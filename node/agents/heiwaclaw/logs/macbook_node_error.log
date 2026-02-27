@@ -1,0 +1,12 @@
+  File "/Users/dmcgregsauce/heiwa-agents/agents/heiwaclaw/inference_node.py", line 62
+    full_prompt = f"System: {system}
+                  ^
+SyntaxError: unterminated f-string literal (detected at line 62)
+  File "/Users/dmcgregsauce/heiwa-agents/agents/heiwaclaw/inference_node.py", line 62
+    full_prompt = f"System: {system}
+                  ^
+SyntaxError: unterminated f-string literal (detected at line 62)
+2026-02-27 13:18:50,480 - MacbookNode - INFO - ✅ Connected to NATS Swarm at nats://localhost:4222
+2026-02-27 13:18:50,480 - MacbookNode - INFO - 🎧 Listening for NATS inference requests on 'heiwa.inference.request'
+2026-02-27 13:19:33,559 - MacbookNode - INFO - ✅ Connected to NATS Swarm at nats://localhost:4222
+2026-02-27 13:19:33,559 - MacbookNode - INFO - 🎧 Listening for NATS inference requests on 'heiwa.inference.request'

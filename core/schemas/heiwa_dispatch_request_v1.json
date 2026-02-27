@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Operator Dispatch Request v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "request_id",
+    "created_at",
+    "origin_surface",
+    "tenant_id",
+    "action",
+    "target_surface",
+    "target_scope",
+    "requested_mode",
+    "arguments",
+    "idempotency_key"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "heiwa_dispatch_request_v1"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "origin_surface": {
+      "type": "string",
+      "enum": [
+        "codex",
+        "antigravity",
+        "openclaw",
+        "picoclaw",
+        "cli"
+      ]
+    },
+    "tenant_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "action": {
+      "type": "string"
+    },
+    "target_surface": {
+      "type": "string"
+    },
+    "target_scope": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "requested_mode": {
+      "type": "string",
+      "enum": [
+        "read",
+        "write"
+      ]
+    },
+    "arguments": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "idempotency_key": {
+      "type": "string"
+    }
+  }
+}

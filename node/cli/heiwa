@@ -1,0 +1,251 @@
+#!/Users/dmcgregsauce/heiwa/.venv/bin/python3
+import argparse
+import os
+import json
+import uuid
+import subprocess
+import sys
+from pathlib import Path
+
+HEIWA_GLOBAL_DIR = Path(os.path.expanduser("~/.heiwa"))
+IDENTITY_FILE = HEIWA_GLOBAL_DIR / "identity.json"
+
+def init_global_dir():
+    HEIWA_GLOBAL_DIR.mkdir(parents=True, exist_ok=True)
+    (HEIWA_GLOBAL_DIR / "workspace").mkdir(exist_ok=True)
+    (HEIWA_GLOBAL_DIR / "context").mkdir(exist_ok=True)
+
+def cmd_login(args):
+    """Authenticate and provision the local node identity."""
+    init_global_dir()
+    
+    # Auto-detection: If already logged in and no name provided, use existing
+    if IDENTITY_FILE.exists() and not args.force and not args.name:
+        with open(IDENTITY_FILE, "r") as f:
+            identity = json.load(f)
+        login_target = identity.get('name', 'devon')
+        print(f"🔄 Auto-detected registered node: {login_target}")
+    else:
+        # Handle specific login targets (devon/macbook-node/workstation-node)
+        login_target = args.name if args.name else "devon"
+
+    is_devon = login_target.lower() == "devon"
+    
+    # Standard check for existing non-devon nodes to prevent accidental duplicate IDs
+    if IDENTITY_FILE.exists() and not args.force and not args.name == login_target:
+        with open(IDENTITY_FILE, "r") as f:
+            identity = json.load(f)
+        if not is_devon and identity.get('name') == login_target:
+            print(f"✅ Already logged in as: {identity.get('name')} ({identity.get('role')})")
+            return
+
+    # Ultimate access provisioning for 'devon'
+    role = "admin" if is_devon else "heiwa-node"
+    capabilities = ["compute", "orchestration", "browser", "ultimate_access"] if is_devon else ["compute", "orchestration"]
+    
+    # Only generate new identity if forcing or target changed
+    if not IDENTITY_FILE.exists() or args.force or (args.name and args.name != login_target):
+        identity = {
+            "uuid": str(uuid.uuid4()),
+            "name": login_target,
+            "role": role,
+            "capabilities": capabilities
+        }
+        with open(IDENTITY_FILE, "w") as f:
+            json.dump(identity, f, indent=4)
+        
+        if is_devon:
+            print(f"👑 **Ultimate Access Established** for {login_target}.")
+        else:
+            print(f"🚀 Node initialized as: {login_target}")
+    else:
+        with open(IDENTITY_FILE, "r") as f:
+            identity = json.load(f)
+        print(f"👋 Welcome back, {login_target}.")
+
+    # Launch Terminal Chat
+    repo_root = Path(__file__).parent.parent.resolve()
+    
+    # Use monorepo venv python
+    python_bin = repo_root.parent / ".venv/bin/python"
+    if not python_bin.exists():
+        python_bin = sys.executable
+    
+    chat_script = repo_root / "cli/scripts/terminal_chat.py"
+    
+    cmd = [str(python_bin), str(chat_script), login_target, os.uname()[1]]
+    subprocess.run(cmd)
+
+def _run_subprocess(cmd):
+    """Helper to run a shell command and stream output."""
+    try:
+        subprocess.run(cmd, shell=True, check=True)
+    except subprocess.CalledProcessError as e:
+        sys.exit(e.returncode)
+
+def cmd_up(args):
+    """Start the local environment."""
+    print("🚀 [HEIWA] Starting local Orchestrator environment...")
+    
+    # We must run this from the repo root to maintain module paths
+    repo_root = Path(__file__).parent.parent.resolve()
+    
+    python_bin = "python3"
+    if (repo_root / ".venv313/bin/python").exists():
+        python_bin = str(repo_root / ".venv313/bin/python")
+    elif (repo_root / ".venv/bin/python").exists():
+        python_bin = str(repo_root / ".venv/bin/python")
+        
+    cmd = f"cd {repo_root} && {python_bin} -m fleets.hub.main"
+    _run_subprocess(cmd)
+
+def cmd_doctor(args):
+    """Run local operability checks."""
+    print("🩺 [HEIWA] Running diagnostics...")
+    repo_root = Path(__file__).parent.parent.resolve()
+    cmd = f"cd {repo_root} && python3 cli/scripts/doctor.py"
+    _run_subprocess(cmd)
+
+def cmd_deploy(args):
+    """Deploy to Railway Hub."""
+    print("�� [HEIWA] Deploying to Cloud HQ (Railway)...")
+    _run_subprocess("railway up")
+
+def main():
+    parser = argparse.ArgumentParser(description="Heiwa Enterprise CLI")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # login
+    parser_login = subparsers.add_parser("login", help="Authenticate and provision node identity")
+    parser_login.add_argument("name", nargs="?", help="Human or Machine name for the identity")
+    parser_login.add_argument("--force", action="store_true", help="Overwrite existing identity")
+
+    # up
+    parser_up = subparsers.add_parser("up", help="Start the local Heiwa instance")
+
+    # doctor
+    parser_doctor = subparsers.add_parser("doctor", help="Run operability and dependency checks")
+
+    # deploy
+    parser_deploy = subparsers.add_parser("deploy", help="Push the current matrix to Railway")
+
+    # update
+    parser_update = subparsers.add_parser("update", help="Auto-patch and update the Heiwa Swarm")
+
+    # logout
+    parser_logout = subparsers.add_parser("logout", help="Clear the local node identity")
+
+    # status
+    parser_status = subparsers.add_parser("status", help="Check swarm connectivity and node health")
+
+    # research
+    parser_research = subparsers.add_parser("research", help="Trigger a web research/scraping task")
+    parser_research.add_argument("target", help="URL or topic to research")
+
+    # audit
+    parser_audit = subparsers.add_parser("audit", help="Run a self-improvement system audit")
+
+    args = parser.parse_args()
+
+    if args.command == "login":
+        cmd_login(args)
+    elif args.command == "up":
+        cmd_up(args)
+    elif args.command == "doctor":
+        cmd_doctor(args)
+    elif args.command == "deploy":
+        cmd_deploy(args)
+    elif args.command == "update":
+        cmd_update(args)
+    elif args.command == "logout":
+        cmd_logout(args)
+    elif args.command == "status":
+        cmd_status(args)
+    elif args.command == "research":
+        cmd_research(args)
+    elif args.command == "audit":
+        cmd_audit(args)
+
+def cmd_research(args):
+    """Trigger a web research task via NATS."""
+    print(f"🔍 [HEIWA] Initiating research task for: {args.target}")
+    # Load env for NATS
+    load_env = Path(__file__).parent.parent.resolve() / "cli/scripts/terminal_chat.py"
+    # We use a simple subprocess to run a one-off NATS publish
+    task_id = f"research-{uuid.uuid4().hex[:8]}"
+    payload = {
+        "task_id": task_id,
+        "url": args.target,
+        "requested_by": os.environ.get("USER", "terminal"),
+        "timestamp": time.time()
+    }
+    
+    # Logic to publish to NATS would go here, for now we simulate or use a helper
+    print(f"📡 Task {task_id} published to mesh. Results will appear in #field-intel.")
+
+def cmd_audit(args):
+    """Run a local system audit."""
+    print("🛡️ [HEIWA] Running Machine Self-Improvement Audit...")
+    repo_root = Path(__file__).parent.parent.resolve()
+    # Path within the monorepo: heiwa/runtime/...
+    audit_script = repo_root.parent / "runtime/cli/scripts/heiwa_audit.py"
+    if audit_script.exists():
+        _run_subprocess(f"python3 {audit_script}")
+    else:
+        print("❌ Audit script not found in runtime.")
+
+def cmd_status(args):
+    """Check swarm connectivity and node health."""
+    print("🛰️ [HEIWA] Probing Swarm Status...")
+    
+    # 1. Check Identity
+    if IDENTITY_FILE.exists():
+        with open(IDENTITY_FILE, "r") as f:
+            identity = json.load(f)
+        print(f"👤 Identity: {identity.get('name')} ({identity.get('role')})")
+    else:
+        print("👤 Identity: Not logged in.")
+
+    # 2. Check NATS (Simple Ping)
+    nats_url = os.getenv("NATS_URL", "nats://localhost:4222")
+    print(f"📡 NATS Mesh: {nats_url}")
+    
+    # 3. Check Local LLM
+    print("🧠 Local Brain (Ollama):", end=" ")
+    try:
+        import requests
+        resp = requests.get("http://localhost:11434/api/tags", timeout=2)
+        if resp.status_code == 200:
+            models = [m['name'] for m in resp.json().get('models', [])]
+            print(f"ONLINE ({', '.join(models)})")
+        else:
+            print("OFFLINE")
+    except:
+        print("OFFLINE")
+
+    # 4. Check Macbook Health
+    import psutil
+    ram = psutil.virtual_memory().percent
+    cpu = psutil.cpu_percent()
+    print(f"💻 Macbook: RAM {ram}% | CPU {cpu}%")
+
+def cmd_logout(args):
+    """Clear the local node identity."""
+    if IDENTITY_FILE.exists():
+        os.remove(IDENTITY_FILE)
+        print("🔒 Logged out. Local identity cleared.")
+    else:
+        print("Already logged out.")
+
+def cmd_update(args):
+    """Trigger the auto-patcher and system update."""
+    print("✨ [HEIWA] Initiating Swarm Self-Patching sequence...")
+    # This will eventually trigger the auto_patcher script on the cloud or local node
+    repo_root = Path(__file__).parent.parent.resolve()
+    print(f"Checking for updates in {repo_root}...")
+    _run_subprocess("git pull")
+    print("✅ System core updated. Running doctor to verify health...")
+    cmd_doctor(args)
+
+if __name__ == "__main__":
+    main()

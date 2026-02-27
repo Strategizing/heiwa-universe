@@ -1,0 +1,431 @@
+{
+  "profile_id": "heiwa-limited",
+  "brand": "Heiwa",
+  "project_slug": "heiwa-limited",
+  "repo_root": "/Users/dmcgregsauce/heiwa-runtime",
+  "github_repo": "Strategizing/heiwa-limited",
+  "default_branch": "main",
+  "railway_project_name": "heiwa-hub",
+  "railway_project_id": "1b7b39a8-ec37-4616-848e-c54ac9fd1549",
+  "railway_environments": {
+    "brain": {
+      "id": "ac391b8e-ccf8-46f5-a6a9-9864b4ea8d64",
+      "role": "compatibility"
+    },
+    "staging": {
+      "id": "7dc5034e-a946-4fef-ba2f-8ab267a1c29b",
+      "role": "preproduction"
+    },
+    "production": {
+      "id": "0f78290c-f1ed-4545-98c3-8678eac31183",
+      "role": "production"
+    }
+  },
+  "railway_services": {
+    "heiwa-cloud-hq": {
+      "service_id": "bbcd396c-ee03-4068-a5de-8ef81ec45d60",
+      "canonical": true,
+      "role": "control-plane",
+      "environments": {
+        "brain": {
+          "instance_id": "2abdaa64-cfad-4eae-bdc2-52a2648a7014",
+          "service_id": "bbcd396c-ee03-4068-a5de-8ef81ec45d60",
+          "latest_status": "SUCCESS",
+          "latest_created_at": "2026-02-19T12:21:10.127Z",
+          "domains": {
+            "service": [
+              "heiwa-cloud-hq-brain.up.railway.app"
+            ],
+            "custom": []
+          },
+          "start_command": null,
+          "present": true
+        },
+        "staging": {
+          "instance_id": "f0bc4dc5-7247-4e3f-b9b4-3556f2621ab0",
+          "service_id": "bbcd396c-ee03-4068-a5de-8ef81ec45d60",
+          "latest_status": "SUCCESS",
+          "latest_created_at": "2026-02-23T14:35:06.180Z",
+          "domains": {
+            "service": [],
+            "custom": []
+          },
+          "start_command": null,
+          "present": true
+        },
+        "production": {
+          "present": false
+        }
+      }
+    },
+    "heiwa-browser-worker": {
+      "service_id": "fce3e0dc-9b86-4b0e-8f0e-ccca8ead3d6f",
+      "canonical": true,
+      "role": "browser-worker",
+      "environments": {
+        "brain": {
+          "instance_id": "5e2e6714-6c56-429d-a9a9-cb429ea13a9f",
+          "service_id": "fce3e0dc-9b86-4b0e-8f0e-ccca8ead3d6f",
+          "latest_status": null,
+          "latest_created_at": null,
+          "domains": {
+            "service": [],
+            "custom": []
+          },
+          "start_command": null,
+          "present": true
+        },
+        "staging": {
+          "instance_id": "152f38a4-262f-4d85-b1b6-05f621770273",
+          "service_id": "fce3e0dc-9b86-4b0e-8f0e-ccca8ead3d6f",
+          "latest_status": "SUCCESS",
+          "latest_created_at": "2026-02-23T14:45:10.555Z",
+          "domains": {
+            "service": [],
+            "custom": []
+          },
+          "start_command": null,
+          "present": true
+        },
+        "production": {
+          "present": false
+        }
+      }
+    },
+    "heiwa-picoclaw-scraper": {
+      "service_id": "445c239d-9dc1-43f4-bd9c-7c28360e849d",
+      "canonical": true,
+      "role": "picoclaw-worker",
+      "environments": {
+        "brain": {
+          "instance_id": "9a6315a4-3934-42ff-8d46-3e77a7bc4026",
+          "service_id": "445c239d-9dc1-43f4-bd9c-7c28360e849d",
+          "latest_status": null,
+          "latest_created_at": null,
+          "domains": {
+            "service": [],
+            "custom": []
+          },
+          "start_command": null,
+          "present": true
+        },
+        "staging": {
+          "instance_id": "06dbc612-56c2-45f1-a9c9-e6bf73dfd0c4",
+          "service_id": "445c239d-9dc1-43f4-bd9c-7c28360e849d",
+          "latest_status": "SUCCESS",
+          "latest_created_at": "2026-02-23T14:50:01.709Z",
+          "domains": {
+            "service": [],
+            "custom": []
+          },
+          "start_command": null,
+          "present": true
+        },
+        "production": {
+          "present": false
+        }
+      }
+    },
+    "heiwa-picoclaw-formatter": {
+      "service_id": "631f0d1d-617e-44f1-bc3c-b5039ad09713",
+      "canonical": true,
+      "role": "picoclaw-worker",
+      "environments": {
+        "brain": {
+          "instance_id": "cdab90a6-e184-4b3a-87e0-26aa66f39a30",
+          "service_id": "631f0d1d-617e-44f1-bc3c-b5039ad09713",
+          "latest_status": null,
+          "latest_created_at": null,
+          "domains": {
+            "service": [],
+            "custom": []
+          },
+          "start_command": null,
+          "present": true
+        },
+        "staging": {
+          "instance_id": "4e519f41-fa71-4e9b-986d-73fefb4859cc",
+          "service_id": "631f0d1d-617e-44f1-bc3c-b5039ad09713",
+          "latest_status": "SUCCESS",
+          "latest_created_at": "2026-02-23T14:51:00.216Z",
+          "domains": {
+            "service": [],
+            "custom": []
+          },
+          "start_command": null,
+          "present": true
+        },
+        "production": {
+          "present": false
+        }
+      }
+    },
+    "heiwa-picoclaw-checker": {
+      "service_id": "2e61d9d2-ced5-4c30-8676-bdbd9f2a9674",
+      "canonical": true,
+      "role": "picoclaw-worker",
+      "environments": {
+        "brain": {
+          "instance_id": "fb0a1380-612c-4b64-8e8a-535616854ac6",
+          "service_id": "2e61d9d2-ced5-4c30-8676-bdbd9f2a9674",
+          "latest_status": null,
+          "latest_created_at": null,
+          "domains": {
+            "service": [],
+            "custom": []
+          },
+          "start_command": null,
+          "present": true
+        },
+        "staging": {
+          "instance_id": "191e1de5-1bef-48f2-89e4-24b35b4752bd",
+          "service_id": "2e61d9d2-ced5-4c30-8676-bdbd9f2a9674",
+          "latest_status": "SUCCESS",
+          "latest_created_at": "2026-02-23T14:52:15.902Z",
+          "domains": {
+            "service": [],
+            "custom": []
+          },
+          "start_command": null,
+          "present": true
+        },
+        "production": {
+          "present": false
+        }
+      }
+    },
+    "hub-api": {
+      "service_id": "38ffb826-bf81-4e6e-9a9b-6abf82c55183",
+      "canonical": false,
+      "role": "legacy-compat",
+      "environments": {
+        "brain": {
+          "instance_id": "aeaa8a6f-9d38-4389-a213-fa3cb47c1496",
+          "service_id": "38ffb826-bf81-4e6e-9a9b-6abf82c55183",
+          "latest_status": "SUCCESS",
+          "latest_created_at": "2026-02-19T12:21:10.156Z",
+          "domains": {
+            "service": [
+              "hub-api-brain.up.railway.app"
+            ],
+            "custom": [
+              "api.heiwa.ltd"
+            ]
+          },
+          "start_command": "uvicorn services.hub.main:app --host 0.0.0.0 --port $PORT",
+          "present": true
+        },
+        "staging": {
+          "present": false
+        },
+        "production": {
+          "present": false
+        }
+      }
+    },
+    "hub-bot": {
+      "service_id": "d7433a3d-2b67-46d3-9de2-8ad8686b4805",
+      "canonical": false,
+      "role": "legacy-compat",
+      "environments": {
+        "brain": {
+          "instance_id": "a7b7165d-bd46-4f3f-8472-2ff637ba228a",
+          "service_id": "d7433a3d-2b67-46d3-9de2-8ad8686b4805",
+          "latest_status": "SUCCESS",
+          "latest_created_at": "2026-02-19T12:21:05.778Z",
+          "domains": {
+            "service": [],
+            "custom": []
+          },
+          "start_command": "python services/hub-bot/bot.py",
+          "present": true
+        },
+        "staging": {
+          "present": false
+        },
+        "production": {
+          "present": false
+        }
+      }
+    },
+    "hub-cron": {
+      "service_id": "76507589-8018-4a9a-9ae1-b60df393e1ab",
+      "canonical": false,
+      "role": "legacy-compat",
+      "environments": {
+        "brain": {
+          "instance_id": "18a278a5-bec6-4e76-b264-82c4a95e9ca6",
+          "service_id": "76507589-8018-4a9a-9ae1-b60df393e1ab",
+          "latest_status": "SUCCESS",
+          "latest_created_at": "2026-02-19T12:21:05.553Z",
+          "domains": {
+            "service": [],
+            "custom": []
+          },
+          "start_command": "python -m services.hub.tick",
+          "present": true
+        },
+        "staging": {
+          "present": false
+        },
+        "production": {
+          "present": false
+        }
+      }
+    },
+    "hub-watchdog": {
+      "service_id": "69bdda0a-3974-4b3c-8d14-9aa23cb3e9b6",
+      "canonical": false,
+      "role": "legacy-compat",
+      "environments": {
+        "brain": {
+          "instance_id": "7df6abd1-437a-4010-872c-fe8d94bdcd8a",
+          "service_id": "69bdda0a-3974-4b3c-8d14-9aa23cb3e9b6",
+          "latest_status": "SUCCESS",
+          "latest_created_at": "2026-02-19T12:21:05.628Z",
+          "domains": {
+            "service": [],
+            "custom": []
+          },
+          "start_command": "python scripts/check_liveness.py",
+          "present": true
+        },
+        "staging": {
+          "present": false
+        },
+        "production": {
+          "present": false
+        }
+      }
+    },
+    "nats": {
+      "service_id": "9da8844c-4103-4d05-9b18-4e11b5e99a38",
+      "canonical": false,
+      "role": "messaging-infra",
+      "environments": {
+        "brain": {
+          "instance_id": "51e9eca6-5289-46f8-b33f-9f09caeda819",
+          "service_id": "9da8844c-4103-4d05-9b18-4e11b5e99a38",
+          "latest_status": "SUCCESS",
+          "latest_created_at": "2026-02-18T02:51:07.177Z",
+          "domains": {
+            "service": [
+              "nats-brain.up.railway.app"
+            ],
+            "custom": []
+          },
+          "start_command": null,
+          "present": true
+        },
+        "staging": {
+          "present": false
+        },
+        "production": {
+          "present": false
+        }
+      }
+    },
+    "Postgres": {
+      "service_id": "734192ca-012d-4935-88b0-d7160c2b90fa",
+      "canonical": false,
+      "role": "database-infra",
+      "environments": {
+        "brain": {
+          "instance_id": "5bdf196a-5430-4fd1-bb45-889823dcec83",
+          "service_id": "734192ca-012d-4935-88b0-d7160c2b90fa",
+          "latest_status": "SUCCESS",
+          "latest_created_at": "2026-01-19T00:40:49.152Z",
+          "domains": {
+            "service": [],
+            "custom": []
+          },
+          "start_command": null,
+          "present": true
+        },
+        "staging": {
+          "present": false
+        },
+        "production": {
+          "present": false
+        }
+      }
+    }
+  },
+  "health_urls": {
+    "brain": {
+      "heiwa-cloud-hq": "https://heiwa-cloud-hq-brain.up.railway.app",
+      "heiwa-browser-worker": null,
+      "heiwa-picoclaw-scraper": null,
+      "heiwa-picoclaw-formatter": null,
+      "heiwa-picoclaw-checker": null,
+      "hub-api": "https://api.heiwa.ltd"
+    },
+    "staging": {
+      "heiwa-cloud-hq": null,
+      "heiwa-browser-worker": null,
+      "heiwa-picoclaw-scraper": null,
+      "heiwa-picoclaw-formatter": null,
+      "heiwa-picoclaw-checker": null,
+      "hub-api": null
+    },
+    "production": {
+      "heiwa-cloud-hq": null,
+      "heiwa-browser-worker": null,
+      "heiwa-picoclaw-scraper": null,
+      "heiwa-picoclaw-formatter": null,
+      "heiwa-picoclaw-checker": null,
+      "hub-api": null
+    }
+  },
+  "figma": {
+    "provider": "figma-make",
+    "make_file_key": "fPJJRH5I9RJd4zaIM1LfOI",
+    "node_id": "0:1",
+    "mode": "read_only_sync",
+    "display_name": "Enterprise AI-Dentity-Design",
+    "source_url": "https://www.figma.com/make/fPJJRH5I9RJd4zaIM1LfOI/Enterprise-AI-Dentity-Design"
+  },
+  "skills_overrides": {
+    "platform_ops_skill": "heiwa-platform-ops",
+    "profile_skill": "heiwa-project-profile",
+    "observability_skill": "heiwa-observability-local",
+    "figma_sync_skill": "heiwa-figma-sync",
+    "repo_compat_seed_skill": "/Users/dmcgregsauce/heiwa-runtime/skills/cli-platform-expert"
+  },
+  "policy_defaults": {
+    "write_gated_autonomy": true,
+    "prod_deploy_requires_approval": true,
+    "default_write_mode": "read_only_first",
+    "secrets_redaction_required": true,
+    "figma_sync_after_architecture_changes": true,
+    "provider_mutation_allowlist": [
+      "gh.workflow_dispatch",
+      "railway.deploy",
+      "railway.variable_set"
+    ]
+  },
+  "ci_policy": {
+    "advisory_workflows": [
+      "The Gauntlet (Heiwa CI)"
+    ]
+  },
+  "observability_tags": [
+    "heiwa",
+    "codex-operating-layer",
+    "profile:heiwa-limited"
+  ],
+  "runbooks": [
+    "ci-audit",
+    "railway-topology-audit",
+    "railway-deploy-readiness",
+    "secret-config-drift-check",
+    "figma-sync-packet"
+  ],
+  "secrets_refs": {
+    "railway_cli_token": "/Users/dmcgregsauce/.railway/config.json",
+    "github_env_secret_names": [
+      "RAILWAY_TOKEN"
+    ],
+    "notes": "Secret values are never persisted in profile files or observability events"
+  }
+}

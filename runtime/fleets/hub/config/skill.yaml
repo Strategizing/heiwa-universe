@@ -1,0 +1,9 @@
+name: discord
+version: 1.0.0
+description: Mock Discord
+tools:
+  send:
+    description: Send a message
+    parameters:
+      message:
+        type: string

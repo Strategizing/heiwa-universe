@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Heiwa | Enterprise Autonomy Platform</title>
+    <meta
+      name="description"
+      content="Heiwa is a daemon-first enterprise autonomy platform with policy-gated control planes, worker mesh execution, and auditable operations."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./assets/styles.css" />
+    <script defer src="./assets/site.js"></script>
+  </head>
+  <body data-page="home">
+    <div class="bg-grid" aria-hidden="true"></div>
+    <header class="topbar">
+      <a class="brand" href="./index.html">HEIWA</a>
+      <nav class="nav">
+        <a href="./status.html">Status</a>
+        <a href="./governance.html">Governance</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <p class="eyebrow">Daemon-first enterprise autonomy</p>
+        <h1>Control plane discipline. Worker mesh execution. Human-governed outcomes.</h1>
+        <p class="lede">
+          Heiwa separates planning from execution, runs policy-gated work across cloud and local workers,
+          and keeps an audit trail for every meaningful action.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-solid" href="./status.html">View Platform Status</a>
+          <a class="btn btn-outline" href="./governance.html">Read Governance Model</a>
+        </div>
+      </section>
+
+      <section class="panels">
+        <article class="panel">
+          <h2>Cloud HQ</h2>
+          <p>Railway-hosted control plane for Discord ingress, planning, approvals, routing, and health/status.</p>
+          <ul>
+            <li>Approval-gated task dispatch</li>
+            <li>NATS-based mesh routing</li>
+            <li>Health and deploy verification</li>
+          </ul>
+        </article>
+        <article class="panel">
+          <h2>Worker Mesh</h2>
+          <p>Local privileged execution on Mac workers via canonical wrappers for Codex, OpenClaw, PicoClaw, Ollama, and Antigravity.</p>
+          <ul>
+            <li>Local-only LLM policy enforcement</li>
+            <li>Outbound allowlists + net-policy audit</li>
+            <li>Structured task results and status fan-in</li>
+          </ul>
+        </article>
+        <article class="panel">
+          <h2>Enterprise Posture</h2>
+          <p>PR-only governance, redaction-aware observability, portable boundaries, and architecture sync discipline.</p>
+          <ul>
+            <li>GitHub + Railway + Cloudflare</li>
+            <li>Secrets out of repos</li>
+            <li>Figma sync packets for architecture changes</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="callout">
+        <div>
+          <p class="eyebrow">V1 surface</p>
+          <h2>Marketing + Status first. Product UI later.</h2>
+          <p>
+            The V1 public web scope is intentionally narrow: a clear brand surface and a read-only operational status view.
+            Execution, approvals, and privileged operations remain in Discord + Heiwa daemon/CLI workflows.
+          </p>
+        </div>
+        <div class="callout-metrics" aria-label="Platform model summary">
+          <div>
+            <span>Execution model</span>
+            <strong>Daemon-first</strong>
+          </div>
+          <div>
+            <span>Governance</span>
+            <strong>PR-only</strong>
+          </div>
+          <div>
+            <span>Cloud stack</span>
+            <strong>Railway / Cloudflare / GitHub</strong>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Heiwa V1 public surface</p>
+      <p class="footer-links">
+        <a href="./status.html">Status</a>
+        <a href="./governance.html">Governance</a>
+      </p>
+    </footer>
+  </body>
+  </html>

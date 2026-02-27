@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Operator IDE Handoff v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "handoff_id",
+    "origin",
+    "kind",
+    "created_at",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "heiwa_ide_handoff_v1"
+    },
+    "handoff_id": {
+      "type": "string"
+    },
+    "origin": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "payload": {}
+  }
+}

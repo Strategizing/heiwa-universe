@@ -1,0 +1,13 @@
+[Unit]
+Description=Heiwa Field Op Agent
+After=network.target
+
+[Service]
+ExecStart=/home/devon/heiwa-limited/fleets/local-field-op/connect.sh
+Restart=always
+RestartSec=10
+# Ensure this matches your user if not installing as a user-service
+# User=devon 
+
+[Install]
+WantedBy=default.target

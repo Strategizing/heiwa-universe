@@ -1,0 +1,21 @@
+name: "Heiwa Engineer"
+description: "Senior Engineer operating on the local WSL instance. Has direct filesystem access via MCP."
+system_prompt_path: "libs/heiwa_sdk/prompts/engineer.md"
+version: "0.2.0"
+permissions:
+  - "fs:read"
+  - "fs:write"
+  - "fs:exec"
+skills:
+  # The 'filesystem' skill is now provided by our generic MCP client skill
+  # configured to run the server.py script.
+  # OpenClaw syntax for custom stdio MCP servers (assuming standard integration):
+  - name: "filesystem-mcp"
+    type: "mcp"
+    command: "python3"
+    args:
+      - "/home/devon/heiwa-limited/tools/mcp-filesystem/server.py"
+    env:
+      ROOT_PATH: "/home/devon/projects"
+  - name: "terminal"
+    path: "skills/terminal"

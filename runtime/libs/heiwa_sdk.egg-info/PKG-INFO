@@ -1,0 +1,65 @@
+Metadata-Version: 2.4
+Name: heiwa-sdk
+Version: 0.1.0
+Summary: Heiwa Limited SDK
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi
+Requires-Dist: uvicorn
+Requires-Dist: pydantic
+Requires-Dist: requests
+Requires-Dist: python-dotenv
+
+# Heiwa Limited (The Source)
+
+**Status:** Classified / Headless
+**Architecture:** Decentralized Execution Mesh (v2.0)
+**Topology:** DOE Protocol (Directive -> Orchestration -> Execution)
+
+> **The Repository is the Reality.**
+
+This repository serves as the **Single Source of Truth** for Heiwa code logic, orchestration contracts, and runtime entrypoints. It does **not** contain committed production secrets.
+
+## Architecture
+
+Refer to:
+- `ARCHITECTURE.md` for topology and DOE flow
+- `docs/platform/CANONICAL_RUNTIME_MAP_V1.md` for canonical V1 runtime ownership/entrypoints
+- `docs/platform/DEPRECATIONS_V1.md` for legacy compatibility paths and migration targets
+- `docs/OPERABILITY_BASELINE_2026-02-17.md` for current known-good/known-bad state
+- `docs/OPERATIONS_RUNBOOK.md` for day-to-day command usage across Railway/OpenClaw/PicoClaw/Ollama/Codex
+- `docs/RAILWAY_DEPLOYMENT.md` for current deploy runbook
+- `docs/PERSISTENT_CONTROL_PLANE_WORKERS.md` for the fastest production path (Railway control plane + Mac/PC workers)
+
+### Core Components
+- **`fleets/`**: The specialized agent code (Cloud HQ, Field Ops).
+- **`libs/`**: Shared SDKs and utilities (`heiwa_sdk`).
+- **`skills/`**: Capability modules for agents.
+- **`cli/scripts/`**: Health checks, verification, and operator tooling.
+
+## Operations
+
+This repo is runnable locally for operator checks and node runtime.
+
+### The Node (Macbook)
+To run local checks and startup:
+```bash
+cd ~/heiwa-limited
+./cli/heiwa doctor
+./cli/heiwa up
+./cli/heiwa worker
+```
+
+For persistent local workers + readiness checks:
+```bash
+bash cli/scripts/ops/start_worker_stack.sh
+python3 cli/scripts/ops/heiwa_360_check.py
+```
+
+### The Hub (Railway)
+Deploys are managed via the `heiwa-cloud-hq` Railway service from this repository.
+
+## Contribution
+1. **Core Agents**: Add or update agent behavior in `fleets/hub/agents/`.
+2. **Skills**: Define new agent capabilities in `skills/`.
+3. **Shared Contracts**: Keep SDK and protocol changes aligned in `libs/heiwa_sdk/` and `fleets/hub/protocol.py`.

@@ -1,0 +1,8 @@
+name: "Vali Org Bot"
+description: "Sandboxed client product."
+version: "0.1.0"
+permissions:
+  - "discord:send"
+skills:
+  - name: "discord"
+    path: "skills/discord"

@@ -1,0 +1,23 @@
+{
+  "generated_at": "20260226T034119Z",
+  "source": "/Users/dmcgregsauce/heiwa-core/legacy/devonx_operator/schemas",
+  "target": "/Users/dmcgregsauce/heiwa-core/schemas",
+  "mappings": {
+    "operator_adapter_registry_v1.json": "heiwa_adapter_registry_v1.json",
+    "operator_approval_decision_v1.json": "heiwa_approval_decision_v1.json",
+    "operator_approval_request_v1.json": "heiwa_approval_request_v1.json",
+    "operator_auth_inventory_report_v1.json": "heiwa_auth_inventory_report_v1.json",
+    "operator_dispatch_request_v1.json": "heiwa_dispatch_request_v1.json",
+    "operator_dispatch_result_v1.json": "heiwa_dispatch_result_v1.json",
+    "operator_event_envelope_v1.json": "heiwa_event_envelope_v1.json",
+    "operator_health_snapshot_v1.json": "heiwa_health_snapshot_v1.json",
+    "operator_ide_handoff_v1.json": "heiwa_ide_handoff_v1.json",
+    "operator_model_routing_policy_v1.json": "heiwa_model_routing_policy_v1.json",
+    "operator_permissions_doctor_report_v1.json": "heiwa_permissions_doctor_report_v1.json",
+    "operator_resource_snapshot_v1.json": "heiwa_resource_snapshot_v1.json",
+    "operator_scheduler_drift_report_v1.json": "heiwa_scheduler_drift_report_v1.json",
+    "operator_scheduler_expected_state_v1.json": "heiwa_scheduler_expected_state_v1.json",
+    "operator_scheduler_registry_v1.json": "heiwa_scheduler_registry_v1.json",
+    "operator_tenant_registry_v1.json": "heiwa_tenant_registry_v1.json"
+  }
+}

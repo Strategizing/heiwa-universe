@@ -1,0 +1,280 @@
+:root {
+  --bg: #081015;
+  --bg2: #121f29;
+  --ink: #e9f0f4;
+  --muted: #9eb1bf;
+  --line: rgba(233, 240, 244, 0.12);
+  --accent: #f28c28;
+  --accent2: #31c5a8;
+  --warn: #f0b429;
+  --bad: #e05d5d;
+  --good: #2fc27e;
+  --card: rgba(255, 255, 255, 0.03);
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 15% 10%, rgba(242, 140, 40, 0.12), transparent 45%),
+    radial-gradient(circle at 90% 20%, rgba(49, 197, 168, 0.12), transparent 45%),
+    linear-gradient(180deg, var(--bg), var(--bg2));
+  min-height: 100vh;
+}
+
+.bg-grid {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.25;
+  background-image:
+    linear-gradient(to right, rgba(255,255,255,.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,.04) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: radial-gradient(circle at center, black, transparent 80%);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.2rem;
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(14px);
+  background: rgba(8, 16, 21, 0.65);
+}
+
+.brand {
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  font-size: 0.95rem;
+}
+
+.nav { display: flex; gap: .5rem; flex-wrap: wrap; }
+.nav a {
+  color: var(--muted);
+  text-decoration: none;
+  border: 1px solid transparent;
+  padding: .45rem .7rem;
+  border-radius: 999px;
+  font-size: .92rem;
+}
+.nav a:hover, .nav a.is-active {
+  color: var(--ink);
+  border-color: var(--line);
+  background: rgba(255,255,255,.03);
+}
+
+main {
+  width: min(1200px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 1.2rem 0 3rem;
+}
+
+.hero {
+  padding: 1.4rem 0 1.1rem;
+  display: grid;
+  gap: 1rem;
+}
+.hero.compact { padding-top: 1rem; }
+.hero h1 {
+  margin: 0;
+  line-height: 1.02;
+  font-size: clamp(2rem, 6vw, 4.4rem);
+  max-width: 14ch;
+}
+.hero.compact h1 { font-size: clamp(1.8rem, 5vw, 3rem); max-width: 18ch; }
+
+.eyebrow {
+  margin: 0;
+  color: var(--accent2);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: .78rem;
+}
+
+.lede {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.45;
+}
+
+.hero-actions {
+  display: flex;
+  gap: .7rem;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  text-decoration: none;
+  border-radius: 999px;
+  padding: .75rem 1rem;
+  border: 1px solid var(--line);
+  font-weight: 600;
+  color: var(--ink);
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn-solid {
+  background: linear-gradient(120deg, rgba(242,140,40,.9), rgba(242,140,40,.72));
+  color: #120b05;
+  border-color: rgba(242, 140, 40, .55);
+}
+.btn-outline:hover { background: rgba(255,255,255,.04); }
+
+.panels {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.panel {
+  grid-column: span 4;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  padding: 1rem;
+}
+.panel h2 {
+  margin: 0 0 .5rem;
+  font-size: 1.1rem;
+}
+.panel p {
+  margin: 0 0 .7rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.panel ul {
+  margin: 0;
+  padding-left: 1rem;
+  color: var(--ink);
+}
+.panel li { margin: .35rem 0; }
+.muted { color: var(--muted); }
+
+.callout {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 1rem;
+  background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015));
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 1rem;
+}
+.callout h2 { margin: .2rem 0 .5rem; }
+.callout p { margin: 0; color: var(--muted); line-height: 1.45; }
+.callout-metrics {
+  display: grid;
+  gap: .75rem;
+  align-content: start;
+}
+.callout-metrics > div {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: .8rem;
+  background: rgba(255,255,255,.02);
+}
+.callout-metrics span {
+  display: block;
+  color: var(--muted);
+  font-size: .8rem;
+  margin-bottom: .3rem;
+}
+.callout-metrics strong {
+  display: block;
+  line-height: 1.2;
+  font-size: 1rem;
+}
+
+.footer {
+  width: min(1200px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 1.2rem 0 2rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .7rem;
+  flex-wrap: wrap;
+}
+.footer p { margin: 0; }
+.footer-links { display: flex; gap: .8rem; }
+.footer a { color: var(--ink); text-decoration: none; }
+
+.status-controls {
+  margin-top: .5rem;
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.status-summary { margin-top: 1rem; }
+.status-list .panel { grid-column: span 6; }
+
+.status-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: .6rem;
+  align-items: baseline;
+}
+.status-badge {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: .78rem;
+  border-radius: 999px;
+  padding: .25rem .45rem;
+  border: 1px solid var(--line);
+}
+.status-badge.ok { color: var(--good); border-color: rgba(47,194,126,.4); }
+.status-badge.warn { color: var(--warn); border-color: rgba(240,180,41,.35); }
+.status-badge.fail { color: var(--bad); border-color: rgba(224,93,93,.35); }
+
+.mono {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: .85rem;
+  word-break: break-word;
+}
+
+pre.status-payload {
+  margin: .7rem 0 0;
+  max-height: 280px;
+  overflow: auto;
+  border-radius: 12px;
+  padding: .7rem;
+  background: rgba(0,0,0,.28);
+  border: 1px solid var(--line);
+  color: #d7e5ef;
+}
+
+@media (max-width: 940px) {
+  .panel { grid-column: span 6; }
+  .callout { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .panel, .status-list .panel { grid-column: 1 / -1; }
+  .topbar { align-items: flex-start; flex-direction: column; }
+  .status-controls { flex-direction: column; align-items: stretch; }
+  .hero-actions .btn { width: 100%; }
+}

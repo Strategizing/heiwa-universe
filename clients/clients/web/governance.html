@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Heiwa Governance</title>
+    <meta name="description" content="Heiwa V1 governance, security posture, and operating boundaries." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./assets/styles.css" />
+    <script defer src="./assets/site.js"></script>
+  </head>
+  <body data-page="governance">
+    <div class="bg-grid" aria-hidden="true"></div>
+    <header class="topbar">
+      <a class="brand" href="./index.html">HEIWA</a>
+      <nav class="nav">
+        <a href="./status.html">Status</a>
+        <a href="./governance.html">Governance</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero compact">
+        <p class="eyebrow">Governance & security summary</p>
+        <h1>Human-governed autonomy, auditable execution, portable boundaries</h1>
+        <p class="lede">
+          Heiwa V1 is designed as an enterprise platform foundation: daemon-first execution, PR-only governance, policy-gated outbound network calls, and local-vs-runtime separation.
+        </p>
+      </section>
+
+      <section class="panels">
+        <article class="panel">
+          <h2>Change Control</h2>
+          <ul>
+            <li>Agents propose changes and open PRs.</li>
+            <li>Humans review, merge, and deploy.</li>
+            <li>CI gates enforce schema, safety, and policy checks.</li>
+          </ul>
+        </article>
+        <article class="panel">
+          <h2>Secrets & Data</h2>
+          <ul>
+            <li>No runtime secrets committed to repos.</li>
+            <li>Local secrets stored outside repo and referenced by symlink.</li>
+            <li>Cloud secrets managed in provider variables (Railway/Cloudflare/GitHub).</li>
+          </ul>
+        </article>
+        <article class="panel">
+          <h2>Execution Boundaries</h2>
+          <ul>
+            <li>Railway runs control-plane services.</li>
+            <li>Privileged operations run on policy-gated local workers.</li>
+            <li>Public web status is read-only and non-privileged.</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="callout">
+        <div>
+          <p class="eyebrow">V1 provider stack</p>
+          <h2>Railway + Cloudflare + GitHub</h2>
+          <p>
+            Heiwa V1 standardizes on a focused provider stack to reduce operational sprawl. Future platform expansion can add
+            providers only after the core control-plane and worker mesh are stable and verified.
+          </p>
+        </div>
+        <div class="callout-metrics">
+          <div><span>Deploy host</span><strong>Railway</strong></div>
+          <div><span>Edge / DNS</span><strong>Cloudflare</strong></div>
+          <div><span>Source / CI</span><strong>GitHub</strong></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Heiwa governance summary (public-safe)</p>
+      <p class="footer-links">
+        <a href="./index.html">Home</a>
+        <a href="./status.html">Status</a>
+      </p>
+    </footer>
+  </body>
+</html>

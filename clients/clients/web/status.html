@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Heiwa Status</title>
+    <meta name="description" content="Read-only health and status checks for the Heiwa V1 platform." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./assets/styles.css" />
+    <script defer src="./assets/site.js"></script>
+    <script defer src="./assets/status.js"></script>
+  </head>
+  <body data-page="status">
+    <div class="bg-grid" aria-hidden="true"></div>
+    <header class="topbar">
+      <a class="brand" href="./index.html">HEIWA</a>
+      <nav class="nav">
+        <a href="./status.html">Status</a>
+        <a href="./governance.html">Governance</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero compact">
+        <p class="eyebrow">Read-only status surface</p>
+        <h1>Platform health snapshots without privileged access</h1>
+        <p class="lede">
+          This page performs lightweight GET checks against configured health/status endpoints. It does not expose secrets,
+          approvals, or execution controls.
+        </p>
+      </section>
+
+      <section class="panel status-controls">
+        <div>
+          <h2>Endpoints</h2>
+          <p class="muted">Override with `?endpoint=` query params (repeatable) for temporary diagnostics.</p>
+        </div>
+        <button id="refresh-status" class="btn btn-solid" type="button">Refresh</button>
+      </section>
+
+      <section id="status-summary" class="callout status-summary">
+        <div>
+          <p class="eyebrow">Current view</p>
+          <h2>Loading…</h2>
+          <p id="status-summary-text">Fetching endpoint responses.</p>
+        </div>
+        <div class="callout-metrics">
+          <div><span>Healthy</span><strong id="healthy-count">0</strong></div>
+          <div><span>Warnings</span><strong id="warn-count">0</strong></div>
+          <div><span>Checked</span><strong id="total-count">0</strong></div>
+        </div>
+      </section>
+
+      <section id="status-list" class="panels status-list" aria-live="polite"></section>
+    </main>
+
+    <footer class="footer">
+      <p>Heiwa status surface (read-only)</p>
+      <p class="footer-links">
+        <a href="./index.html">Home</a>
+        <a href="./governance.html">Governance</a>
+      </p>
+    </footer>
+  </body>
+</html>

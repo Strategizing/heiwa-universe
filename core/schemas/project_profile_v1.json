@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Heiwa Project Profile v1",
+  "type": "object",
+  "required": [
+    "profile_id",
+    "brand",
+    "project_slug",
+    "repo_root",
+    "github_repo",
+    "default_branch",
+    "railway_project_name",
+    "railway_project_id",
+    "railway_environments",
+    "railway_services",
+    "health_urls",
+    "figma",
+    "skills_overrides",
+    "policy_defaults",
+    "observability_tags",
+    "runbooks",
+    "secrets_refs"
+  ],
+  "properties": {
+    "profile_id": {
+      "type": "string"
+    },
+    "brand": {
+      "type": "string"
+    },
+    "project_slug": {
+      "type": "string"
+    },
+    "repo_root": {
+      "type": "string"
+    },
+    "github_repo": {
+      "type": "string"
+    },
+    "default_branch": {
+      "type": "string"
+    },
+    "railway_project_name": {
+      "type": "string"
+    },
+    "railway_project_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "railway_environments": {
+      "type": "object",
+      "required": [
+        "brain",
+        "staging",
+        "production"
+      ]
+    },
+    "railway_services": {
+      "type": "object"
+    },
+    "health_urls": {
+      "type": "object"
+    },
+    "figma": {
+      "type": "object",
+      "required": [
+        "make_file_key",
+        "node_id",
+        "mode"
+      ]
+    },
+    "skills_overrides": {
+      "type": "object"
+    },
+    "policy_defaults": {
+      "type": "object",
+      "required": [
+        "write_gated_autonomy",
+        "prod_deploy_requires_approval"
+      ]
+    },
+    "observability_tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "runbooks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "secrets_refs": {
+      "type": "object"
+    }
+  }
+}

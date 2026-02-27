@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Heiwa Automation Report v1",
+  "type": "object",
+  "required": [
+    "report_id",
+    "automation_name",
+    "timestamp",
+    "profile_id",
+    "scope",
+    "findings",
+    "actions_proposed",
+    "actions_taken",
+    "evidence_refs",
+    "next_checks",
+    "severity"
+  ],
+  "properties": {
+    "report_id": {
+      "type": "string"
+    },
+    "automation_name": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "profile_id": {
+      "type": "string"
+    },
+    "scope": {
+      "type": "string"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "actions_proposed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "actions_taken": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "next_checks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "severity": {
+      "enum": [
+        "info",
+        "warn",
+        "crit"
+      ]
+    }
+  }
+}

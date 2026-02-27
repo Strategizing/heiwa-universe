@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Provider Auth Context Snapshot v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "generated_at", "commands", "redaction_applied"],
+  "properties": {
+    "schema_version": { "const": "provider_auth_context_v1" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "profile_id": { "type": "string" },
+    "commands": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": true } },
+    "redaction_applied": { "type": "boolean" }
+  }
+}
