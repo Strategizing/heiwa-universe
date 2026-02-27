@@ -1,0 +1,15 @@
+# Prometheus config to scrape Heiwa Swarm metrics
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Scrape the Cloud HQ Health Endpoint (Requires exposing /metrics in health.py)
+  - job_name: 'heiwa-cloud-hq'
+    static_configs:
+      - targets: ['localhost:8080'] # Assuming health.py runs on 8080 locally
+
+  # Scrape NATS JetStream metrics (Requires NATS exporter)
+  - job_name: 'nats-server'
+    static_configs:
+      - targets: ['localhost:8222'] # NATS monitoring port

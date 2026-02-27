@@ -1,0 +1,46 @@
+// Tailscale ACLs for Zero-Trust Swarm Communications
+{
+    // Define the groups that make up the Swarm
+    "groups": {
+        "group:swarm-admin": ["devonrmcgregor@gmail.com"], // Your primary identity
+    },
+
+    // Define tags to securely identify nodes without tying them to an identity
+    "tagOwners": {
+        "tag:cloud-hq": ["group:swarm-admin"],
+        "tag:macbook-gpu": ["group:swarm-admin"],
+    },
+
+    "acls": [
+        // Allow the Macbook GPU Node to ONLY talk to the Cloud HQ on the NATS port
+        {
+            "action": "accept",
+            "src": ["tag:macbook-gpu"],
+            "dst": ["tag:cloud-hq:4222", "tag:cloud-hq:7422"]
+        },
+        
+        // Allow Cloud HQ to ping the Macbook Node for health checks
+        {
+            "action": "accept",
+            "src": ["tag:cloud-hq"],
+            "dst": ["tag:macbook-gpu:*"]
+        },
+
+        // Allow Admins full access to SSH/manage all nodes
+        {
+            "action": "accept",
+            "src": ["group:swarm-admin"],
+            "dst": ["*:*"]
+        }
+    ],
+
+    // Enforce regular re-authentication for SSH access
+    "ssh": [
+        {
+            "action": "check",
+            "src": ["group:swarm-admin"],
+            "dst": ["tag:cloud-hq", "tag:macbook-gpu"],
+            "users": ["root", "devon"]
+        }
+    ]
+}
