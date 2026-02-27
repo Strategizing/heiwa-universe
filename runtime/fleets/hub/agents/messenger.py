@@ -13,9 +13,25 @@ from fleets.hub.agents.base import BaseAgent
 from fleets.hub.cognition.approval import ApprovalRegistry
 from fleets.hub.cognition.planner import LocalTaskPlanner
 from fleets.hub.protocol import Subject
+from libs.heiwa_sdk.ui import UIManager
+from libs.heiwa_sdk.db import Database
 
 logger = logging.getLogger("Messenger")
 
+STRUCTURE = {
+    "🌐 HEIWA COMMAND CENTER": {
+        "text": ["central-command", "local-macbook-comms", "swarm-status"],
+    },
+    "🛠️ DEVELOPMENT & OPS": {
+        "text": ["sysops", "engineering", "deployments", "security-audit"],
+    },
+    "🧠 INTELLIGENCE & RESEARCH": {
+        "text": ["field-intel", "research-archive", "scraper-logs"],
+    },
+    "📜 ARCHIVE & LOGS": {
+        "text": ["task-history", "moltbook-logs"],
+    }
+}
 
 class ApprovalView(discord.ui.View):
     def __init__(self, messenger: "MessengerAgent", task_id: str):
@@ -63,8 +79,8 @@ class MessengerAgent(BaseAgent):
 
     def __init__(self):
         super().__init__(name="heiwa-messenger")
+        self.db = Database()
         self.token = os.getenv("DISCORD_TOKEN") or os.getenv("DISCORD_BOT_TOKEN")
-        self.channel_id = int(os.getenv("DISCORD_CHANNEL_ID", "0"))
         self.conversational_mode = os.getenv("HEIWA_CONVERSATIONAL_MODE", "true").lower() == "true"
         self.selftest_allow_bot_commands = (
             os.getenv("HEIWA_SELFTEST_ALLOW_BOT_COMMANDS", "false").strip().lower() == "true"
@@ -83,27 +99,50 @@ class MessengerAgent(BaseAgent):
         self.bot.event(self.on_ready)
         self.bot.event(self.on_message)
 
-    def _response_target_fields(self, task_id: str, payload: dict[str, Any] | None = None) -> dict[str, int | None]:
+    def _get_channel_id(self, purpose: str) -> int:
+        """Resolve channel ID from DB, falling back to legacy ENV if needed."""
+        db_id = self.db.get_discord_channel(purpose)
+        if db_id:
+            return int(db_id)
+        
+        # Legacy fallback
+        if purpose == "central-command":
+            return int(os.getenv("DISCORD_CHANNEL_ID", "0"))
+        return 0
+
+    def _resolve_target_channel(self, payload: dict[str, Any], task_id: str):
         target_meta = self.task_targets.get(task_id, {})
-        response_channel_id = None
-        response_thread_id = None
-        if payload:
-            response_channel_id = payload.get("response_channel_id")
-            response_thread_id = payload.get("response_thread_id")
-        if response_channel_id is None:
-            response_channel_id = target_meta.get("channel_id")
-        if response_thread_id is None:
-            response_thread_id = target_meta.get("thread_id")
-        return {
-            "response_channel_id": int(response_channel_id) if response_channel_id else None,
-            "response_thread_id": int(response_thread_id) if response_thread_id else None,
-        }
+        thread_id = payload.get("response_thread_id") or target_meta.get("thread_id")
+        channel_id = payload.get("response_channel_id") or target_meta.get("channel_id")
+        
+        if not channel_id:
+            # Resolve by intent
+            intent = payload.get("intent_class", "chat")
+            channel_id = self._get_channel_id(intent) or self._get_channel_id("central-command")
+
+        target = None
+        if thread_id:
+            try:
+                target = self.bot.get_channel(int(thread_id))
+            except (TypeError, ValueError):
+                target = None
+        if not target and channel_id:
+            try:
+                target = self.bot.get_channel(int(channel_id))
+            except (TypeError, ValueError):
+                target = None
+        return target
 
     async def on_ready(self):
         logger.info("🎮 Discord Connected as %s", self.bot.user)
         channel = self.bot.get_channel(self.channel_id)
         if channel:
-            await channel.send("🟢 **Heiwa control plane online.** Conversational routing is active.")
+            embed = UIManager.create_base_embed(
+                "Control Plane Online", 
+                "24/7 Cloud HQ established. Swarm orchestration and conversational routing active.", 
+                status="online"
+            )
+            await channel.send(embed=embed)
 
     async def on_message(self, message: discord.Message):
         raw = (message.content or "").strip()
@@ -115,10 +154,60 @@ class MessengerAgent(BaseAgent):
                 await self._handle_bot_control_command(message, raw)
             return
 
+        if raw.startswith("!sync"):
+            await self._sync_server_structure(message)
+            return
+
         if raw.startswith("!dispatch"):
             instruction = raw.replace("!dispatch", "", 1).strip()
             await self._ingest_instruction(instruction, message, explicit=True)
             return
+
+    async def _sync_server_structure(self, message: discord.Message):
+        """Bootstrap or repair the Discord server structure."""
+        if not message.guild:
+            await message.channel.send("❌ Sync must be run within a Guild.")
+            return
+
+        if not message.author.guild_permissions.administrator:
+            await message.channel.send("❌ You need Administrator permissions to sync.")
+            return
+
+        embed = UIManager.create_base_embed("Server Sync", "Architecting Heiwa Command Center...", status="thinking")
+        status_msg = await message.channel.send(embed=embed)
+
+        try:
+            for cat_name, details in STRUCTURE.items():
+                category = discord.utils.get(message.guild.categories, name=cat_name)
+                if not category:
+                    category = await message.guild.create_category(cat_name)
+                
+                for chan_name in details["text"]:
+                    channel = discord.utils.get(category.text_channels, name=chan_name)
+                    if not channel:
+                        channel = await message.guild.create_text_channel(chan_name, category=category)
+                    
+                    # Store in DB
+                    self.db.upsert_discord_channel(chan_name, channel.id, category_name=cat_name)
+            
+            # Special sync for central command
+            self.db.upsert_discord_channel("central-command", message.channel.id, category_name="Primary")
+
+            # Role Management
+            roles_to_create = ["Heiwa Admin", "Heiwa Node", "Heiwa Researcher"]
+            for rname in roles_to_create:
+                role = discord.utils.get(message.guild.roles, name=rname)
+                if not role:
+                    role = await message.guild.create_role(name=rname, reason="Heiwa App Initialization")
+                self.db.upsert_discord_role(rname, role.id)
+
+            embed.title = "✅ Server Sync Complete"
+            embed.description = "All channels architected and indexed in Sovereignty (DB)."
+            embed.color = UIManager.COLORS["executing"]
+            await status_msg.edit(embed=embed)
+        except Exception as e:
+            logger.error("Sync failed: %s", e)
+            await message.channel.send(f"❌ Sync failed: {e}")
 
         if self.selftest_allow_bot_commands and (raw.startswith("!approve") or raw.startswith("!reject")):
             await self._handle_text_approval_command(message, raw)
@@ -235,12 +324,19 @@ class MessengerAgent(BaseAgent):
         response_thread_id = message.channel.id if isinstance(message.channel, discord.Thread) else None
 
         # Immediate acknowledgment for chatbot UX.
-        # Skip orchestration ack for casual chat.
         if intent_profile.intent_class != "chat":
-            ack = f"⚡ **Heiwa acknowledged** `{task_id}`. Planning now{' (explicit)' if explicit else ''}."
+            ack_desc = f"Heiwa acknowledged this request. Planning sequence initiated."
             if intent_profile.underspecified:
-                ack += " I will auto-structure missing details with defaults."
-            await message.channel.send(ack)
+                ack_desc += "\n⚠️ *Note: Request is underspecified. I will auto-structure missing details.*"
+            
+            embed = UIManager.create_base_embed(
+                f"Request Received",
+                ack_desc,
+                status="thinking"
+            )
+            embed.add_field(name="Task ID", value=f"`{task_id}`", inline=True)
+            embed.add_field(name="Intent", value=f"`{preview_intent}`", inline=True)
+            await message.channel.send(embed=embed)
 
             # Publish ingress event before planning for traceability.
             ingress = {
@@ -267,7 +363,9 @@ class MessengerAgent(BaseAgent):
             else:
                 reply = "Hello. (Cognitive engine unavailable)."
             reply = (reply or "").strip() or "Heiwa chat response unavailable (cognitive provider blocked/unavailable)."
-            await message.channel.send(reply)
+            
+            embed = UIManager.create_base_embed("Response", reply, status="thinking")
+            await message.channel.send(embed=embed)
             return
 
         # Use planner to build the schema-validated task plan.
@@ -292,7 +390,20 @@ class MessengerAgent(BaseAgent):
         await self._publish_raw(Subject.TASK_PLAN_REQUEST.value, ingress)
         await self._publish_raw(Subject.TASK_PLAN_RESULT.value, plan_payload)
 
-        await message.channel.send(self._render_plan(plan_payload))
+        # Render visual plan
+        plan_embed = UIManager.create_task_embed(
+            task_id=task_id,
+            instruction=instruction,
+            status="thinking",
+        )
+        plan_embed.title = f"🧠 Heiwa Plan Ready: `{plan_payload['plan_id']}`"
+        for idx, step in enumerate(plan_payload.get("steps", []), start=1):
+            plan_embed.add_field(
+                name=f"Step {idx}: {step['title']}",
+                value=f"Runtime: `{step['target_runtime']}` | Tool: `{step['target_tool']}`",
+                inline=False
+            )
+        await message.channel.send(embed=plan_embed)
 
         if plan_payload["requires_approval"]:
             approval_id = str(plan_payload.get("approval_id") or f"approval-{task_id}")
@@ -472,56 +583,21 @@ class MessengerAgent(BaseAgent):
 
         payload = self._unwrap(data)
         task_id = str(payload.get("task_id", "n/a"))
-        step_id = str(payload.get("step_id", "n/a"))
         status = str(payload.get("status", "PASS"))
         summary = str(payload.get("summary", "")).strip() or "(no summary)"
-        runtime = str(payload.get("runtime", "unknown"))
-        executor = str(payload.get("executor_id", "unknown"))
-
+        
         target = self._resolve_target_channel(payload, task_id)
         if not target:
             return
 
-        artifacts = payload.get("artifacts") or []
-        artifact_lines = []
-        for item in artifacts[:5]:
-            if isinstance(item, dict):
-                artifact_lines.append(f"- `{item.get('kind', 'artifact')}`: {item.get('value', '')}")
-
-        prefix = "✅" if status == "PASS" else "⚠️"
-        lines = [
-            f"{prefix} **Execution Result** `{task_id}` / `{step_id}`",
-            f"- status: `{status}`",
-            f"- runtime: `{runtime}`",
-            f"- executor: `{executor}`",
-            f"- summary: {summary[:1200]}",
-        ]
-        if artifact_lines:
-            lines.append("- artifacts:")
-            lines.extend(artifact_lines)
-        error = payload.get("error")
-        if error:
-            lines.append(f"- error: `{str(error)[:300]}`")
-
-        await target.send("\n".join(lines))
-
-    def _resolve_target_channel(self, payload: dict[str, Any], task_id: str):
-        target_meta = self.task_targets.get(task_id, {})
-        thread_id = payload.get("response_thread_id") or target_meta.get("thread_id")
-        channel_id = payload.get("response_channel_id") or target_meta.get("channel_id") or self.channel_id
-
-        target = None
-        if thread_id:
-            try:
-                target = self.bot.get_channel(int(thread_id))
-            except (TypeError, ValueError):
-                target = None
-        if not target and channel_id:
-            try:
-                target = self.bot.get_channel(int(channel_id))
-            except (TypeError, ValueError):
-                target = None
-        return target
+        ui_status = "completed" if status == "PASS" else "error"
+        embed = UIManager.create_task_embed(
+            task_id, 
+            instruction=summary[:100] + "...", 
+            status=ui_status, 
+            result=summary
+        )
+        await target.send(embed=embed)
 
     async def handle_swarm_log(self, data: dict[str, Any]):
         if not self.bot.is_ready():

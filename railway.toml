@@ -1,0 +1,13 @@
+[service]
+name = "heiwa-cloud-hq"
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "fleets/hub/Dockerfile"
+
+[deploy]
+startCommand = "bash fleets/hub/start.sh"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+healthcheckPath = "/health"
+healthcheckTimeout = 30

@@ -9,21 +9,40 @@ from nats.aio.client import Client as NATS
 import uuid
 
 # Load environment variables
-env_path = os.path.join(os.path.dirname(__file__), '.env')
-if os.path.exists(env_path):
-    with open(env_path) as f:
-        for line in f:
-            if line.strip() and not line.startswith('#'):
-                try:
+def load_env():
+    # Priority: Local agent-specific .env first, then monorepo root .env
+    local_env = os.path.join(os.path.dirname(__file__), ".env")
+    global_env = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../.env"))
+    
+    loaded_vars = {}
+    
+    # Load global first
+    if os.path.exists(global_env):
+        with open(global_env) as f:
+            for line in f:
+                if line.strip() and not line.startswith('#'):
                     key, val = line.strip().split('=', 1)
-                    os.environ[key] = val.strip()
-                except ValueError:
-                    pass
+                    loaded_vars[key] = val.strip().strip('"').strip("'")
+    
+    # Override with local
+    if os.path.exists(local_env):
+        with open(local_env) as f:
+            for line in f:
+                if line.strip() and not line.startswith('#'):
+                    key, val = line.strip().split('=', 1)
+                    loaded_vars[key] = val.strip().strip('"').strip("'")
+    
+    # Apply to os.environ
+    for k, v in loaded_vars.items():
+        os.environ[k] = v
+
+load_env()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("MacbookNode")
 
 NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
+logger.info(f"Connecting to NATS at: {NATS_URL}")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 NODE_ID = os.getenv("NODE_ID", "Macbook-GPU-Node")
 MODEL_PRIMARY = os.getenv("MODEL_PRIMARY", "deepseek-coder-v2:16b")

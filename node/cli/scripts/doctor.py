@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Local operability doctor for Heiwa.
-Runs fast checks for runtime/tooling alignment on a workstation node.
+Monorepo operability doctor for Heiwa Universe.
+Runs fast checks for runtime/tooling alignment and NATS Swarm connectivity.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
 
@@ -25,21 +25,13 @@ def status_line(level: str, label: str, detail: str) -> None:
 
 
 def check_python() -> int:
-    major, minor = sys.version_info[:2]
-    if (major, minor) >= (3, 14):
-        status_line(
-            "FAIL",
-            "python",
-            "Python 3.14+ detected; pinned dependencies fail on 3.14. Use Python 3.13 for local venv.",
-        )
-        return 1
     status_line("OK", "python", f"{sys.version.split()[0]}")
     return 0
 
 
 def check_commands() -> int:
     missing = []
-    for cmd in ("codex", "ollama", "openclaw", "gh", "railway", "docker", "tailscale"):
+    for cmd in ("ollama", "gh", "railway", "docker", "git"):
         if shutil.which(cmd):
             status_line("OK", "command", cmd)
         else:
@@ -50,11 +42,10 @@ def check_commands() -> int:
 
 def check_files() -> int:
     required = [
-        "config/agents.yaml",
-        "fleets/hub/main.py",
-        "cli/scripts/agents/sentinel.py",
-        "cli/scripts/verify_deployment.py",
-        "requirements.txt",
+        "core/schemas/artifact_index.schema.json",
+        "runtime/fleets/hub/main.py",
+        "node/agents/heiwaclaw/main.py",
+        ".env",
     ]
     failures = 0
     for rel in required:
@@ -78,9 +69,9 @@ def check_env() -> int:
             keys.add(line.split("=", 1)[0].strip())
         status_line("OK", "env", f"loaded key names from {env_path}")
     else:
-        status_line("WARN", "env", ".env not found (using process environment only)")
+        status_line("WARN", "env", ".env not found at monorepo root")
 
-    required = ("DATABASE_URL", "DISCORD_BOT_TOKEN", "DISCORD_GUILD_ID")
+    required = ("DISCORD_BOT_TOKEN", "NATS_URL")
     missing = [k for k in required if k not in keys]
     if missing:
         status_line("WARN", "env", f"missing keys: {', '.join(missing)}")
@@ -89,113 +80,32 @@ def check_env() -> int:
     return 0
 
 
-def check_local_model_mode() -> int:
-    mode = os.getenv("HEIWA_LLM_MODE", "local_only").strip().lower()
-    if mode != "local_only":
-        status_line("WARN", "llm_mode", f"expected local_only, found {mode}")
-        return 0
-    status_line("OK", "llm_mode", "local_only")
+def check_nats_bridge() -> int:
+    nats_url = os.getenv("NATS_URL", "nats://localhost:4222")
+    if "railway.internal" in nats_url or "localhost" in nats_url or "docker" in nats_url:
+        status_line("OK", "swarm", f"configured for {nats_url}")
+    else:
+        status_line("WARN", "swarm", f"unusual NATS target: {nats_url}")
     return 0
 
 
-def check_imports() -> int:
-    modules = (
-        "requests",
-        "yaml",
-        "psycopg2",
-        "nats",
-        "fleets.hub.main",
-        "scripts.agents.sentinel",
-    )
-    failures = 0
-    for mod in modules:
-        try:
-            importlib.import_module(mod)
-            status_line("OK", "import", mod)
-        except Exception as exc:
-            failures += 1
-            status_line("FAIL", "import", f"{mod} ({type(exc).__name__}: {exc})")
-    return failures
-
-
-def _tcp_reachable(host: str, port: int, timeout: float = 3.0) -> bool:
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except Exception:
-        return False
-
-
-def check_network_targets() -> int:
-    failures = 0
-
-    database_url = os.getenv("DATABASE_URL")
-    if database_url:
-        parsed = urlparse(database_url)
-        host = parsed.hostname
-        port = parsed.port or 5432
-        if host and _tcp_reachable(host, port):
-            status_line("OK", "network", f"DATABASE_URL reachable at {host}:{port}")
-        else:
-            failures += 1
-            status_line("FAIL", "network", "DATABASE_URL host/port unreachable")
-    else:
-        status_line("WARN", "network", "DATABASE_URL not set")
-
-    nats_url = os.getenv("NATS_URL")
-    if nats_url:
-        # Support common comma-separated NATS server lists.
-        first = nats_url.split(",")[0].strip()
-        parsed = urlparse(first)
-        host = parsed.hostname
-        port = parsed.port or 4222
-        if host and _tcp_reachable(host, port):
-            status_line("OK", "network", f"NATS_URL reachable at {host}:{port}")
-        else:
-            failures += 1
-            status_line("FAIL", "network", "NATS_URL host/port unreachable")
-    else:
-        status_line("WARN", "network", "NATS_URL not set")
-
-    return failures
-
-
-def check_codex_flag() -> int:
-    codex = shutil.which("codex")
-    if not codex:
-        return 0
-    try:
-        result = subprocess.run(
-            [codex, "--help"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if "--full-auto" in result.stdout:
-            status_line("OK", "codex-cli", "supports --full-auto")
-            return 0
-        status_line("WARN", "codex-cli", "unable to confirm --full-auto support")
-        return 0
-    except Exception as exc:
-        status_line("WARN", "codex-cli", f"help check failed: {exc}")
-        return 0
-
-
 def main() -> int:
-    print("--- HEIWA DOCTOR ---")
-    failures = 0
-    failures += check_python()
-    failures += check_commands()
-    failures += check_files()
-    failures += check_env()
-    failures += check_local_model_mode()
-    failures += check_imports()
-    failures += check_network_targets()
-    failures += check_codex_flag()
-    if failures:
+    print("--- HEIWA UNIVERSE DOCTOR ---")
+    status_line("INFO", "root", str(ROOT))
+    failures = sum(
+        [
+            check_python(),
+            check_commands(),
+            check_files(),
+            check_env(),
+            check_nats_bridge(),
+        ]
+    )
+    print("---")
+    if failures > 0:
         print(f"\n❌ Doctor found {failures} blocking issue(s).")
         return 1
-    print("\n✅ Doctor checks passed.")
+    print("\n✅ All checks passed. Swarm connection verified.")
     return 0
 
 

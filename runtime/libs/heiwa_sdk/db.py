@@ -372,6 +372,31 @@ class Database:
             """
             )
 
+            # Discord Channels Table
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS discord_channels (
+                    purpose TEXT PRIMARY KEY,
+                    channel_id BIGINT NOT NULL,
+                    category_name TEXT,
+                    permissions_json TEXT,
+                    last_verified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+            )
+
+            # Discord Roles Table
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS discord_roles (
+                    role_name TEXT PRIMARY KEY,
+                    role_id BIGINT NOT NULL,
+                    permissions_bitmask BIGINT,
+                    last_verified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+            )
+
             conn.commit()
             print("[DB] Postgres schema initialized")
 
@@ -636,6 +661,31 @@ class Database:
 
         # Phase 2: Metadata column for audit
         self._safe_alter_column(cursor, "proposal_consents", "metadata", "TEXT")
+
+        # Discord Channels
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS discord_channels (
+                purpose TEXT PRIMARY KEY,
+                channel_id INTEGER NOT NULL,
+                category_name TEXT,
+                permissions_json TEXT,
+                last_verified_at TEXT
+            )
+        """
+        )
+
+        # Discord Roles
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS discord_roles (
+                role_name TEXT PRIMARY KEY,
+                role_id INTEGER NOT NULL,
+                permissions_bitmask INTEGER,
+                last_verified_at TEXT
+            )
+        """
+        )
 
         conn.commit()
         conn.close()
@@ -1711,6 +1761,84 @@ class Database:
             return 0
         finally:
              conn.close()
+
+    # --- Discord Management ---
+
+    def get_discord_channel(self, purpose):
+        """Fetch channel ID by purpose."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            self._exec(cursor, "SELECT channel_id FROM discord_channels WHERE purpose = ?", (purpose,))
+            row = cursor.fetchone()
+            return row[0] if row else None
+        finally:
+            conn.close()
+
+    def upsert_discord_channel(self, purpose, channel_id, category_name=None, permissions=None):
+        """Register or update a channel mapping."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        try:
+            if self.use_postgres:
+                self._exec(cursor, """
+                    INSERT INTO discord_channels (purpose, channel_id, category_name, permissions_json, last_verified_at)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (purpose) DO UPDATE SET channel_id = %s, category_name = %s, permissions_json = %s, last_verified_at = %s
+                """, (purpose, channel_id, category_name, json.dumps(permissions), now, channel_id, category_name, json.dumps(permissions), now))
+            else:
+                self._exec(cursor, """
+                    INSERT INTO discord_channels (purpose, channel_id, category_name, permissions_json, last_verified_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT (purpose) DO UPDATE SET channel_id = ?, category_name = ?, permissions_json = ?, last_verified_at = ?
+                """, (purpose, channel_id, category_name, json.dumps(permissions), now, channel_id, category_name, json.dumps(permissions), now))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"Discord Channel Error: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+
+    def get_discord_role(self, role_name):
+        """Fetch role ID by name."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            self._exec(cursor, "SELECT role_id FROM discord_roles WHERE role_name = ?", (role_name,))
+            row = cursor.fetchone()
+            return row[0] if row else None
+        finally:
+            conn.close()
+
+    def upsert_discord_role(self, role_name, role_id, permissions_bitmask=None):
+        """Register or update a role mapping."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        try:
+            if self.use_postgres:
+                self._exec(cursor, """
+                    INSERT INTO discord_roles (role_name, role_id, permissions_bitmask, last_verified_at)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (role_name) DO UPDATE SET role_id = %s, permissions_bitmask = %s, last_verified_at = %s
+                """, (role_name, role_id, permissions_bitmask, now, role_id, permissions_bitmask, now))
+            else:
+                self._exec(cursor, """
+                    INSERT INTO discord_roles (role_name, role_id, permissions_bitmask, last_verified_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT (role_name) DO UPDATE SET role_id = ?, permissions_bitmask = ?, last_verified_at = ?
+                """, (role_name, role_id, permissions_bitmask, now, role_id, permissions_bitmask, now))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"Discord Role Error: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
 
     def scan_alerts(self, now_utc):
         """
