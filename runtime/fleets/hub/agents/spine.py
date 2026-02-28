@@ -22,8 +22,10 @@ class SpineAgent(BaseAgent):
 
         # 1. Open Ears
         await self.listen(Subject.NODE_HEARTBEAT, self.handle_heartbeat)
-        # DEPRECATED IN V2: Spine no longer dictates execution. Gemini Strategist handles CORE_REQUEST.
-        # await self.listen(Subject.CORE_REQUEST, self.handle_request)
+        
+        # Re-enabling Spine routing until V2 Strategist is fully implemented
+        await self.listen(Subject.CORE_REQUEST, self.handle_request)
+        await self.listen(Subject.TASK_NEW, self.handle_request)
 
         logger.info("🧠 Spine Active. Monitoring Fleet...")
 
