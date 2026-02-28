@@ -1,0 +1,140 @@
+# Evidence Pack: ORD_REFACTOR_010 (Multi-Node Hardening)
+\n## 1. Git Diff Stat
+ docs/MULTI_NODE.md                                 |   73 +-
+ runtime_A/.heiwa_runtime.json                      |    8 +
+ .../runs/RUN_20260122_193606/inputs/proposal.yaml  |    8 +
+ .../RUN_20260122_193606/logs/node_shield_check.log |   18 +
+ .../RUN_20260122_193606/logs/repo_health_check.log |   32 +
+ .../RUN_20260122_193606/logs/signals_local.log     |    0
+ .../RUN_20260122_193606/outputs/CHAIN_RESULT.json  |   12 +
+ .../outputs/node_shield_check.SkillResult.json     |   11 +
+ .../outputs/planning.SkillResult.json              |   11 +
+ .../outputs/repo_health_check.SkillResult.json     |   16 +
+ .../outputs/signals_local.SkillResult.json         |   22 +
+ .../runs/RUN_20260122_193607/inputs/proposal.yaml  |    8 +
+ .../RUN_20260122_193607/logs/node_shield_check.log |   18 +
+ .../RUN_20260122_193607/logs/repo_health_check.log |   32 +
+ .../RUN_20260122_193607/logs/signals_local.log     |    0
+ .../RUN_20260122_193607/outputs/CHAIN_RESULT.json  |   12 +
+ .../outputs/node_shield_check.SkillResult.json     |   11 +
+ .../outputs/planning.SkillResult.json              |   11 +
+ .../outputs/repo_health_check.SkillResult.json     |   16 +
+ .../outputs/signals_local.SkillResult.json         |   22 +
+ runtime_A/state/processed/PRO_B_1.fingerprint      |    1 +
+ runtime_A/state/processed/PRO_B_1.proposal.yaml    |    8 +
+ runtime_A/state/processed/PRO_C_1.fingerprint      |    1 +
+ runtime_A/state/processed/PRO_C_1.proposal.yaml    |    8 +
+ runtime_B/.heiwa_runtime.json                      |    8 +
+ .../runs/RUN_20260122_193604/inputs/proposal.yaml  |    8 +
+ .../RUN_20260122_193604/logs/node_shield_check.log |   18 +
+ .../RUN_20260122_193604/logs/repo_health_check.log |   32 +
+ .../RUN_20260122_193604/logs/signals_local.log     |    0
+ .../RUN_20260122_193604/outputs/CHAIN_RESULT.json  |   12 +
+ .../outputs/node_shield_check.SkillResult.json     |   11 +
+ .../outputs/planning.SkillResult.json              |   11 +
+ .../outputs/repo_health_check.SkillResult.json     |   16 +
+ .../outputs/signals_local.SkillResult.json         |   22 +
+ runtime_B/state/processed/PRO_A_1.fingerprint      |    1 +
+ runtime_B/state/processed/PRO_A_1.proposal.yaml    |    8 +
+ scripts/gate_build.py                              |   16 +-
+ scripts/mock_hub.py                                |   21 +-
+ scripts/node_sentinel.py                           | 1685 +++++++++-----------
+ scripts/verify_multi_node.py                       |  164 ++
+ scripts/verify_ord_refac_002.py                    |   99 ++
+ services/hub/db.py                                 |  125 +-
+ skills/chain_runner/wrapper.py                     |   10 +-
+ 43 files changed, 1630 insertions(+), 996 deletions(-)
+\n## 2. Multi-Node Verification Output
+```
+=== Multi-Node Verification ===
+[1] Starting Nodes A and B...
+[2] Submitting Proposals...
+Submitted PRO_A_1
+Submitted PRO_B_1
+Submitted PRO_C_1
+Waiting for processing (max 30s)...
+Success detected at tick 5: A=1, B=2
+[3] Verifying Outputs...
+PASS: Runtime ownership confirmed.
+Node A processed: 1
+Node B processed: 2
+PASS: Run Success. Work distributed, ownership verified, no duplication.
+```
+\n## 3. Build Gate Output
+```
+Requirement already satisfied: fastapi==0.115.6 in ./.venv/lib/python3.12/site-packages (from -r services/hub/requirements.txt (line 1)) (0.115.6)
+Requirement already satisfied: uvicorn==0.34.0 in ./.venv/lib/python3.12/site-packages (from uvicorn[standard]==0.34.0->-r services/hub/requirements.txt (line 2)) (0.34.0)
+Requirement already satisfied: pydantic==2.10.4 in ./.venv/lib/python3.12/site-packages (from -r services/hub/requirements.txt (line 3)) (2.10.4)
+Requirement already satisfied: requests>=2.28.0 in ./.venv/lib/python3.12/site-packages (from -r services/hub/requirements.txt (line 4)) (2.32.5)
+Requirement already satisfied: psycopg2-binary>=2.9.9 in ./.venv/lib/python3.12/site-packages (from -r services/hub/requirements.txt (line 5)) (2.9.11)
+Requirement already satisfied: starlette<0.42.0,>=0.40.0 in ./.venv/lib/python3.12/site-packages (from fastapi==0.115.6->-r services/hub/requirements.txt (line 1)) (0.41.3)
+Requirement already satisfied: typing-extensions>=4.8.0 in ./.venv/lib/python3.12/site-packages (from fastapi==0.115.6->-r services/hub/requirements.txt (line 1)) (4.15.0)
+Requirement already satisfied: annotated-types>=0.6.0 in ./.venv/lib/python3.12/site-packages (from pydantic==2.10.4->-r services/hub/requirements.txt (line 3)) (0.7.0)
+Requirement already satisfied: pydantic-core==2.27.2 in ./.venv/lib/python3.12/site-packages (from pydantic==2.10.4->-r services/hub/requirements.txt (line 3)) (2.27.2)
+Requirement already satisfied: click>=7.0 in ./.venv/lib/python3.12/site-packages (from uvicorn==0.34.0->uvicorn[standard]==0.34.0->-r services/hub/requirements.txt (line 2)) (8.3.1)
+Requirement already satisfied: h11>=0.8 in ./.venv/lib/python3.12/site-packages (from uvicorn==0.34.0->uvicorn[standard]==0.34.0->-r services/hub/requirements.txt (line 2)) (0.16.0)
+Requirement already satisfied: httptools>=0.6.3 in ./.venv/lib/python3.12/site-packages (from uvicorn[standard]==0.34.0->-r services/hub/requirements.txt (line 2)) (0.7.1)
+Requirement already satisfied: python-dotenv>=0.13 in ./.venv/lib/python3.12/site-packages (from uvicorn[standard]==0.34.0->-r services/hub/requirements.txt (line 2)) (1.2.1)
+Requirement already satisfied: pyyaml>=5.1 in ./.venv/lib/python3.12/site-packages (from uvicorn[standard]==0.34.0->-r services/hub/requirements.txt (line 2)) (6.0.3)
+Requirement already satisfied: uvloop!=0.15.0,!=0.15.1,>=0.14.0 in ./.venv/lib/python3.12/site-packages (from uvicorn[standard]==0.34.0->-r services/hub/requirements.txt (line 2)) (0.22.1)
+Requirement already satisfied: watchfiles>=0.13 in ./.venv/lib/python3.12/site-packages (from uvicorn[standard]==0.34.0->-r services/hub/requirements.txt (line 2)) (1.1.1)
+Requirement already satisfied: websockets>=10.4 in ./.venv/lib/python3.12/site-packages (from uvicorn[standard]==0.34.0->-r services/hub/requirements.txt (line 2)) (16.0)
+Requirement already satisfied: anyio<5,>=3.4.0 in ./.venv/lib/python3.12/site-packages (from starlette<0.42.0,>=0.40.0->fastapi==0.115.6->-r services/hub/requirements.txt (line 1)) (4.12.1)
+Requirement already satisfied: idna>=2.8 in ./.venv/lib/python3.12/site-packages (from anyio<5,>=3.4.0->starlette<0.42.0,>=0.40.0->fastapi==0.115.6->-r services/hub/requirements.txt (line 1)) (3.11)
+Requirement already satisfied: charset_normalizer<4,>=2 in ./.venv/lib/python3.12/site-packages (from requests>=2.28.0->-r services/hub/requirements.txt (line 4)) (3.4.4)
+Requirement already satisfied: urllib3<3,>=1.21.1 in ./.venv/lib/python3.12/site-packages (from requests>=2.28.0->-r services/hub/requirements.txt (line 4)) (2.6.3)
+Requirement already satisfied: certifi>=2017.4.17 in ./.venv/lib/python3.12/site-packages (from requests>=2.28.0->-r services/hub/requirements.txt (line 4)) (2026.1.4)
+Listing 'services/hub'...
+[DB] Using SQLite: ./hub.db
+main import ok
+tick import ok
+[DB] Using SQLite: ./hub.db
+db import ok
+[DB] Using SQLite: ./hub.db
+=== CP-002 Verification ===
+
+[1] Upserting Nodes...
+PASS: Capabilities stored
+
+[A] Requirement: Needs Docker
+PASS: Docker requirement filtered correctly. Eligible: ['node-capable']
+
+[B] Requirement: Allowed Tag 'forge'
+PASS: Tag requirement filtered correctly. Eligible: ['node-capable']
+
+[C] Scoring Check
+Scores: {'node-capable': 59, 'node-basic': 56}
+PASS: Scoring logic plausible
+
+=> ALL CHECKS PASSED
+/home/devon/heiwa-limited/scripts/verify_ord_refac_002.py:91: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  db.scan_alerts(datetime.datetime.utcnow())
+..
+----------------------------------------------------------------------
+Ran 2 tests in 0.015s
+
+OK
+[DB] Using SQLite: ./hub.db
+[DB] Using SQLite: ./hub.db
+[DB] Consent append error: DB Boom
+[DB] Proposal transition error: DB Boom 2
+[DB] Claim for node error: DB Boom 3
+[DB] Using SQLite: ./hub.db
+=== Gate A1: Cold Build Check ===
+Running: /home/devon/heiwa-limited/.venv/bin/python -m pip install -r services/hub/requirements.txt
+Running: /home/devon/heiwa-limited/.venv/bin/python -m compileall services/hub
+Checking imports...
+Running: /home/devon/heiwa-limited/.venv/bin/python -c "import services.hub.main; print('main import ok')"
+Running: /home/devon/heiwa-limited/.venv/bin/python -c "import services.hub.tick; print('tick import ok')"
+Running: /home/devon/heiwa-limited/.venv/bin/python -c "import services.hub.db; print('db import ok')"
+Checking AST rules...
+Checking Safe DB Usage...
+
+=== Running Verification Scripts ===
+Running scripts/verify_cp_002.py...
+Running: /home/devon/heiwa-limited/.venv/bin/python scripts/verify_cp_002.py
+Running scripts/verify_ord_refac_002.py...
+Running: /home/devon/heiwa-limited/.venv/bin/python scripts/verify_ord_refac_002.py
+
+=== Gate A1 Passed: Cold build & Verifications valid ===
+```

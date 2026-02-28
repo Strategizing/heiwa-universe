@@ -1,0 +1,44 @@
+ docs/MULTI_NODE.md                                 |   73 +-
+ runtime_A/.heiwa_runtime.json                      |    8 +
+ .../runs/RUN_20260122_193606/inputs/proposal.yaml  |    8 +
+ .../RUN_20260122_193606/logs/node_shield_check.log |   18 +
+ .../RUN_20260122_193606/logs/repo_health_check.log |   32 +
+ .../RUN_20260122_193606/logs/signals_local.log     |    0
+ .../RUN_20260122_193606/outputs/CHAIN_RESULT.json  |   12 +
+ .../outputs/node_shield_check.SkillResult.json     |   11 +
+ .../outputs/planning.SkillResult.json              |   11 +
+ .../outputs/repo_health_check.SkillResult.json     |   16 +
+ .../outputs/signals_local.SkillResult.json         |   22 +
+ .../runs/RUN_20260122_193607/inputs/proposal.yaml  |    8 +
+ .../RUN_20260122_193607/logs/node_shield_check.log |   18 +
+ .../RUN_20260122_193607/logs/repo_health_check.log |   32 +
+ .../RUN_20260122_193607/logs/signals_local.log     |    0
+ .../RUN_20260122_193607/outputs/CHAIN_RESULT.json  |   12 +
+ .../outputs/node_shield_check.SkillResult.json     |   11 +
+ .../outputs/planning.SkillResult.json              |   11 +
+ .../outputs/repo_health_check.SkillResult.json     |   16 +
+ .../outputs/signals_local.SkillResult.json         |   22 +
+ runtime_A/state/processed/PRO_B_1.fingerprint      |    1 +
+ runtime_A/state/processed/PRO_B_1.proposal.yaml    |    8 +
+ runtime_A/state/processed/PRO_C_1.fingerprint      |    1 +
+ runtime_A/state/processed/PRO_C_1.proposal.yaml    |    8 +
+ runtime_B/.heiwa_runtime.json                      |    8 +
+ .../runs/RUN_20260122_193604/inputs/proposal.yaml  |    8 +
+ .../RUN_20260122_193604/logs/node_shield_check.log |   18 +
+ .../RUN_20260122_193604/logs/repo_health_check.log |   32 +
+ .../RUN_20260122_193604/logs/signals_local.log     |    0
+ .../RUN_20260122_193604/outputs/CHAIN_RESULT.json  |   12 +
+ .../outputs/node_shield_check.SkillResult.json     |   11 +
+ .../outputs/planning.SkillResult.json              |   11 +
+ .../outputs/repo_health_check.SkillResult.json     |   16 +
+ .../outputs/signals_local.SkillResult.json         |   22 +
+ runtime_B/state/processed/PRO_A_1.fingerprint      |    1 +
+ runtime_B/state/processed/PRO_A_1.proposal.yaml    |    8 +
+ scripts/gate_build.py                              |   16 +-
+ scripts/mock_hub.py                                |   21 +-
+ scripts/node_sentinel.py                           | 1685 +++++++++-----------
+ scripts/verify_multi_node.py                       |  164 ++
+ scripts/verify_ord_refac_002.py                    |   99 ++
+ services/hub/db.py                                 |  125 +-
+ skills/chain_runner/wrapper.py                     |   10 +-
+ 43 files changed, 1630 insertions(+), 996 deletions(-)
