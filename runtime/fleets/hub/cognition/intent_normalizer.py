@@ -37,8 +37,8 @@ _INTENT_RULES = (
     ("research", ("research", "analyze", "compare", "summarize", "investigate"), "low", False),
     ("build", ("build", "create", "implement", "code", "script", "project"), "medium", False),
     ("deploy", ("deploy", "release", "ship", "publish", "production"), "high", True),
-    ("operate", ("fix", "debug", "incident", "monitor", "health", "audit", "patch", "optimize", "improve"), "high", True),
-    ("files", ("file", "move", "rename", "delete", "folder"), "high", True),
+    ("operate", ("fix", "debug", "incident", "monitor", "health", "audit", "patch", "optimize", "improve", "self-improve"), "high", True),
+    ("files", ("file", "move", "rename", "delete", "folder", "[ATTACHMENT:", "[MEDIA_TYPE:"), "high", True),
     ("notion", ("notion", "wiki", "docs", "database", "meeting notes"), "medium", True),
     ("discord", ("discord", "channel", "dm", "message", "announce"), "high", True),
 )
