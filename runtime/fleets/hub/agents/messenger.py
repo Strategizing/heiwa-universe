@@ -20,16 +20,24 @@ logger = logging.getLogger("Messenger")
 
 STRUCTURE = {
     "🌐 HEIWA COMMAND CENTER": {
-        "text": ["central-command", "local-macbook-comms", "swarm-status"],
+        "text": ["operator-input", "central-command", "local-macbook-comms", "swarm-status"],
+        "visibility": "admin_only"
     },
     "🛠️ DEVELOPMENT & OPS": {
         "text": ["sysops", "engineering", "deployments", "security-audit"],
+        "visibility": "admin_only"
     },
     "🧠 INTELLIGENCE & RESEARCH": {
         "text": ["field-intel", "research-archive", "scraper-logs"],
+        "visibility": "admin_only"
     },
     "📜 ARCHIVE & LOGS": {
         "text": ["task-history", "moltbook-logs"],
+        "visibility": "admin_only"
+    },
+    "📢 PUBLIC SURFACE": {
+        "text": ["general", "announcements", "suggestions"],
+        "visibility": "public"
     }
 }
 

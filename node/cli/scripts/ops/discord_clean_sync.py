@@ -66,19 +66,43 @@ class SyncClient(discord.Client):
                     except Exception as e:
                         print(f"   ⚠️ Could not delete {channel.name}: {e}")
 
+        # 1.5 Setup Roles
+        print("🛡️ Setting up roles...")
+        admin_role = discord.utils.get(guild.roles, name="Heiwa Admin")
+        if not admin_role:
+            print("   Creating role: Heiwa Admin")
+            admin_role = await guild.create_role(name="Heiwa Admin", reason="Heiwa App Initialization", permissions=discord.Permissions(administrator=True))
+        
+        self.db.upsert_discord_role("Heiwa Admin", admin_role.id)
+
         # 2. Build STRUCTURE
         print("🏗️ Building Heiwa App Structure...")
         for cat_name, details in STRUCTURE.items():
+            visibility = details.get("visibility", "admin_only")
+            
+            overwrites = {}
+            if visibility == "admin_only":
+                overwrites[guild.default_role] = discord.PermissionOverwrite(view_channel=False)
+                overwrites[admin_role] = discord.PermissionOverwrite(view_channel=True)
+            elif visibility == "public":
+                overwrites[guild.default_role] = discord.PermissionOverwrite(view_channel=True)
+                
             category = discord.utils.get(guild.categories, name=cat_name)
             if not category:
                 print(f"   Creating category: {cat_name}")
-                category = await guild.create_category(cat_name)
+                category = await guild.create_category(cat_name, overwrites=overwrites)
+            else:
+                # Update existing category permissions
+                await category.edit(overwrites=overwrites)
             
             for chan_name in details["text"]:
                 channel = discord.utils.get(category.text_channels, name=chan_name)
                 if not channel:
                     print(f"   Creating channel: {chan_name}")
                     channel = await guild.create_text_channel(chan_name, category=category)
+                else:
+                    # Sync channel to category permissions
+                    await channel.edit(sync_permissions=True)
                 
                 # Store in DB
                 self.db.upsert_discord_channel(chan_name, channel.id, category_name=cat_name)
