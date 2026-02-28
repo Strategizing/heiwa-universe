@@ -74,7 +74,15 @@ def main() -> int:
 
     command, args = _parse_command(payload)
     timeout_sec = int(os.getenv("PICOCLAW_TIMEOUT", "180"))
-    cmd = [resolved, command, *args]
+    
+    cmd = [resolved, command]
+    
+    # Inject model override if present
+    model_override = os.getenv("PICOCLAW_MODEL")
+    if model_override:
+        cmd.extend(["--model", model_override])
+        
+    cmd.extend(args)
 
     with log_file.open("a", encoding="utf-8") as f:
         f.write(json.dumps({"event": "START", "run_id": run_id, "cmd": cmd}) + "\n")

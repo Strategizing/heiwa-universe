@@ -47,8 +47,16 @@ gateway_is_healthy() {
     openclaw gateway health >/dev/null 2>&1
 }
 
+build_cmd() {
+    local base_cmd=("$@")
+    if [[ -n "${OPENCLAW_MODEL:-}" ]]; then
+        base_cmd+=("--model" "$OPENCLAW_MODEL")
+    fi
+    "${base_cmd[@]}"
+}
+
 run_gateway() {
-    openclaw agent \
+    build_cmd openclaw agent \
         --session-id "$SESSION_ID" \
         --agent "$AGENT_ID" \
         --thinking "$THINKING" \
@@ -58,7 +66,7 @@ run_gateway() {
 }
 
 run_local() {
-    openclaw agent \
+    build_cmd openclaw agent \
         --local \
         --agent "$AGENT_ID" \
         --thinking "$THINKING" \

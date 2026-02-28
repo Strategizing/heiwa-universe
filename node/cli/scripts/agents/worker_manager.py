@@ -107,6 +107,34 @@ class WorkerManager(BaseAgent):
             intent_class = str(payload.get("intent_class", "general")).lower()
             instruction = str(payload.get("instruction") or payload.get("raw_text") or "").strip()
 
+            # Dynamic Identity Routing & Prompt Enrichment
+            try:
+                ops_dir = self.root / "node" / "cli" / "scripts" / "ops"
+                if str(ops_dir) not in sys.path:
+                    sys.path.append(str(ops_dir))
+                from identity_selector import load_profiles, select_identity
+                
+                profiles = load_profiles()
+                selection = select_identity(intent_class, profiles)
+                selected = selection.get("selected", {})
+                
+                desc = selected.get("description", "Heiwa operator.")
+                # Enrich the prompt with the identity role
+                instruction = f"[ROLE]: {desc}\n\n{instruction}"
+                
+                # Assign specific models if defined in identity
+                models = selected.get("models", {})
+                if tool == "openclaw" and models.get("openclaw"):
+                    # Use the preferred model (e.g. qwen/deepseek)
+                    os.environ["OPENCLAW_MODEL"] = models["openclaw"][0]
+                elif tool == "ollama" and models.get("openclaw"):
+                    # Fallback mapping: use openclaw's model for ollama if applicable
+                    os.environ["HEIWA_OLLAMA_MODEL"] = models["openclaw"][0].split("/")[-1]
+                elif tool == "picoclaw" and models.get("picoclaw"):
+                    os.environ["PICOCLAW_MODEL"] = models["picoclaw"][0]
+            except Exception as e:
+                logger.warning("Failed to resolve identity, using defaults. Error: %s", e)
+
             if runtime not in {"macbook", "both"}:
                 await self._emit_result(
                     task_id=task_id,

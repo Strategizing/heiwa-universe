@@ -104,7 +104,7 @@ def main() -> int:
     })
 
     base_url = prov["base_url"]
-    model = prov["default_model"]
+    model = os.environ.get("HEIWA_OLLAMA_MODEL") or prov["default_model"]
     fallback = prov.get("fallback_model")
     timeout = int(prov["timeout_seconds"])
     gen = prov.get("generation", {})
