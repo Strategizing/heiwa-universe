@@ -40,7 +40,14 @@ async def _start_mcp():
     await server.serve()
 
 async def main():
-    print("--- HEIWA LIMITED: CORE COLLECTIVE ---")
+    splash = """
+    █░█ █▀▀ █ █░█░█ ▄▀█
+    █▀█ ██▄ █ ▀▄▀▄▀ █▀█ 
+    [ HEIWA ENTERPRISE HUB v2.1 ]
+    """
+    print(splash)
+    logger = logging.getLogger("Hub")
+    logger.info("Initializing SOTA AI-Dentity Enterprise Kernal...")
 
     # Instantiate core fleet components.
     spine = SpineAgent()

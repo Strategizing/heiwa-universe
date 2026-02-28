@@ -76,4 +76,18 @@ jobs:
       - name: Verify Deployment Reachability
         run: python apps/heiwa-cli/scripts/verify_deployment.py https://api.heiwa.ltd
       - name: Verify Domain Routing (Probe)
-        run: python apps/heiwa-cli/scripts/ops/probe_domains.py
+        run: python apps/heiwa_cli/scripts/ops/probe_domains.py
+
+  deploy-web:
+    name: Deploy Web Surface
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/heiwa_web/clients/web --project-name=heiwa-clients

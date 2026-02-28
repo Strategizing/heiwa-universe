@@ -56,9 +56,16 @@ class SpineAgent(BaseAgent):
 
     async def handle_request(self, data: dict):
         """
-        Receive a Task Envelope from Messenger/API, ACK it, then dispatch planned
-        steps to the executor subject(s).
+        Receive a Task Envelope, verify the Digital Barrier, and dispatch.
         """
+        from heiwa_sdk.config import settings
+        
+        # --- DIGITAL BARRIER CHECK ---
+        auth_token = data.get("auth_token") or data.get("data", {}).get("auth_token")
+        if auth_token != settings.HEIWA_AUTH_TOKEN:
+            logger.warning(f"🛡️  Digital Barrier Breach Attempt: Invalid token from sender {data.get('sender_id')}")
+            return # Silent drop for security
+
         payload = data.get("data", data)
         task_id = payload.get("task_id", f"task-{int(time.time())}")
         intent = payload.get("intent_class", "unknown")
