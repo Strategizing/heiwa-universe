@@ -22,8 +22,7 @@ from heiwa_hub.agents.spine import SpineAgent
 from heiwa_hub.agents.messenger import MessengerAgent
 from heiwa_hub.agents.executor import ExecutorAgent
 from heiwa_hub.agents.telemetry import TelemetryAgent
-from heiwa_hub.health import start_health_server
-from heiwa_hub.mcp_server import app as mcp_app
+from heiwa_hub.mcp_server import app as hub_app
 
 # Configure Global Logging
 logging.basicConfig(
@@ -31,11 +30,11 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-async def _start_mcp(port: int):
+async def _start_server(port: int):
     import uvicorn
-    logger = logging.getLogger("Hub.MCP")
-    logger.info("📡 Heiwa MCP Server booting on port %s...", port)
-    config = uvicorn.Config(mcp_app, host="0.0.0.0", port=port, log_level="info")
+    logger = logging.getLogger("Hub.Server")
+    logger.info("📡 Heiwa Hub Server booting on port %s...", port)
+    config = uvicorn.Config(hub_app, host="0.0.0.0", port=port, log_level="info")
     server = uvicorn.Server(config)
     await server.serve()
 
@@ -53,14 +52,9 @@ async def main():
     spine = SpineAgent()
     executor = ExecutorAgent()
     telemetry = TelemetryAgent()
-    tasks = [spine.run(), executor.run(), telemetry.run(), start_health_server()]
-
-    mcp_enabled = os.getenv("HEIWA_ENABLE_MCP_SERVER", "true").strip().lower() == "true"
-    if mcp_enabled:
-        mcp_port = int(os.getenv("HEIWA_MCP_PORT", "8001"))
-        tasks.append(_start_mcp(port=mcp_port))
-    else:
-        logger.info("MCP server disabled (HEIWA_ENABLE_MCP_SERVER=false).")
+    
+    port = int(os.getenv("PORT", "8080"))
+    tasks = [spine.run(), executor.run(), telemetry.run(), _start_server(port=port)]
 
     # Messenger is optional: run only when token exists (or explicitly forced).
     messenger_mode = os.getenv("HEIWA_ENABLE_MESSENGER", "auto").strip().lower()

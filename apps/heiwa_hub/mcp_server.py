@@ -36,11 +36,13 @@ class MCPTool(BaseModel):
 
 
 @app.get("/health")
+@app.head("/health")
 async def health():
-    return {"status": "alive", "service": "heiwa-core-mcp", "timestamp": time.time()}
+    return {"status": "alive", "service": "heiwa-core-hub", "timestamp": time.time()}
 
 
 @app.get("/")
+@app.head("/")
 async def root():
     index = _web_file("index.html")
     if index:
