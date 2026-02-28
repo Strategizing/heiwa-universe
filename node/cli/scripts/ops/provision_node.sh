@@ -10,7 +10,7 @@ echo "🏗️  Preparing Heiwa Node Package for: $NODE_ID ($NODE_TYPE)"
 # 1. Generate local env overrides
 HEIWA_TOKEN=$(grep HEIWA_AUTH_TOKEN .env | cut -d'=' -f2- | tr -d '"' | tr -d "'")
 if [[ -z "$HEIWA_TOKEN" ]]; then
-    HEIWA_TOKEN="test-token"
+    HEIWA_TOKEN="faab5ce53c496715150d6aa96b5082b2"
 fi
 
 ENV_CONTENT=$(cat <<EOF
