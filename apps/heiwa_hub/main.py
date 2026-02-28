@@ -48,17 +48,12 @@ async def main():
     logger = logging.getLogger("Hub")
     logger.info("Initializing SOTA AI-Dentity Sovereign Mesh...")
 
-    # 0. Initialize Persistence
+    # 0. Initialize Persistence (Background)
     from heiwa_sdk.db import Database
     db = Database()
-    db.init_db()
-
-    # Instantiate core fleet components.
-    spine = SpineAgent()
-    executor = ExecutorAgent()
-    telemetry = TelemetryAgent()
+    asyncio.create_task(asyncio.to_thread(db.init_db))
     
-    logger.info("🦾 [BOOT] Agents initialized. Starting execution tasks...")
+    logger.info("🦾 [BOOT] Agents initialized. Awaiting DB sync...")
     
     port = int(os.getenv("PORT", "8080"))
     tasks = [

@@ -235,23 +235,17 @@ class HeiwaShell:
         
         console.print(table)
 
-    async def send_task(self, text: str):
+    async def send_task(self, text: str) -> str:
+        """Atomic task dispatch with Digital Barrier verification."""
         if not self.nc:
             console.print("[red]❌ Not connected to mesh.[/red]")
-            return
-        if not settings.HEIWA_AUTH_TOKEN:
-            console.print("[red]❌ HEIWA_AUTH_TOKEN is not set. Digital Barrier handshake cannot be completed.[/red]")
-            return
+            return ""
+        
+        token = os.getenv("HEIWA_AUTH_TOKEN") or settings.HEIWA_AUTH_TOKEN
+        if not token:
+            console.print("[red]❌ HEIWA_AUTH_TOKEN missing. Handshake denied.[/red]")
+            return ""
 
-        # Handle file attachments
-        attachments = []
-        for word in text.split():
-            try:
-                p = Path(word)
-                if p.is_file():
-                    attachments.append(f"\n--- ATTACHMENT: {word} ---\n{p.read_text(errors='ignore')}\n")
-            except: pass
-            
         task_id = f"task-{uuid.uuid4().hex[:6]}"
         self.task_cache[task_id] = True
         
@@ -259,18 +253,24 @@ class HeiwaShell:
             Payload.SENDER_ID: self.node_id,
             Payload.TIMESTAMP: time.time(),
             Payload.TYPE: Subject.CORE_REQUEST.name,
-            "auth_token": settings.HEIWA_AUTH_TOKEN,
+            "auth_token": token,
             Payload.DATA: {
                 "task_id": task_id,
-                "raw_text": text + "".join(attachments),
+                "raw_text": text,
                 "source": "cli",
-                "private": self.privacy_mode,
-                "auth_token": settings.HEIWA_AUTH_TOKEN # Redundant but safe
+                "auth_token": token,
+                "sender_id": self.node_id,
+                "target_runtime": "any"
             }
         }
-        await self.nc.publish(Subject.CORE_REQUEST.value, json.dumps(payload).encode())
-        console.print(f"[bold yellow]▶ DISPATCHED:[/bold yellow] [dim]{task_id}[/dim]")
-        return task_id
+        
+        try:
+            await self.nc.publish(Subject.CORE_REQUEST.value, json.dumps(payload).encode())
+            console.print(f"[bold yellow]▶ DISPATCHED:[/bold yellow] [dim]{task_id}[/dim]")
+            return task_id
+        except Exception as e:
+            console.print(f"[red]❌ Dispatch failed:[/red] {e}")
+            return ""
 
     async def run(self, initial_prompt: Optional[str] = None):
         console.clear()
