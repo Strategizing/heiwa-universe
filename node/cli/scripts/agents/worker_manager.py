@@ -61,11 +61,13 @@ class WorkerManager(BaseAgent):
         if not use_remote_nats:
             current_nats = os.getenv("NATS_URL", "")
             if not current_nats or "railway.internal" in current_nats:
-                os.environ["NATS_URL"] = os.getenv("HEIWA_LOCAL_NATS_URL", "nats://127.0.0.1:4222")
+                os.environ["NATS_URL"] = os.getenv(
+                    "HEIWA_LOCAL_NATS_URL", "nats://127.0.0.1:4222"
+                )
 
         super().__init__(name="heiwa-worker-manager")
         self.root = ROOT
-        self.node_id = os.getenv("HEIWA_NODE_ID", "macbook")
+        self.node_id = os.getenv("HEIWA_NODE_ID", "macbook@heiwa-agile")
         self.node_type = os.getenv("HEIWA_NODE_TYPE", "mobile_node") # mobile_node | heavy_compute
         self.limiter = RateLimiter()
         self.router = ModelRouter(self.limiter)
@@ -123,16 +125,26 @@ class WorkerManager(BaseAgent):
             logger.error("NATS is required for worker_manager")
             return
 
-        await self.nc.subscribe(Subject.TASK_EXEC_REQUEST_CODE.value, cb=self._handle_msg)
-        await self.nc.subscribe(Subject.TASK_EXEC_REQUEST_RESEARCH.value, cb=self._handle_msg)
-        await self.nc.subscribe(Subject.TASK_EXEC_REQUEST_AUTOMATION.value, cb=self._handle_msg)
-        await self.nc.subscribe(Subject.TASK_EXEC_REQUEST_OPERATE.value, cb=self._handle_msg)
+        await self.nc.subscribe(
+            Subject.TASK_EXEC_REQUEST_CODE.value, cb=self._handle_msg
+        )
+        await self.nc.subscribe(
+            Subject.TASK_EXEC_REQUEST_RESEARCH.value, cb=self._handle_msg
+        )
+        await self.nc.subscribe(
+            Subject.TASK_EXEC_REQUEST_AUTOMATION.value, cb=self._handle_msg
+        )
+        await self.nc.subscribe(
+            Subject.TASK_EXEC_REQUEST_OPERATE.value, cb=self._handle_msg
+        )
 
         logger.info(
-            "worker_manager active. subjects=%s concurrency=%s warm_ttl=%ss",
+            "worker_manager active. subjects=%s concurrency=%s warm_ttl=%ss node=%s caps=%s",
             list(self.subject_tools.keys()),
             self.concurrency,
             self.warm_ttl_sec,
+            self.node_id,
+            self.capabilities
         )
 
         while True:
@@ -141,6 +153,7 @@ class WorkerManager(BaseAgent):
     async def _handle_msg(self, msg):
         data = json.loads(msg.data.decode())
         payload = self._unwrap(data)
+        logger.info("Received task on %s: %s", msg.subject, payload)
         payload.setdefault("target_tool", self.subject_tools.get(msg.subject, "ollama"))
         payload.setdefault("subject", msg.subject)
         await self.execute(payload)
@@ -150,10 +163,12 @@ class WorkerManager(BaseAgent):
             start = time.time()
             task_id = str(payload.get("task_id", "unknown"))
             step_id = str(payload.get("step_id", f"step-{int(start*1000)}"))
-            runtime = str(payload.get("target_runtime", "macbook"))
+            runtime = str(payload.get("target_runtime", "any"))
             tool = str(payload.get("target_tool", "ollama")).lower()
             intent_class = str(payload.get("intent_class", "general")).lower()
-            instruction = str(payload.get("instruction") or payload.get("raw_text") or "").strip()
+            instruction = str(
+                payload.get("instruction") or payload.get("raw_text") or ""
+            ).strip()
 
             # Dynamic Identity Routing & Prompt Enrichment
             try:
@@ -161,11 +176,11 @@ class WorkerManager(BaseAgent):
                 if str(ops_dir) not in sys.path:
                     sys.path.append(str(ops_dir))
                 from identity_selector import load_profiles, select_identity
-                
+
                 profiles = load_profiles()
                 selection = select_identity(intent_class, profiles)
                 selected = selection.get("selected", {})
-                
+
                 desc = selected.get("description", "Heiwa operator.")
                 # Enrich the prompt with the identity role and executive summary requirement
                 instruction = (
@@ -175,7 +190,7 @@ class WorkerManager(BaseAgent):
                     "Follow it with '---' then any technical details or code.\n\n"
                     f"{instruction}"
                 )
-                
+
                 # Assign specific models if defined in identity
                 # Standardize: check 'openclaw' list as the primary intelligence pool
                 models = selected.get("models", {}).get("openclaw", [])
@@ -197,12 +212,14 @@ class WorkerManager(BaseAgent):
                     elif tool == "picoclaw":
                         os.environ["PICOCLAW_MODEL"] = selected_model
             except Exception as e:
-                logger.warning("Failed to resolve identity, using defaults. Error: %s", e)
+                logger.warning(
+                    "Failed to resolve identity, using defaults. Error: %s", e
+                )
 
             required_caps = set(payload.get("required_capabilities") or [])
             
             can_execute = False
-            if runtime in {self.node_id, "both", "any", "all"}:
+            if runtime in {self.node_id, "both", "any", "all", "macbook"}:
                 can_execute = True
             elif required_caps and required_caps.issubset(self.capabilities):
                 can_execute = True
@@ -218,37 +235,43 @@ class WorkerManager(BaseAgent):
                     error=None,
                     artifacts=[{"kind": "dispatch", "value": "capability_mismatch"}],
                     payload=payload,
-                    usage=None,
+                    usage=None
                 )
                 return
 
-            if intent_class in {"discord", "notion", "deploy", "automation"} and not self.allowed_outbound_targets:
+            if (
+                intent_class in {"discord", "notion", "deploy", "automation"}
+                and not self.allowed_outbound_targets
+            ):
                 await self._emit_result(
                     task_id=task_id,
                     step_id=step_id,
                     status="BLOCKED",
                     summary="Outbound action blocked: HEIWA_ALLOWED_OUTBOUND_TARGETS is empty",
                     duration_ms=int((time.time() - start) * 1000),
-                    runtime="macbook",
+                    runtime=self.node_id,
                     error="outbound_allowlist_empty",
                     artifacts=[],
                     payload=payload,
-                    usage=None,
+                    usage=None
                 )
                 return
 
-            if tool in {"openclaw", "picoclaw", "ollama"} and self.llm_mode != "local_only":
+            if (
+                tool in {"openclaw", "picoclaw", "ollama"}
+                and self.llm_mode != "local_only"
+            ):
                 await self._emit_result(
                     task_id=task_id,
                     step_id=step_id,
                     status="BLOCKED",
                     summary="Local-model-only policy blocked non-local execution",
                     duration_ms=int((time.time() - start) * 1000),
-                    runtime="macbook",
+                    runtime=self.node_id,
                     error="llm_mode_violation",
                     artifacts=[],
                     payload=payload,
-                    usage=None,
+                    usage=None
                 )
                 return
 
@@ -259,7 +282,7 @@ class WorkerManager(BaseAgent):
                     "task_id": task_id,
                     "step_id": step_id,
                     "status": "RUNNING",
-                    "runtime": "macbook",
+                    "runtime": self.node_id,
                     "tool": tool,
                     "warm_hit": warm_hit,
                 },
@@ -284,7 +307,6 @@ class WorkerManager(BaseAgent):
                     # Parse JSON output for usage
                     try:
                         data = json.loads(out)
-                        # Extract message and usage if available
                         if isinstance(data, dict):
                             summary = data.get("message", summary)
                             usage = data.get("usage", {})
@@ -389,7 +411,9 @@ class WorkerManager(BaseAgent):
         combined = "\n".join(part for part in [output.strip(), err.strip()] if part)
         return proc.returncode, combined[:6000]
 
-    async def _run_shell_wrapper(self, wrapper: Path, instruction: str) -> tuple[int, str]:
+    async def _run_shell_wrapper(
+        self, wrapper: Path, instruction: str
+    ) -> tuple[int, str]:
         proc = await asyncio.create_subprocess_exec(
             str(wrapper),
             instruction,

@@ -26,7 +26,7 @@ load_env_file() {
                 ;;
         esac
     }
-    while IFS= read -r raw; do
+    while IFS= read -r raw || [[ -n "$raw" ]]; do
         local line
         line="$(echo "$raw" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
         [[ -z "$line" || "${line:0:1}" == "#" ]] && continue
@@ -47,6 +47,10 @@ load_env_file() {
         export "$key=$val"
     done <"$file"
 }
+
+if [[ -f "$HOME/.heiwa/vault.env" ]]; then
+    load_env_file "$HOME/.heiwa/vault.env"
+fi
 
 if [[ -f "$ROOT/.env.worker.local" ]]; then
     load_env_file "$ROOT/.env.worker.local"
