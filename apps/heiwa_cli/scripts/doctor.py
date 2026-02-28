@@ -12,6 +12,7 @@ import socket
 import shutil
 import subprocess
 import sys
+import re
 from urllib.parse import urlparse
 from pathlib import Path
 
@@ -22,6 +23,21 @@ sys.path.insert(0, str(ROOT))
 
 def status_line(level: str, label: str, detail: str) -> None:
     print(f"[{level}] {label}: {detail}")
+
+
+def _read_env_file(path: Path) -> dict[str, str]:
+    data: dict[str, str] = {}
+    if not path.exists():
+        return data
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        key = k.strip()
+        val = v.strip().strip('"').strip("'")
+        data[key] = val
+    return data
 
 
 def check_python() -> int:
@@ -44,7 +60,8 @@ def check_files() -> int:
     required = [
         "config/schemas/artifact_index.schema.json",
         "apps/heiwa_hub/main.py",
-        "apps/worker-nodes/heiwaclaw/main.py",
+        "apps/heiwa_cli/heiwa",
+        "apps/heiwa_web/clients/web/index.html",
         ".env",
     ]
     failures = 0
@@ -60,18 +77,21 @@ def check_files() -> int:
 
 def check_env() -> int:
     env_path = ROOT / ".env"
+    worker_env_path = ROOT / ".env.worker.local"
     keys = set(os.environ.keys())
+    env_files = []
     if env_path.exists():
-        for raw in env_path.read_text(encoding="utf-8").splitlines():
-            line = raw.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            keys.add(line.split("=", 1)[0].strip())
-        status_line("OK", "env", f"loaded key names from {env_path}")
+        keys.update(_read_env_file(env_path).keys())
+        env_files.append(str(env_path))
+    if worker_env_path.exists():
+        keys.update(_read_env_file(worker_env_path).keys())
+        env_files.append(str(worker_env_path))
+    if env_files:
+        status_line("OK", "env", f"loaded key names from {', '.join(env_files)}")
     else:
         status_line("WARN", "env", ".env not found at monorepo root")
 
-    required = ("DISCORD_BOT_TOKEN", "NATS_URL")
+    required = ("HEIWA_AUTH_TOKEN", "NATS_URL")
     missing = [k for k in required if k not in keys]
     if missing:
         status_line("WARN", "env", f"missing keys: {', '.join(missing)}")
@@ -81,8 +101,14 @@ def check_env() -> int:
 
 
 def check_nats_bridge() -> int:
-    nats_url = os.getenv("NATS_URL", "nats://localhost:4222")
-    if "railway.internal" in nats_url or "localhost" in nats_url or "docker" in nats_url:
+    file_env = {}
+    for path in (ROOT / ".env.worker.local", ROOT / ".env"):
+        file_env.update(_read_env_file(path))
+    nats_url = os.getenv("NATS_URL") or file_env.get("NATS_URL") or "nats://localhost:4222"
+    parsed = urlparse(nats_url)
+    host = parsed.hostname or ""
+    host_is_ip = bool(re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", host))
+    if "railway.internal" in host or "localhost" in host or host.startswith("127.") or host.endswith(".up.railway.app") or host_is_ip:
         status_line("OK", "swarm", f"configured for {nats_url}")
     else:
         status_line("WARN", "swarm", f"unusual NATS target: {nats_url}")

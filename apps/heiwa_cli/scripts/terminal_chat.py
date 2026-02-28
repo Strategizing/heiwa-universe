@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import sys
 import uuid
@@ -57,6 +58,7 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.formatted_text import HTML
 
 console = Console()
+logger = logging.getLogger("heiwa.cli.terminal_chat")
 
 class HeiwaCompleter(Completer):
     def __init__(self):
@@ -113,9 +115,29 @@ class HeiwaShell:
 
     async def connect(self, max_retries: int = 5, retry_delay: int = 2):
         nats_url = settings.NATS_URL
+
+        async def _silent_error_cb(err):
+            logger.debug("NATS error (suppressed): %s", err)
+
+        async def _silent_disconnected_cb():
+            logger.debug("NATS disconnected (suppressed)")
+
+        async def _silent_closed_cb():
+            logger.debug("NATS closed (suppressed)")
+
         for attempt in range(1, max_retries + 1):
             try:
-                await self.nc.connect(nats_url, connect_timeout=5)
+                # Keep CLI behavior deterministic in offline scenarios:
+                # do not keep reconnecting in the background and flooding stderr.
+                await self.nc.connect(
+                    nats_url,
+                    connect_timeout=5,
+                    allow_reconnect=False,
+                    max_reconnect_attempts=0,
+                    error_cb=_silent_error_cb,
+                    disconnected_cb=_silent_disconnected_cb,
+                    closed_cb=_silent_closed_cb,
+                )
                 # Subscriptions
                 await self.nc.subscribe(Subject.TASK_EXEC_RESULT.value, cb=self.handle_result)
                 await self.nc.subscribe(Subject.LOG_THOUGHT.value, cb=self.handle_thought)
@@ -216,6 +238,9 @@ class HeiwaShell:
     async def send_task(self, text: str):
         if not self.nc:
             console.print("[red]❌ Not connected to mesh.[/red]")
+            return
+        if not settings.HEIWA_AUTH_TOKEN:
+            console.print("[red]❌ HEIWA_AUTH_TOKEN is not set. Digital Barrier handshake cannot be completed.[/red]")
             return
 
         # Handle file attachments

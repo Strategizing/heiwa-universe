@@ -1,8 +1,12 @@
 import asyncio
 import json
 import logging
+import time
+from pathlib import Path
 from typing import Any, Dict, List
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from heiwa_sdk.db import Database
 from heiwa_sdk.config import load_swarm_env
@@ -13,16 +17,70 @@ load_swarm_env()
 logger = logging.getLogger("Hub.MCP")
 app = FastAPI(title="Heiwa Core MCP Server")
 db = Database()
+ROOT = Path(__file__).resolve().parents[2]
+WEB_ROOT = ROOT / "apps" / "heiwa_web" / "clients" / "web"
+ASSETS_ROOT = WEB_ROOT / "assets"
+
+if ASSETS_ROOT.exists():
+    app.mount("/assets", StaticFiles(directory=str(ASSETS_ROOT)), name="assets")
+
+
+def _web_file(name: str) -> Path | None:
+    candidate = WEB_ROOT / name
+    return candidate if candidate.exists() else None
 
 class MCPTool(BaseModel):
     name: str
     description: str
     input_schema: Dict[str, Any]
 
+
+@app.get("/health")
+async def health():
+    return {"status": "alive", "service": "heiwa-core-mcp", "timestamp": time.time()}
+
+
+@app.get("/")
+async def root():
+    index = _web_file("index.html")
+    if index:
+        return FileResponse(index)
+    return {"name": "Heiwa Limited", "version": "1.0.0", "status": "operational"}
+
+
+@app.get("/domains")
+@app.get("/domains.html")
+async def domains_page():
+    page = _web_file("domains.html")
+    if page:
+        return FileResponse(page)
+    raise HTTPException(status_code=404, detail="domains page unavailable")
+
+
+@app.get("/governance")
+@app.get("/governance.html")
+async def governance_page():
+    page = _web_file("governance.html")
+    if page:
+        return FileResponse(page)
+    raise HTTPException(status_code=404, detail="governance page unavailable")
+
+
+@app.get("/status.html")
+async def status_page():
+    page = _web_file("status.html")
+    if page:
+        return FileResponse(page)
+    raise HTTPException(status_code=404, detail="status page unavailable")
+
 @app.get("/status")
 async def get_public_status():
     """Public telemetry snapshot for the web dashboard."""
-    summary = db.get_model_usage_summary(minutes=60)
+    try:
+        summary = db.get_model_usage_summary(minutes=60)
+    except Exception as exc:
+        logger.warning("Public status summary unavailable: %s", exc)
+        summary = []
     return {
         "status": "OPERATIONAL",
         "mesh_nodes": ["macbook@heiwa-agile", "wsl@heiwa-thinker", "railway@mesh-brain"],

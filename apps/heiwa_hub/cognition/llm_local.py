@@ -4,12 +4,13 @@ Heiwa LLM Engine — Tiered Multi-Provider Router
 Tier 1: Node Ollama  (Macbook M4/Workstation RTX 3060 — free, unlimited)
 Tier 2: Gemini Flash (Google AI Pro plan — fast, cheap)
 Tier 3: Gemini Pro   (Google AI Pro plan — heavy reasoning)
-Tier 4: ChatGPT Plus (OpenAI — highest quality, most expensive)
+Tier 4: Claude (Anthropic — premium strategy/reasoning)
+Tier 5: OpenAI fallback (optional)
 
 Routing logic:
   LOW complexity  → Tier 1 (Ollama) → fallback Tier 2
   MED complexity  → Tier 2 (Gemini Flash) → fallback Tier 1
-  HIGH complexity → Tier 3 (Gemini Pro) → fallback Tier 4 → fallback Tier 1
+  HIGH complexity → Tier 3 (Gemini Pro) → fallback Tier 4 → fallback Tier 5 → fallback Tier 1
 """
 from __future__ import annotations
 
@@ -86,7 +87,14 @@ class LocalLLMEngine:
         )
         self.gemini_timeout = float(os.getenv("HEIWA_GEMINI_TIMEOUT_SEC", "30"))
 
-        # --- OpenAI / ChatGPT Plus (Tier 4: Highest quality) ---
+        # --- Anthropic Claude (Tier 4: Premium strategy) ---
+        self.anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+        self.anthropic_model = os.getenv(
+            "HEIWA_ANTHROPIC_MODEL", "claude-3-5-sonnet-latest"
+        )
+        self.anthropic_timeout = float(os.getenv("HEIWA_ANTHROPIC_TIMEOUT_SEC", "45"))
+
+        # --- OpenAI fallback (Tier 5) ---
         self.openai_key = os.getenv("OPENAI_API_KEY")
         self.openai_model = os.getenv("HEIWA_OPENAI_MODEL", "gpt-4o")
         self.openai_timeout = float(os.getenv("HEIWA_OPENAI_TIMEOUT_SEC", "45"))
@@ -104,10 +112,11 @@ class LocalLLMEngine:
                 self._redis = None
 
         logger.info(
-            "LLMEngine initialized | host_runtime=%s ollama=%s gemini=%s openai=%s",
+            "LLMEngine initialized | host_runtime=%s ollama=%s gemini=%s claude=%s openai=%s",
             self.host_runtime,
             "ON" if self._ollama_available(runtime=self.host_runtime) else "OFF",
             "ON" if self.gemini_key else "OFF",
+            "ON" if self.anthropic_key else "OFF",
             "ON" if self.openai_key else "OFF",
         )
 
@@ -167,6 +176,8 @@ class LocalLLMEngine:
         if self._ollama_available(runtime=runtime):
             return True
         if self.gemini_key:
+            return True
+        if self.anthropic_key:
             return True
         if self.openai_key:
             return True
@@ -281,6 +292,59 @@ class LocalLLMEngine:
         wait=wait_exponential(multiplier=2, min=2, max=30),
         retry=retry_if_exception_type(requests.exceptions.HTTPError),
     )
+    def _call_claude(
+        self, prompt: str, system: Optional[str] = None
+    ) -> LLMResult:
+        url = "https://api.anthropic.com/v1/messages"
+        payload: dict[str, Any] = {
+            "model": self.anthropic_model,
+            "max_tokens": 2048,
+            "temperature": 0.2,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if system:
+            payload["system"] = system
+
+        headers = {
+            "x-api-key": str(self.anthropic_key),
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
+        if _NET_PROXY:
+            resp = _NET_PROXY.post(
+                url,
+                purpose="claude inference",
+                purpose_class="model_inference",
+                json=payload,
+                headers=headers,
+                timeout=int(self.anthropic_timeout),
+            )
+        else:
+            resp = requests.post(
+                url, json=payload, headers=headers, timeout=self.anthropic_timeout
+            )
+        if resp.status_code == 429:
+            logger.warning("Claude 429 — backing off")
+            resp.raise_for_status()
+        resp.raise_for_status()
+
+        data = resp.json()
+        content = data.get("content") or []
+        text_parts = [
+            str(chunk.get("text", "")).strip()
+            for chunk in content
+            if isinstance(chunk, dict) and chunk.get("type") == "text"
+        ]
+        text = "\n".join(part for part in text_parts if part)
+        return LLMResult(
+            text=text, provider="anthropic", model=self.anthropic_model, tier=4
+        )
+
+    @retry(
+        stop=stop_after_attempt(2),
+        wait=wait_exponential(multiplier=2, min=2, max=30),
+        retry=retry_if_exception_type(requests.exceptions.HTTPError),
+    )
     def _call_openai(
         self, prompt: str, system: Optional[str] = None
     ) -> LLMResult:
@@ -333,7 +397,9 @@ class LocalLLMEngine:
         elif complexity == "medium":
             chain = ["gemini_flash", "ollama", "gemini_pro"]
         else:  # high
-            chain = ["gemini_pro", "openai", "ollama"]
+            # Degrade to Gemini Flash before exhausting all providers so
+            # high-tier requests still return useful output under Pro quota pressure.
+            chain = ["gemini_pro", "gemini_flash", "claude", "openai", "ollama"]
         if not self._runtime_allows_ollama(effective_runtime):
             chain = [provider for provider in chain if provider != "ollama"]
         return chain
@@ -357,6 +423,8 @@ class LocalLLMEngine:
                 return self._call_gemini(
                     prompt, self.gemini_pro_model, tier=3, system=system
                 )
+            elif provider == "claude" and self.anthropic_key:
+                return self._call_claude(prompt, system)
             elif provider == "openai" and self.openai_key:
                 return self._call_openai(prompt, system)
         except Exception as e:

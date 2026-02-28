@@ -22,10 +22,10 @@ variable "railway_cname_target" {
   default     = "heiwa-cloud-hq-brain.up.railway.app"
 }
 
-variable "pages_cname_target" {
-  description = "The Cloudflare Pages domain target for status/docs"
+variable "web_cname_target" {
+  description = "Primary web target for root/status/docs"
   type        = string
-  default     = "heiwa-clients.pages.dev"
+  default     = "heiwa-cloud-hq-brain.up.railway.app"
 }
 
 # -------------------------------------------------------------------------
@@ -35,7 +35,7 @@ variable "pages_cname_target" {
 resource "cloudflare_record" "root" {
   zone_id = var.zone_id
   name    = "@"
-  value   = var.pages_cname_target
+  value   = var.web_cname_target
   type    = "CNAME"
   proxied = true
 }
@@ -43,7 +43,7 @@ resource "cloudflare_record" "root" {
 resource "cloudflare_record" "status" {
   zone_id = var.zone_id
   name    = "status"
-  value   = var.pages_cname_target
+  value   = var.web_cname_target
   type    = "CNAME"
   proxied = true
 }
@@ -51,7 +51,7 @@ resource "cloudflare_record" "status" {
 resource "cloudflare_record" "docs" {
   zone_id = var.zone_id
   name    = "docs"
-  value   = var.pages_cname_target
+  value   = var.web_cname_target
   type    = "CNAME"
   proxied = true
 }
@@ -73,6 +73,19 @@ resource "cloudflare_record" "api" {
 }
 
 # -------------------------------------------------------------------------
+# Zone Baseline (avoid global challenge lockouts)
+# -------------------------------------------------------------------------
+
+resource "cloudflare_zone_settings_override" "zone_baseline" {
+  zone_id = var.zone_id
+
+  settings {
+    security_level = "medium"
+    browser_check  = "on"
+  }
+}
+
+# -------------------------------------------------------------------------
 # WAF / Edge Rules
 # -------------------------------------------------------------------------
 
@@ -90,12 +103,6 @@ resource "cloudflare_ruleset" "heiwa_waf" {
     enabled = true
   }
 
-  rules {
-    action = "block"
-    expression = "(http.request.host eq \"api.heiwa.ltd\" or http.request.host eq \"auth.heiwa.ltd\") and not cf.bot_management.verified_bot"
-    description = "Challenge unverified bots hitting compute endpoints"
-    enabled = true
-  }
 }
 
 resource "cloudflare_ruleset" "rate_limiting" {
@@ -107,7 +114,7 @@ resource "cloudflare_ruleset" "rate_limiting" {
 
   rules {
     action = "block"
-    expression = "(http.request.host eq \"api.heiwa.ltd\" or http.request.host eq \"auth.heiwa.ltd\")"
+    expression = "(http.host eq \"api.heiwa.ltd\" or http.host eq \"auth.heiwa.ltd\")"
     description = "Rate limit API/Auth to 100 req per minute per IP"
     enabled = true
     action_parameters {
@@ -118,10 +125,10 @@ resource "cloudflare_ruleset" "rate_limiting" {
       }
     }
     ratelimit {
-      characteristics = ["ip.src"]
-      period          = 60
-      requests_per_period = 100
-      mitigation_timeout  = 300 # 5 minutes block
+      characteristics = ["ip.src", "cf.colo.id"]
+      period          = 10
+      requests_per_period = 10
+      mitigation_timeout  = 10
     }
   }
 }

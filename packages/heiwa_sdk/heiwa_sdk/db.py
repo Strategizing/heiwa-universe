@@ -192,6 +192,13 @@ class Database:
             """
             )
 
+            # Migration: Add columns to runs if missing
+            for col in ["node_id", "replay_receipt", "model_id", "mode"]:
+                self._safe_alter_column(cursor, "runs", col, "TEXT")
+            for col in ["tokens_input", "tokens_output", "tokens_total"]:
+                self._safe_alter_column(cursor, "runs", col, "INTEGER")
+            self._safe_alter_column(cursor, "runs", "cost", "REAL")
+
             # Alerts Table
             cursor.execute(
                 """

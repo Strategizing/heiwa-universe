@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "task_envelope_v2",
+  "title": "Heiwa Task Envelope V2",
+  "type": "object",
+  "required": [
+    "task_id",
+    "parent_task_id",
+    "plan_id",
+    "step_id",
+    "raw_text",
+    "intent_class",
+    "risk_level",
+    "requires_approval",
+    "requested_by",
+    "source_channel_id",
+    "source_message_id",
+    "response_channel_id",
+    "response_thread_id",
+    "target_runtime",
+    "target_tool",
+    "steps"
+  ],
+  "properties": {
+    "task_id": { "type": "string", "minLength": 1 },
+    "parent_task_id": { "type": "string" },
+    "plan_id": { "type": "string", "minLength": 1 },
+    "step_id": { "type": "string", "minLength": 1 },
+    "raw_text": { "type": "string", "minLength": 1 },
+    "intent_class": {
+      "type": "string",
+      "enum": ["build", "research", "deploy", "operate", "automation", "files", "notion", "discord", "chat", "general"]
+    },
+    "risk_level": { "type": "string", "enum": ["low", "medium", "high"] },
+    "requires_approval": { "type": "boolean" },
+    "requested_by": { "type": "string", "minLength": 1 },
+    "source_channel_id": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
+    "source_message_id": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
+    "response_channel_id": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
+    "response_thread_id": { "oneOf": [{ "type": "integer" }, { "type": "string" }, { "type": "null" }] },
+    "target_runtime": { "type": "string", "enum": ["railway", "macbook", "both"] },
+    "target_tool": { "type": "string", "enum": ["codex", "openclaw", "picoclaw", "n8n", "ollama"] },
+    "target_tier": { "type": "string" },
+    "normalization": { "type": "object" },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["step_id", "title", "instruction", "subject", "target_runtime", "target_tool", "target_tier"],
+        "properties": {
+          "step_id": { "type": "string", "minLength": 1 },
+          "title": { "type": "string", "minLength": 1 },
+          "instruction": { "type": "string", "minLength": 1 },
+          "subject": { "type": "string", "minLength": 1 },
+          "target_runtime": { "type": "string", "enum": ["railway", "macbook", "both"] },
+          "target_tool": { "type": "string", "enum": ["codex", "openclaw", "picoclaw", "n8n", "ollama"] },
+          "target_tier": { "type": "string" },
+          "required_capability": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

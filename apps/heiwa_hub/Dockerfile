@@ -50,6 +50,7 @@ RUN curl -L https://github.com/nats-io/nats-server/releases/download/v${NATS_VER
 COPY packages/ /app/packages/
 COPY config/ /app/config/
 COPY apps/heiwa_hub/ /app/apps/heiwa_hub/
+COPY apps/heiwa_web/clients/web/ /app/apps/heiwa_web/clients/web/
 COPY requirements.txt /app/requirements.txt
 
 # Copy entrypoint

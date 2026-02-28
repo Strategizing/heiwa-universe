@@ -60,7 +60,12 @@ class LocalTaskPlanner:
     """Produces schema-like execution plans from free-form text."""
 
     def __init__(self) -> None:
-        self.schema_path = Path(__file__).resolve().parents[3] / "schemas" / "task_envelope_v2.schema.json"
+        root = Path(__file__).resolve().parents[3]
+        candidates = [
+            root / "config" / "schemas" / "task_envelope_v2.schema.json",
+            root / "schemas" / "task_envelope_v2.schema.json",
+        ]
+        self.schema_path = next((path for path in candidates if path.exists()), candidates[0])
         self.engine: LocalLLMEngine | None = None
         try:
             self.engine = LocalLLMEngine()

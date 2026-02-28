@@ -143,6 +143,42 @@ class MessengerAgent(BaseAgent):
                 except: pass
         return 0
 
+    def _parse_channel_ids(self, raw: str) -> set[int]:
+        ids: set[int] = set()
+        for part in (raw or "").split(","):
+            token = part.strip()
+            if not token:
+                continue
+            try:
+                ids.add(int(token))
+            except ValueError:
+                logger.warning("Ignoring invalid HEIWA_LISTEN_CHANNEL_IDS token: %s", token)
+        return ids
+
+    def _parse_intent_channel_map(self, raw: str) -> dict[str, int]:
+        mapping: dict[str, int] = {}
+        for part in (raw or "").split(","):
+            token = part.strip()
+            if not token or ":" not in token:
+                continue
+            intent, channel = token.split(":", 1)
+            intent_key = intent.strip().lower()
+            channel_id = channel.strip()
+            if not intent_key or not channel_id:
+                continue
+            try:
+                mapping[intent_key] = int(channel_id)
+            except ValueError:
+                logger.warning("Ignoring invalid intent channel mapping: %s", token)
+        return mapping
+
+    @staticmethod
+    def _unwrap(data: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(data, dict):
+            return {}
+        inner = data.get("data")
+        return inner if isinstance(inner, dict) else data
+
     def _resolve_target_channel(self, payload: dict[str, Any], task_id: str):
         target_meta = self.task_targets.get(task_id, {})
         thread_id = payload.get("response_thread_id") or target_meta.get("thread_id")
@@ -318,6 +354,81 @@ class MessengerAgent(BaseAgent):
     async def dispatch_plan(self, plan: dict[str, Any]) -> None:
         await self._publish_raw(Subject.TASK_NEW.value, plan)
         await self._publish_raw(Subject.CORE_REQUEST.value, plan)
+
+    async def apply_approval_decision(
+        self,
+        task_id: str,
+        approved: bool,
+        actor: str,
+        interaction: discord.Interaction | None = None,
+    ) -> None:
+        state = self.approvals.decide(task_id, approved=approved, actor=actor)
+        if not state:
+            if interaction:
+                await interaction.response.send_message(
+                    f"Approval not found for `{task_id}`.", ephemeral=True
+                )
+            return
+
+        plan_payload = self.approvals.get_payload(task_id) or {}
+        decision_payload = {
+            "task_id": task_id,
+            "status": state.status,
+            "approved": approved,
+            "decision_by": actor,
+            "decision_at": state.decision_at,
+            "response_channel_id": plan_payload.get("response_channel_id"),
+            "response_thread_id": plan_payload.get("response_thread_id"),
+        }
+        await self._publish_raw(Subject.TASK_APPROVAL_DECISION.value, decision_payload)
+
+        if approved and plan_payload:
+            await self.dispatch_plan(plan_payload)
+        else:
+            self.approvals.consume_payload(task_id)
+
+        if interaction:
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    f"`{task_id}` marked `{state.status}` by {actor}.",
+                    ephemeral=True,
+                )
+            else:
+                await interaction.response.send_message(
+                    f"`{task_id}` marked `{state.status}` by {actor}.",
+                    ephemeral=True,
+                )
+
+    async def handle_approval_timeout(self, task_id: str) -> None:
+        state = self.approvals.expire(task_id, actor="system", reason="approval_timeout")
+        if not state:
+            return
+        plan_payload = self.approvals.get_payload(task_id) or {}
+        await self._publish_raw(
+            Subject.TASK_APPROVAL_DECISION.value,
+            {
+                "task_id": task_id,
+                "status": state.status,
+                "approved": False,
+                "decision_by": state.decision_by,
+                "decision_at": state.decision_at,
+                "reason": state.reason,
+                "response_channel_id": plan_payload.get("response_channel_id"),
+                "response_thread_id": plan_payload.get("response_thread_id"),
+            },
+        )
+        self.approvals.consume_payload(task_id)
+
+    async def handle_approval_decision_event(self, data: dict[str, Any]) -> None:
+        if not self.bot.is_ready():
+            return
+        payload = self._unwrap(data)
+        task_id = str(payload.get("task_id", "n/a"))
+        target = self._resolve_target_channel(payload, task_id)
+        if target:
+            await target.send(
+                f"🧾 **Approval** `{task_id}`: `{payload.get('status', 'UNKNOWN')}`"
+            )
 
     async def handle_thought(self, data: dict[str, Any]):
         if not self.bot.is_ready(): return

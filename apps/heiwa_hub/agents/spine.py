@@ -59,10 +59,15 @@ class SpineAgent(BaseAgent):
         Receive a Task Envelope, verify the Digital Barrier, and dispatch.
         """
         from heiwa_sdk.config import settings
-        
+
+        expected_token = settings.HEIWA_AUTH_TOKEN
+        if not expected_token:
+            logger.error("🛡️  Digital Barrier misconfigured: HEIWA_AUTH_TOKEN is not set. Dropping inbound task.")
+            return
+
         # --- DIGITAL BARRIER CHECK ---
         auth_token = data.get("auth_token") or data.get("data", {}).get("auth_token")
-        if auth_token != settings.HEIWA_AUTH_TOKEN:
+        if not auth_token or auth_token != expected_token:
             logger.warning(f"🛡️  Digital Barrier Breach Attempt: Invalid token from sender {data.get('sender_id')}")
             return # Silent drop for security
 

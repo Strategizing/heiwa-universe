@@ -36,7 +36,10 @@ class TelemetryAgent(BaseAgent):
         # Background loop for periodical analysis
         pulse_count = 0
         while self.running:
-            await self.process_analytics()
+            try:
+                await self.process_analytics()
+            except Exception as exc:
+                logger.error("Telemetry analytics loop error: %s", exc)
             
             # Swarm Pulse: Proactive brainstorming every hour (60 loops)
             pulse_count += 1
@@ -70,6 +73,13 @@ class TelemetryAgent(BaseAgent):
             "status": "OPERATIONAL"
         }
         await self.speak(Subject.SWARM_STATUS_REPORT, report)
+
+    @staticmethod
+    def _unwrap(data: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(data, dict):
+            return {}
+        inner = data.get("data")
+        return inner if isinstance(inner, dict) else data
 
     async def handle_exec_result(self, data: dict[str, Any]):
         payload = self._unwrap(data)
@@ -125,7 +135,12 @@ class TelemetryAgent(BaseAgent):
         if now - self.last_summary_ts < 300: # Every 5 mins
             return
             
-        summary = self.db.get_model_usage_summary(minutes=60)
+        try:
+            summary = self.db.get_model_usage_summary(minutes=60)
+        except Exception as exc:
+            logger.warning("Skipping model usage summary (schema mismatch or DB issue): %s", exc)
+            self.last_summary_ts = now
+            return
         # Update internal state
         for s in summary:
             mid = s["model_id"]

@@ -5,6 +5,7 @@ import json
 import uuid
 import subprocess
 import shlex
+import re
 from pathlib import Path
 
 # --- SOTA ROOT DISCOVERY ---
@@ -44,6 +45,11 @@ except ImportError:
 
 HEIWA_GLOBAL_DIR = Path(os.path.expanduser("~/.heiwa"))
 IDENTITY_FILE = HEIWA_GLOBAL_DIR / "identity.json"
+_CRED_URL_RE = re.compile(r"(://)[^:@/]+:[^@/]+@")
+
+
+def _redact_url_credentials(url: str) -> str:
+    return _CRED_URL_RE.sub(r"\1<user>:<redacted>@", url or "")
 
 def _resolve_python() -> str:
     return sys.executable
@@ -116,7 +122,7 @@ def cmd_status(args):
         print(f"👤 Identity: {identity.get('name')} ({identity.get('role')})")
     
     nats_url = os.getenv("NATS_URL", "nats://localhost:4222")
-    print(f"📡 NATS Mesh: {nats_url}")
+    print(f"📡 NATS Mesh: {_redact_url_credentials(nats_url)}")
     
     print("\n📊 Local Hardware Utilization:")
     try:

@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 12,
   "default_identity": "operator-general",
   "identities": [
     {
@@ -8,11 +8,28 @@
       "trigger_keywords": ["heiwa", "ops", "fix", "status"],
       "targets": {
         "tool": "openclaw", 
-        "runtime": "any",
+        "runtime": "macbook@heiwa-agile",
         "required_capabilities": ["standard_compute", "workspace_interaction"]
       },
+      "cells": [
+        {"role": "scout", "model": "google/gemini-2.0-flash", "difficulty": "low"},
+        {"role": "builder", "model": "ollama/qwen2.5-coder:7b", "difficulty": "medium"},
+        {"role": "architect", "model": "cerebras/gpt-oss-120b", "difficulty": "high"}
+      ],
       "models": {
-        "openclaw": ["ollama/qwen2.5-coder:7b", "google/gemini-2.5-flash", "groq/llama-3.3-70b-versatile"]
+        "openclaw": [
+          "ollama/qwen2.5-coder:7b",
+          "google/gemini-2.5-flash",
+          "google/gemini-2.0-flash",
+          "google/gemini-1.5-pro",
+          "groq/llama-3.1-8b-instant",
+          "groq/llama-3.3-70b-versatile",
+          "cerebras/gpt-oss-120b",
+          "openrouter/qwen/qwen3-coder:free",
+          "openrouter/google/gemini-2.0-flash:free",
+          "opencode/glm-4.7-free",
+          "opencode/kimi-k2.5-free"
+        ]
       },
       "actions": {
         "discord_channel": "central-comms",
@@ -33,7 +50,14 @@
         {"role": "visionary", "model": "google-antigravity/claude-opus-4-5-thinking", "difficulty": "high"}
       ],
       "models": {
-        "openclaw": ["groq/llama-3.3-70b-versatile", "google/gemini-1.5-pro", "google-antigravity/claude-opus-4-5-thinking"]
+        "openclaw": [
+          "groq/llama-3.3-70b-versatile",
+          "google/gemini-1.5-pro",
+          "google-antigravity/claude-opus-4-5-thinking",
+          "google-antigravity/gemini-3-pro-high",
+          "openrouter/openai/gpt-oss-120b:free",
+          "openai-codex/gpt-5.2-codex"
+        ]
       },
       "actions": {
         "discord_channel": "roadmap",
@@ -55,7 +79,15 @@
         {"role": "verifier", "model": "openrouter/qwen/qwen3-vl-30b-a3b-thinking", "difficulty": "high"}
       ],
       "models": {
-        "openclaw": ["ollama/deepseek-r1:14b", "groq/deepseek-r1-distill-llama-70b", "openrouter/qwen/qwen3-vl-30b-a3b-thinking"]
+        "openclaw": [
+          "ollama/deepseek-r1:14b",
+          "groq/deepseek-r1-distill-llama-70b",
+          "openrouter/qwen/qwen3-vl-30b-a3b-thinking",
+          "openrouter/nousresearch/hermes-3-llama-3.1-405b:free",
+          "openrouter/qwen/qwen2.5-72b-instruct:free",
+          "groq/qwen-qwq-32b",
+          "cerebras/gpt-oss-120b"
+        ]
       },
       "actions": {
         "discord_channel": "dev-labs",
@@ -72,11 +104,21 @@
         "required_capabilities": ["research", "web_access"]
       },
       "cells": [
-        {"role": "browser", "model": "google/gemini-2.5-flash", "difficulty": "low"},
+        {"role": "browser", "model": "google/gemini-2.0-flash", "difficulty": "low"},
         {"role": "synthesizer", "model": "openrouter/mistralai/mistral-small-3.1-24b-instruct:free", "difficulty": "medium"}
       ],
       "models": {
-        "openclaw": ["google/gemini-2.5-flash", "openrouter/meta-llama/llama-3.3-70b-instruct:free"]
+        "openclaw": [
+          "google/gemini-2.5-flash",
+          "openrouter/meta-llama/llama-3.3-70b-instruct:free",
+          "openrouter/google/gemini-2.0-flash:free",
+          "openrouter/mistralai/mistral-small-3.1-24b-instruct:free",
+          "openrouter/stepfun/step-3.5-flash:free",
+          "openrouter/upstage/solar-pro-3:free",
+          "openrouter/z-ai/glm-4.5-air:free",
+          "opencode/minimax-m2.1-free",
+          "opencode/trinity-large-preview-free"
+        ]
       },
       "actions": {
         "discord_channel": "technical-research",

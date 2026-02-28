@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Heiwa 360 Readiness Check
+Heiwa 360 Readiness Check (Enterprise v1.0)
 
 Validates:
-1) Source/deploy boundary files
+1) Monorepo structure and critical files
 2) Worker executors and wrappers
 3) Local service readiness (Ollama/NATS/OpenClaw gateway)
-4) Railway control-plane health
-5) Env drift signals that break local-vs-cloud separation
+4) Railway & Edge health (DNS resolution and HTTP pulse)
+5) Identity and Vault integrity
 """
 
 from __future__ import annotations
@@ -21,7 +21,16 @@ from urllib.error import HTTPError
 from urllib.request import urlopen
 
 
-ROOT = Path(__file__).resolve().parents[2]
+def find_monorepo_root(start_path: Path) -> Path:
+    current = start_path.resolve()
+    for _ in range(5):
+        if (current / "apps").exists() and (current / "packages").exists():
+            return current
+        current = current.parent
+    return Path("/Users/dmcgregsauce/heiwa")
+
+
+ROOT = find_monorepo_root(Path(__file__).resolve().parent)
 
 
 def say(level: str, label: str, detail: str) -> None:
@@ -30,7 +39,6 @@ def say(level: str, label: str, detail: str) -> None:
 
 def cmd_ok(name: str) -> bool:
     import shutil
-
     return shutil.which(name) is not None
 
 
@@ -44,35 +52,30 @@ def tcp_open(host: str, port: int, timeout: float = 2.0) -> bool:
 
 def http_health(url: str, timeout: int = 5) -> tuple[bool, str]:
     try:
-        with urlopen(url, timeout=timeout) as resp:  # nosec B310
+        # Use HEAD if possible, fallback to GET
+        with urlopen(url, timeout=timeout) as resp:
             code = getattr(resp, "status", 200)
             return (200 <= code < 300, f"HTTP {code}")
     except HTTPError as exc:
-        # Some public endpoints are challenge-guarded but still up.
         if exc.code in {401, 403}:
             return (True, f"HTTP {exc.code} (protected)")
         return (False, f"HTTP {exc.code}")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return (False, str(exc))
-
-
-def read_env_file(path: Path) -> dict[str, str]:
-    out: dict[str, str] = {}
-    if not path.exists():
-        return out
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        k, v = line.split("=", 1)
-        out[k.strip()] = v.strip().strip('"').strip("'")
-    return out
 
 
 def main() -> int:
     print("--- HEIWA 360 CHECK ---")
     fails = 0
     warns = 0
+
+    # 1. Environment & Vault
+    vault_path = Path.home() / ".heiwa" / "vault.env"
+    if vault_path.exists():
+        say("OK", "vault", "~/.heiwa/vault.env present")
+    else:
+        say("WARN", "vault", "modular vault missing (run setup_wsl_node.sh or manual setup)")
+        warns += 1
 
     env_files = [".env.worker.local", ".env.worker", ".env"]
     found_env = False
@@ -82,23 +85,19 @@ def main() -> int:
             found_env = True
             break
     if not found_env:
-        say(
-            "FAIL",
-            "file",
-            "missing base .env (checked .env.worker.local, .env.worker, .env)",
-        )
+        say("FAIL", "file", "missing base .env")
         fails += 1
 
+    # 2. Structural Integrity
     remaining_critical = [
         "railway.toml",
-        "config/identities/heiwa-one-system.yaml",
+        "config/identities/profiles.json",
+        "config/swarm/swarm.json",
         "apps/heiwa_hub/main.py",
-        "apps/heiwa_hub/config.py",
+        "apps/heiwa_cli/heiwa",
         "apps/heiwa_cli/scripts/agents/worker_manager.py",
-        "apps/heiwa_cli/scripts/agents/wrappers/codex_exec.sh",
         "apps/heiwa_cli/scripts/agents/wrappers/openclaw_exec.sh",
-        "apps/heiwa_cli/scripts/agents/wrappers/picoclaw_exec.py",
-        "apps/heiwa_cli/scripts/agents/wrappers/ollama_exec.py",
+        "packages/heiwa_sdk/heiwa_sdk/db.py",
     ]
     for rel in remaining_critical:
         p = ROOT / rel
@@ -108,99 +107,41 @@ def main() -> int:
             say("FAIL", "file", f"missing {rel}")
             fails += 1
 
-    for cmd in ("codex", "openclaw", "ollama", "railway", "wrangler"):
+    # 3. Dependencies & Commands
+    for cmd in ("openclaw", "ollama", "railway", "wrangler", "terraform"):
         if cmd_ok(cmd):
             say("OK", "command", cmd)
-            if cmd == "wrangler":
-                # Check authentication status
-                wrangler_rc = subprocess.call(
-                    ["/usr/bin/env", "bash", "-lc", "wrangler whoami >/dev/null 2>&1"]
-                )
-                if wrangler_rc == 0:
-                    say("OK", "service", "wrangler is authenticated")
-                else:
-                    say(
-                        "WARN",
-                        "service",
-                        "wrangler is NOT authenticated (run `wrangler login`)",
-                    )
-                    warns += 1
         else:
             say("FAIL", "command", f"{cmd} missing")
             fails += 1
 
-    for cmd in ("docker", "nats-server", "picoclaw"):
-        if cmd_ok(cmd):
-            say("OK", "command", cmd)
-        else:
-            say("WARN", "command", f"{cmd} missing (optional depending on topology)")
-            warns += 1
-
+    # 4. Local Services
     if tcp_open("127.0.0.1", 11434):
         say("OK", "service", "ollama listening on 127.0.0.1:11434")
     else:
-        say("WARN", "service", "ollama not listening on 127.0.0.1:11434")
+        say("WARN", "service", "ollama not listening")
         warns += 1
 
     if tcp_open("127.0.0.1", 4222):
         say("OK", "service", "nats listening on 127.0.0.1:4222")
     else:
-        say("WARN", "service", "nats not listening on 127.0.0.1:4222")
+        say("WARN", "service", "local nats not listening (remote mesh may be active)")
         warns += 1
 
-    # OpenClaw gateway can still be bypassed with --local mode.
-    gateway_rc = subprocess.call(
-        [
-            "/usr/bin/env",
-            "bash",
-            "-lc",
-            "openclaw status 2>/dev/null | grep -q 'Gateway.*reachable'",
-        ]
-    )
-    if gateway_rc == 0:
-        say("OK", "service", "openclaw gateway reachable")
-    else:
-        say(
-            "WARN",
-            "service",
-            "openclaw gateway not reachable (wrapper may fallback to --local)",
-        )
-        warns += 1
-
-    env_file = ROOT / ".env.worker.local"
-    if not env_file.exists():
-        env_file = ROOT / ".env.worker"
-    if not env_file.exists():
-        env_file = ROOT / ".env"
-    env = read_env_file(env_file)
-    if env:
-        nats_url = env.get("NATS_URL", "")
-        db_url = env.get("DATABASE_URL", "")
-        if "railway.internal" in nats_url:
-            say(
-                "WARN",
-                "env",
-                "NATS_URL uses railway.internal; local workers usually cannot reach this directly",
-            )
-            warns += 1
-        if "${{" in db_url:
-            say("WARN", "env", "DATABASE_URL contains unresolved template placeholders")
-            warns += 1
-    else:
-        say("WARN", "env", f"{env_file.name} not found or contains no parseable values")
-        warns += 1
-
-    # Railway control-plane health check (best-effort).
+    # 5. Cloud & Edge Health
     health_urls = [
-        "https://heiwa-cloud-hq-brain.up.railway.app/health",
+        "https://heiwa.ltd",
+        "https://status.heiwa.ltd",
         "https://api.heiwa.ltd/health",
+        "https://auth.heiwa.ltd/health",
+        "https://heiwa-cloud-hq-brain.up.railway.app/health",
     ]
     for url in health_urls:
         ok, detail = http_health(url)
         if ok:
-            say("OK", "railway", f"{url} -> {detail}")
+            say("OK", "edge", f"{url} -> {detail}")
         else:
-            say("WARN", "railway", f"{url} -> {detail}")
+            say("WARN", "edge", f"{url} -> {detail}")
             warns += 1
 
     print(f"\nSummary: fails={fails} warns={warns}")
@@ -208,7 +149,7 @@ def main() -> int:
         print("Result: NOT READY (fix FAIL items first)")
         return 1
     if warns:
-        print("Result: PARTIALLY READY (address WARN items for persistent production)")
+        print("Result: PARTIALLY READY (address WARN items for production stability)")
         return 0
     print("Result: READY")
     return 0
