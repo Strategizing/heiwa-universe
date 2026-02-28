@@ -13,6 +13,9 @@ if str(ROOT / "packages/heiwa_protocol") not in sys.path:
 if str(ROOT / "apps") not in sys.path:
     sys.path.insert(0, str(ROOT / "apps"))
 
+from heiwa_sdk.config import load_swarm_env
+load_swarm_env()
+
 from heiwa_hub.agents.spine import SpineAgent
 from heiwa_hub.agents.messenger import MessengerAgent
 from heiwa_hub.agents.executor import ExecutorAgent

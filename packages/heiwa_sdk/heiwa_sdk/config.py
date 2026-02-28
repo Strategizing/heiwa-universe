@@ -13,6 +13,24 @@ def get_env(key, default=None, required=True):
             sys.exit(1)
     return val
 
+from pathlib import Path
+from dotenv import load_dotenv
+
+def load_swarm_env():
+    """Enterprise-grade environment loader. Priority: Vault > Local Worker > Standard Env."""
+    monorepo_root = Path(__file__).resolve().parents[3]
+    vault_path = Path.home() / ".heiwa" / "vault.env"
+    
+    # 1. Standard .env (Base)
+    load_dotenv(monorepo_root / ".env")
+    
+    # 2. Worker Local (Specific Node overrides)
+    load_dotenv(monorepo_root / ".env.worker.local", override=True)
+    
+    # 3. Vault (Highest priority secrets)
+    if vault_path.exists():
+        load_dotenv(vault_path, override=True)
+
 class Settings:
     # Database: prefer DATABASE_URL (Postgres)
     DATABASE_URL = get_env("DATABASE_URL")

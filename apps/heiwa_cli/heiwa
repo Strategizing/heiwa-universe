@@ -17,12 +17,14 @@ CONFIG_ROOT = MONOREPO_ROOT / "config"
 
 # Load Environment
 try:
+    sys.path.insert(0, str(MONOREPO_ROOT / "packages/heiwa_sdk"))
+    from heiwa_sdk.config import load_swarm_env
+    load_swarm_env()
+except ImportError:
+    # Fallback if SDK not yet accessible
     from dotenv import load_dotenv
-    # Priority: .env.worker.local -> .env
     load_dotenv(MONOREPO_ROOT / ".env.worker.local")
     load_dotenv(MONOREPO_ROOT / ".env")
-except ImportError:
-    pass
 
 # Enterprise Venv Discovery
 VENV_BIN = MONOREPO_ROOT / ".venv/bin/python3"

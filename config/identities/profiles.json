@@ -1,19 +1,18 @@
 {
-  "version": 10,
+  "version": 11,
   "default_identity": "operator-general",
   "identities": [
     {
       "id": "operator-general",
       "description": "General Swarm Instance. Standard agility and workspace interaction.",
       "trigger_keywords": ["heiwa", "ops", "fix", "status"],
-      "targets": {"tool": "openclaw", "runtime": "macbook@heiwa-agile"},
-      "cells": [
-        {"role": "scout", "model": "google/gemini-2.5-flash", "difficulty": "low"},
-        {"role": "builder", "model": "ollama/qwen2.5-coder:7b", "difficulty": "medium"},
-        {"role": "architect", "model": "cerebras/gpt-oss-120b", "difficulty": "high"}
-      ],
+      "targets": {
+        "tool": "openclaw", 
+        "runtime": "any",
+        "required_capabilities": ["standard_compute", "workspace_interaction"]
+      },
       "models": {
-        "openclaw": ["ollama/qwen2.5-coder:7b", "google/gemini-2.5-flash", "cerebras/gpt-oss-120b"]
+        "openclaw": ["ollama/qwen2.5-coder:7b", "google/gemini-2.5-flash", "groq/llama-3.3-70b-versatile"]
       },
       "actions": {
         "discord_channel": "central-comms",
@@ -24,7 +23,11 @@
       "id": "architect-strategist",
       "description": "Strategic Evolution Instance. High-level planning and roadmap development.",
       "trigger_keywords": ["brainstorm", "plan", "strategy", "improve"],
-      "targets": {"tool": "openclaw", "runtime": "any"},
+      "targets": {
+        "tool": "openclaw", 
+        "runtime": "any",
+        "required_capabilities": ["brainstorming", "multi_model_inference"]
+      },
       "cells": [
         {"role": "analyst", "model": "google/gemini-1.5-pro", "difficulty": "medium"},
         {"role": "visionary", "model": "google-antigravity/claude-opus-4-5-thinking", "difficulty": "high"}
@@ -40,12 +43,16 @@
     {
       "id": "heavy-reasoner",
       "description": "Deep Logic Instance. Utilizes high-end VRAM for massive reasoning chains.",
-      "trigger_keywords": ["deepthink", "logic", "audit"],
-      "targets": {"tool": "openclaw", "runtime": "wsl@heiwa-thinker"},
+      "trigger_keywords": ["deepthink", "logic", "audit", "reasoning"],
+      "targets": {
+        "tool": "openclaw", 
+        "runtime": "wsl@heiwa-thinker",
+        "required_capabilities": ["heavy_compute", "gpu_native"]
+      },
       "cells": [
-        {"role": "scout", "model": "groq/deepseek-r1-distill-llama-70b", "difficulty": "low"},
-        {"role": "builder", "model": "ollama/deepseek-r1:14b", "difficulty": "medium"},
-        {"role": "architect", "model": "openrouter/qwen/qwen3-vl-30b-a3b-thinking", "difficulty": "high"}
+        {"role": "critic", "model": "groq/deepseek-r1-distill-llama-70b", "difficulty": "low"},
+        {"role": "generator", "model": "ollama/deepseek-r1:14b", "difficulty": "medium"},
+        {"role": "verifier", "model": "openrouter/qwen/qwen3-vl-30b-a3b-thinking", "difficulty": "high"}
       ],
       "models": {
         "openclaw": ["ollama/deepseek-r1:14b", "groq/deepseek-r1-distill-llama-70b", "openrouter/qwen/qwen3-vl-30b-a3b-thinking"]
@@ -58,8 +65,12 @@
     {
       "id": "research-scout",
       "description": "Global Discovery Instance. Specialized in web search and synthesis.",
-      "trigger_keywords": ["research", "analyze", "find"],
-      "targets": {"tool": "openclaw", "runtime": "any"},
+      "trigger_keywords": ["research", "analyze", "find", "intel"],
+      "targets": {
+        "tool": "openclaw", 
+        "runtime": "any",
+        "required_capabilities": ["research", "web_access"]
+      },
       "cells": [
         {"role": "browser", "model": "google/gemini-2.5-flash", "difficulty": "low"},
         {"role": "synthesizer", "model": "openrouter/mistralai/mistral-small-3.1-24b-instruct:free", "difficulty": "medium"}

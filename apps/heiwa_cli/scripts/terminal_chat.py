@@ -24,6 +24,9 @@ if str(ROOT / "packages/heiwa_protocol") not in sys.path:
 if str(ROOT / "apps") not in sys.path:
     sys.path.insert(0, str(ROOT / "apps"))
 
+from heiwa_sdk.config import load_swarm_env
+load_swarm_env()
+
 import nats
 from nats.aio.client import Client as NATSClient
 from heiwa_protocol.protocol import Subject
