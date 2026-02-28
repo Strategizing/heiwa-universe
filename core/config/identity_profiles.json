@@ -113,6 +113,37 @@
       }
     },
     {
+      "id": "heavy-reasoner",
+      "description": "Heiwa Heavy Thinker. Utilizes Workstation GPU for massive reasoning models. Use for complex logic and deep technical architecture.",
+      "trigger_keywords": [
+        "deepthink",
+        "complex logic",
+        "heavy reasoning",
+        "massive task",
+        "architecture audit"
+      ],
+      "targets": {
+        "tool": "openclaw",
+        "runtime": "workstation",
+        "dispatch": [
+          "discord"
+        ]
+      },
+      "models": {
+        "openclaw": [
+          "ollama/deepseek-r1:32b",
+          "ollama/deepseek-coder-v2:16b"
+        ],
+        "picoclaw": []
+      },
+      "actions": {
+        "ci_workflow": "",
+        "railway_service": "",
+        "discord_channel": "executive-reports",
+        "report_channel": "executive-reports"
+      }
+    },
+    {
       "id": "research-scout",
       "description": "Research-focused identity. Synthesize findings into a readable brief.",
       "trigger_keywords": [

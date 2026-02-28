@@ -33,6 +33,8 @@ class WorkerManager(BaseAgent):
 
         super().__init__(name="heiwa-worker-manager")
         self.root = ROOT
+        self.node_id = os.getenv("HEIWA_NODE_ID", "macbook")
+        self.node_type = os.getenv("HEIWA_NODE_TYPE", "mobile_node") # mobile_node | heavy_compute
         self.warm_ttl_sec = int(os.getenv("HEIWA_WORKER_WARM_TTL_SEC", "600"))
         self.concurrency = int(os.getenv("HEIWA_EXECUTOR_CONCURRENCY", "2"))
         self.llm_mode = os.getenv("HEIWA_LLM_MODE", "local_only").lower()
@@ -142,14 +144,14 @@ class WorkerManager(BaseAgent):
             except Exception as e:
                 logger.warning("Failed to resolve identity, using defaults. Error: %s", e)
 
-            if runtime not in {"macbook", "both"}:
+            if runtime not in {self.node_id, "both", "any"}:
                 await self._emit_result(
                     task_id=task_id,
                     step_id=step_id,
                     status="BLOCKED",
-                    summary=f"Skipped on Macbook executor (target_runtime={runtime})",
+                    summary=f"Skipped on {self.node_id} executor (target_runtime={runtime})",
                     duration_ms=int((time.time() - start) * 1000),
-                    runtime="macbook",
+                    runtime=self.node_id,
                     error=None,
                     artifacts=[{"kind": "dispatch", "value": "runtime_mismatch"}],
                     payload=payload,

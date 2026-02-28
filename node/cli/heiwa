@@ -137,11 +137,37 @@ def cmd_domains(args):
     else:
         print("❌ Probe script not found.")
 
+def cmd_provision(args):
+    """Prepare a provisioning environment for a new node."""
+    print(f"🏗️ [HEIWA] Provisioning node: {args.node_id}...")
+    python_bin = _resolve_python()
+    provision_script = NODE_ROOT / "cli/scripts/ops/provision_node.sh"
+    if provision_script.exists():
+        cmd = ["bash", str(provision_script), args.node_id, args.node_type]
+        subprocess.run(cmd)
+    else:
+        print("❌ Provision script not found.")
+
 def cmd_deploy(args):
-    """Deploy to Railway Hub."""
-    print("🚀 [HEIWA] Deploying to Cloud HQ (Railway)...")
-    service = os.getenv("HEIWA_RAILWAY_SERVICE", "heiwa-cloud-hq")
-    _run_subprocess(f"railway up --service {shlex.quote(service)} --detach")
+    """Deploy Infrastructure and Compute."""
+    print("🚀 [HEIWA] Initiating Deployment Sequence...")
+    
+    if args.edge or args.full:
+        print("\n🛡️ Deploying Edge Configuration (Cloudflare WAF/DNS)...")
+        terraform_dir = MONOREPO_ROOT / "infrastructure" / "terraform" / "cloudflare"
+        if (terraform_dir / "main.tf").exists():
+            print("   Running Terraform apply...")
+            # We assume token is exported or in environment
+            cmd = f"cd {shlex.quote(str(terraform_dir))} && terraform apply -auto-approve"
+            _run_subprocess(cmd)
+        else:
+            print("   ❌ Terraform configs not found.")
+
+    if args.compute or args.full or not (args.edge or args.compute or args.full):
+        # Default behavior is compute if no flags passed
+        print("\n☁️ Deploying Compute to Cloud HQ (Railway)...")
+        service = os.getenv("HEIWA_RAILWAY_SERVICE", "heiwa-cloud-hq")
+        _run_subprocess(f"railway up --service {shlex.quote(service)} --detach")
 
 def cmd_identity(args):
     """Select a pre-programmed Heiwa identity from conversation intent."""
@@ -175,13 +201,21 @@ def main():
     parser_doctor = subparsers.add_parser("doctor", help="Run operability and dependency checks")
 
     # deploy
-    parser_deploy = subparsers.add_parser("deploy", help="Push the current matrix to Railway")
+    parser_deploy = subparsers.add_parser("deploy", help="Push the current matrix to Railway or Cloudflare")
+    parser_deploy.add_argument("--edge", action="store_true", help="Deploy only edge WAF/DNS (Cloudflare)")
+    parser_deploy.add_argument("--compute", action="store_true", help="Deploy only compute node (Railway)")
+    parser_deploy.add_argument("--full", action="store_true", help="Deploy both edge and compute")
 
     # domains
     parser_domains = subparsers.add_parser("domains", help="Probe domain resolution and status")
 
     # cutover
     parser_cutover = subparsers.add_parser("run-cutover", help="Run automated domain cutover sequence")
+
+    # provision
+    parser_provision = subparsers.add_parser("provision-node", help="Prepare environment for a new swarm node")
+    parser_provision.add_argument("node_id", help="Unique ID for the node (e.g. workstation)")
+    parser_provision.add_argument("--node-type", default="heavy_compute", help="Type of hardware (mobile_node|heavy_compute)")
 
     # identity
     parser_identity = subparsers.add_parser(
@@ -221,6 +255,8 @@ def main():
         cmd_domains(args)
     elif args.command == "run-cutover":
         cmd_cutover(args)
+    elif args.command == "provision-node":
+        cmd_provision(args)
     elif args.command == "identity":
         cmd_identity(args)
     elif args.command == "update":

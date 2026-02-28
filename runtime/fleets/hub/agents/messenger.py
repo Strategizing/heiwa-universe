@@ -275,7 +275,14 @@ class MessengerAgent(BaseAgent):
         if self.bot.user and self.bot.user in message.mentions:
             return True
 
-        if message.channel.id == self.channel_id:
+        # Zero-Mention Channels: Implicitly listen to operator-input and central-command
+        operator_input_id = self._get_channel_id("operator-input")
+        central_command_id = self._get_channel_id("central-command")
+        
+        if message.channel.id in {operator_input_id, central_command_id}:
+            return True
+
+        if self.channel_id and message.channel.id == self.channel_id:
             return True
 
         return message.channel.id in self.listen_channel_ids
