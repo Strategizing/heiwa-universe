@@ -125,19 +125,17 @@ class Database:
              raise ValueError(f"Invalid column name: {column}")
 
         try:
-            # We still manipulate string for column name as it can't be parameterized in ALTER,
-            # but we validated it above against strict charset.
             if self.use_postgres:
-                cursor.execute("SAVEPOINT safe_alter")
-
-            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
-
-            if self.use_postgres:
-                cursor.execute("RELEASE SAVEPOINT safe_alter")
-        except Exception:
-            # Column likely exists
-            if self.use_postgres:
-                cursor.execute("ROLLBACK TO SAVEPOINT safe_alter")
+                # Postgres 9.6+ supports ADD COLUMN IF NOT EXISTS
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {col_type}")
+            else:
+                # SQLite doesn't support IF NOT EXISTS for columns
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+        except Exception as e:
+            if not self.use_postgres and "duplicate column name" in str(e).lower():
+                pass
+            elif "already exists" not in str(e).lower():
+                print(f"[DB] Migration note for {table}.{column}: {e}")
             pass
 
     def _init_db_postgres(self):
