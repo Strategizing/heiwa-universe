@@ -21,41 +21,36 @@ class Database:
         self.use_postgres = settings.use_postgres
         self.db_path = settings.DATABASE_PATH
         self.database_url = settings.DATABASE_URL
-
-        if self.use_postgres:
-            if not HAS_PSYCOPG2:
-                print("[CRITICAL] DATABASE_URL set but psycopg2 not installed")
-                sys.exit(1)
-            print(f"[DB] Connecting to Sovereignty (PostgreSQL): {self.database_url[:30]}...")
-            self._init_db_postgres()
-        else:
-            print(f"[DB] Using Amnesia Mode (SQLite): {self.db_path}")
-            self._ensure_persistence_check()
-            self._init_db()
+        # No heavy IO or migrations in init - just setup config
 
     def init_db(self):
         """Bootstraps the database schema on startup."""
+        if self.use_postgres:
+            print(f"[DB] Initializing Sovereign Schema (PostgreSQL)...")
+            self._init_db_postgres()
+        else:
+            print(f"[DB] Initializing Amnesia Schema (SQLite)...")
+            self._ensure_persistence_check()
+            self._init_db()
+        
+        # Shared schema: Products
         conn = self.get_connection()
         try:
             cursor = conn.cursor()
-            # DDL for Products
             id_def = "SERIAL PRIMARY KEY" if self.use_postgres else "INTEGER PRIMARY KEY AUTOINCREMENT"
-            bool_true = "TRUE" # Compatible with both Postgres (bool) and SQLite (int 1)
-            
             self._exec(cursor, f"""
                 CREATE TABLE IF NOT EXISTS products (
                     id {id_def},
                     name TEXT NOT NULL,
                     description TEXT,
                     price REAL NOT NULL,
-                    in_stock BOOLEAN DEFAULT {bool_true}
+                    in_stock BOOLEAN DEFAULT TRUE
                 )
             """)
             conn.commit()
             print("[DB] Self-healing schema check completed.")
         except Exception as e:
             print(f"[DB] Init failed: {e}")
-            # We don't suppress, we want to know if boot fails
             raise e
         finally:
             conn.close()

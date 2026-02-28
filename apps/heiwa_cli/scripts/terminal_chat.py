@@ -295,13 +295,16 @@ class HeiwaShell:
             
             # Wait for result or timeout
             start_wait = time.time()
-            timeout = 60
+            timeout = 120 # Increase for SOTA reasoning
             while task_id in self.task_cache and (time.time() - start_wait) < timeout:
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(1) # More time for agents to process
             
             if task_id in self.task_cache:
-                console.print(f"\n[yellow]⚠️  Task {task_id} timed out after {timeout}s.[/yellow]")
+                console.print(f"\n[yellow]⚠️  Task {task_id} timed out after {timeout}s. Checking mesh heartbeats...[/yellow]")
+                await self.show_status()
             
+            # Final drain to ensure NATS receives/sends all remaining messages
+            if self.nc: await self.nc.drain()
             self.running = False
             return
 
