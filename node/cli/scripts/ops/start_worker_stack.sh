@@ -6,7 +6,7 @@
 # - Heiwa worker_manager
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$ROOT"
 
 mkdir -p "$ROOT/runtime/logs"
@@ -155,14 +155,14 @@ start_worker_manager() {
         echo "[WARN] NATS bus is not reachable on :4222; skipping worker_manager startup"
         return
     fi
-    if pgrep -f "cli/scripts/agents/worker_manager.py" >/dev/null 2>&1; then
+    if pgrep -f "node/cli/scripts/agents/worker_manager.py" >/dev/null 2>&1; then
         echo "[OK] worker_manager already running"
         return
     fi
     echo "[INFO] Starting worker_manager daemon wrapper ..."
-    nohup "$ROOT/cli/scripts/ops/worker_manager_daemon.sh" >"$ROOT/runtime/logs/worker_manager.log" 2>&1 &
+    nohup "$ROOT/node/cli/scripts/ops/worker_manager_daemon.sh" >"$ROOT/runtime/logs/worker_manager.log" 2>&1 &
     sleep 1
-    if pgrep -f "cli/scripts/agents/worker_manager.py" >/dev/null 2>&1; then
+    if pgrep -f "node/cli/scripts/agents/worker_manager.py" >/dev/null 2>&1; then
         echo "[OK] worker_manager started"
     else
         echo "[WARN] worker_manager exited; check runtime/logs/worker_manager.log"
@@ -175,4 +175,4 @@ start_nats
 start_openclaw_gateway
 start_worker_manager
 echo "--- HEIWA WORKER STACK CHECK ---"
-"$(choose_python)" "$ROOT/cli/scripts/ops/heiwa_360_check.py" || true
+"$(choose_python)" "$ROOT/node/cli/scripts/ops/heiwa_360_check.py" || true

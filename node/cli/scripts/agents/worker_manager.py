@@ -10,9 +10,10 @@ import time
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+ROOT = Path(__file__).resolve().parents[4]
+RUNTIME_ROOT = ROOT / "runtime"
+if str(RUNTIME_ROOT) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_ROOT))
 
 from fleets.hub.agents.base import BaseAgent
 from fleets.hub.protocol import Subject
@@ -24,6 +25,12 @@ class WorkerManager(BaseAgent):
     """Macbook execution daemon for codex/openclaw/picoclaw/n8n task steps."""
 
     def __init__(self) -> None:
+        use_remote_nats = os.getenv("HEIWA_USE_REMOTE_NATS", "0") == "1"
+        if not use_remote_nats:
+            current_nats = os.getenv("NATS_URL", "")
+            if not current_nats or "railway.internal" in current_nats:
+                os.environ["NATS_URL"] = os.getenv("HEIWA_LOCAL_NATS_URL", "nats://127.0.0.1:4222")
+
         super().__init__(name="heiwa-worker-manager")
         self.root = ROOT
         self.warm_ttl_sec = int(os.getenv("HEIWA_WORKER_WARM_TTL_SEC", "600"))
@@ -37,10 +44,11 @@ class WorkerManager(BaseAgent):
         self.last_used: dict[str, float] = {}
         self.sem = asyncio.Semaphore(max(1, self.concurrency))
 
-        self.codex_wrapper = self.root / "scripts" / "agents" / "wrappers" / "codex_exec.sh"
-        self.openclaw_wrapper = self.root / "scripts" / "agents" / "wrappers" / "openclaw_exec.sh"
-        self.picoclaw_wrapper = self.root / "scripts" / "agents" / "wrappers" / "picoclaw_exec.py"
-        self.ollama_wrapper = self.root / "scripts" / "agents" / "wrappers" / "ollama_exec.py"
+        wrappers_root = self.root / "node" / "cli" / "scripts" / "agents" / "wrappers"
+        self.codex_wrapper = wrappers_root / "codex_exec.sh"
+        self.openclaw_wrapper = wrappers_root / "openclaw_exec.sh"
+        self.picoclaw_wrapper = wrappers_root / "picoclaw_exec.py"
+        self.ollama_wrapper = wrappers_root / "ollama_exec.py"
 
         self.subject_tools = {
             Subject.TASK_EXEC_REQUEST_CODE.value: "codex",

@@ -2,7 +2,7 @@
 # Install persistent macOS LaunchAgents for Heiwa worker node.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 AGENTS_DIR="$HOME/Library/LaunchAgents"
 mkdir -p "$AGENTS_DIR" "$ROOT/runtime/logs"
 
@@ -48,7 +48,7 @@ cat >"$WORKER_PLIST" <<PLIST
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>$ROOT/cli/scripts/ops/worker_manager_daemon.sh</string>
+    <string>$ROOT/node/cli/scripts/ops/worker_manager_daemon.sh</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>

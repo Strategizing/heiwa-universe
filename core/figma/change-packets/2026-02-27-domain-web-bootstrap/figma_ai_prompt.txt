@@ -1,0 +1,17 @@
+Update the Heiwa architecture board to match current runtime topology.
+
+Scope to update:
+1) Add a domain edge layer for root domain heiwa.ltd with four subdomains:
+   - status.heiwa.ltd -> Cloudflare Pages project "heiwa-clients" (public read-only status)
+   - auth.heiwa.ltd -> Railway "heiwa-cloud-hq" auth edge route
+   - api.heiwa.ltd -> Railway "heiwa-cloud-hq" API ingress behind Cloudflare proxy/WAF
+   - docs.heiwa.ltd -> Cloudflare Pages docs surface
+2) Add an operator identity-routing layer sourced from core/config/identity_profiles.json:
+   - default identity: operator-general
+   - domain-web-initializer identity routes to CI + Discord engineering lane
+3) Show OpenClaw and PicoClaw as orchestration routers pointing to /Users/dmcgregsauce/heiwa as workspace root and identity map source.
+4) Keep portability boundary explicit: runtime/deploy paths must not depend on ~/.codex/heiwa operator state.
+
+Design intent:
+- Keep this as an architecture/system map, not UI mockups.
+- Distinguish read-only status surfaces vs privileged control-plane paths.

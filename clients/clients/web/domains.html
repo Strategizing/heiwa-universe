@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Heiwa Domains</title>
+    <meta name="description" content="Domain bootstrap status and initialization plan for heiwa.ltd." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./assets/styles.css" />
+    <script defer src="./assets/site.js"></script>
+    <script defer src="./assets/domains.js"></script>
+  </head>
+  <body data-page="domains">
+    <div class="bg-grid" aria-hidden="true"></div>
+    <header class="topbar">
+      <a class="brand" href="./index.html">HEIWA</a>
+      <nav class="nav">
+        <a href="./status.html">Status</a>
+        <a href="./domains.html">Domains</a>
+        <a href="./governance.html">Governance</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero compact">
+        <p class="eyebrow">Domain bootstrap</p>
+        <h1>Initialize and verify the heiwa.ltd surface area</h1>
+        <p class="lede">
+          This page mirrors the current domain bootstrap manifest used for cutover planning across Cloudflare
+          and Railway. It is read-only and safe for public viewing.
+        </p>
+      </section>
+
+      <section class="panel domain-controls">
+        <div>
+          <h2>Manifest Source</h2>
+          <p class="muted mono" id="manifest-source">Loading manifest source...</p>
+        </div>
+        <button id="refresh-domains" class="btn btn-solid" type="button">Refresh</button>
+      </section>
+
+      <section class="callout">
+        <div>
+          <p class="eyebrow">Root domain</p>
+          <h2 id="root-domain">heiwa.ltd</h2>
+          <p id="platform-summary">Loading platform routing summary...</p>
+        </div>
+        <div class="callout-metrics">
+          <div><span>DNS</span><strong id="platform-dns">-</strong></div>
+          <div><span>Public Web</span><strong id="platform-web">-</strong></div>
+          <div><span>Control Plane</span><strong id="platform-control">-</strong></div>
+        </div>
+      </section>
+
+      <section id="domains-list" class="panels domain-list" aria-live="polite"></section>
+
+      <section class="panels domain-detail-grid">
+        <article class="panel">
+          <h2>DNS Records</h2>
+          <p class="muted">Initial records to create before cutover.</p>
+          <div class="dns-table-wrap">
+            <table class="dns-table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Name</th>
+                  <th>Value</th>
+                  <th>Proxy</th>
+                  <th>TTL</th>
+                </tr>
+              </thead>
+              <tbody id="dns-records"></tbody>
+            </table>
+          </div>
+        </article>
+        <article class="panel">
+          <h2>Bootstrap Checklist</h2>
+          <p class="muted">Approval-gated sequence for initial rollout.</p>
+          <ol id="bootstrap-steps" class="steps-list"></ol>
+        </article>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Heiwa domain bootstrap surface (read-only)</p>
+      <p class="footer-links">
+        <a href="./index.html">Home</a>
+        <a href="./status.html">Status</a>
+        <a href="./governance.html">Governance</a>
+      </p>
+    </footer>
+  </body>
+</html>

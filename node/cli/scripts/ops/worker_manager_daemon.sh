@@ -2,7 +2,7 @@
 # Launch wrapper for persistent worker_manager service.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$ROOT"
 
 # launchd default PATH is minimal; add user/global bins required by wrappers.
@@ -67,4 +67,4 @@ else
     PYTHON_BIN="$(command -v python3 || command -v python)"
 fi
 
-exec "$PYTHON_BIN" "$ROOT/cli/scripts/agents/worker_manager.py"
+exec "$PYTHON_BIN" "$ROOT/node/cli/scripts/agents/worker_manager.py"

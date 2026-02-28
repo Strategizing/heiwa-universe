@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def tracked_python_files() -> list[Path]:
@@ -41,9 +41,9 @@ def compile_all(paths: list[Path]) -> list[str]:
 
 def check_required_paths() -> list[str]:
     required = [
-        ROOT / "fleets/hub/main.py",
-        ROOT / "cli/scripts/agents/sentinel.py",
-        ROOT / "config/agents.yaml",
+        ROOT / "runtime/fleets/hub/main.py",
+        ROOT / "runtime/fleets/hub/config.py",
+        ROOT / "node/cli/scripts/agents/sentinel.py",
         ROOT / "requirements.txt",
     ]
     missing = [str(p.relative_to(ROOT)) for p in required if not p.exists()]
@@ -52,11 +52,11 @@ def check_required_paths() -> list[str]:
 
 def check_wrapper_flags() -> list[str]:
     issues: list[str] = []
-    codex_wrapper = ROOT / "cli/scripts/agents/wrappers/codex_exec.sh"
+    codex_wrapper = ROOT / "node/cli/scripts/agents/wrappers/codex_exec.sh"
     if codex_wrapper.exists():
         text = codex_wrapper.read_text(encoding="utf-8")
         if "--approval-mode" in text:
-            issues.append("cli/scripts/agents/wrappers/codex_exec.sh uses deprecated --approval-mode flag")
+            issues.append("node/cli/scripts/agents/wrappers/codex_exec.sh uses deprecated --approval-mode flag")
     return issues
 
 

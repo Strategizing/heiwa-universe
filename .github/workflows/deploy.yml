@@ -64,3 +64,16 @@ jobs:
         run: railway up --service heiwa-cloud-hq --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      - name: Set up Python for Checks
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        run: pip install -r requirements.txt requests
+      - name: Await Deployment (Sleep)
+        run: sleep 45
+      - name: Verify Deployment Reachability
+        run: python node/cli/scripts/verify_deployment.py https://api.heiwa.ltd
+      - name: Verify Domain Routing (Probe)
+        run: python node/cli/scripts/ops/probe_domains.py

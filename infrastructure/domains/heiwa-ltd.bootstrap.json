@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "generated_from": "HEIWA_DOMAIN_PLAN.md",
+  "root_domain": "heiwa.ltd",
+  "platform": {
+    "dns": "cloudflare",
+    "public_web": "cloudflare_pages",
+    "control_plane": "railway",
+    "edge_security": "cloudflare_waf"
+  },
+  "domains": [
+    {
+      "host": "status.heiwa.ltd",
+      "purpose": "Public status surface",
+      "target": "Cloudflare Pages project: heiwa-clients",
+      "state": "initializing",
+      "health_path": "/status.html"
+    },
+    {
+      "host": "auth.heiwa.ltd",
+      "purpose": "Identity and auth gateway",
+      "target": "Railway heiwa-cloud-hq (auth edge route)",
+      "state": "planned",
+      "health_path": "/health"
+    },
+    {
+      "host": "api.heiwa.ltd",
+      "purpose": "Swarm API ingress",
+      "target": "Railway service domain + Cloudflare WAF",
+      "state": "active",
+      "health_path": "/health"
+    },
+    {
+      "host": "docs.heiwa.ltd",
+      "purpose": "Heiwa canon docs",
+      "target": "Cloudflare Pages docs project",
+      "state": "planned",
+      "health_path": "/"
+    }
+  ],
+  "dns_records": [
+    {
+      "type": "CNAME",
+      "name": "status",
+      "value": "heiwa-clients.pages.dev",
+      "proxy": true,
+      "ttl": "auto"
+    },
+    {
+      "type": "CNAME",
+      "name": "auth",
+      "value": "heiwa-cloud-hq-brain.up.railway.app",
+      "proxy": true,
+      "ttl": "auto"
+    },
+    {
+      "type": "CNAME",
+      "name": "api",
+      "value": "heiwa-cloud-hq-brain.up.railway.app",
+      "proxy": true,
+      "ttl": "auto"
+    },
+    {
+      "type": "CNAME",
+      "name": "docs",
+      "value": "heiwa-clients.pages.dev",
+      "proxy": true,
+      "ttl": "auto"
+    }
+  ],
+  "bootstrap_steps": [
+    "Attach status.heiwa.ltd and docs.heiwa.ltd to Cloudflare Pages project heiwa-clients.",
+    "Attach auth.heiwa.ltd and api.heiwa.ltd to Railway service heiwa-cloud-hq and enforce Cloudflare proxy/WAF.",
+    "Enable strict TLS and baseline WAF rules for api.heiwa.ltd.",
+    "Run post-cutover checks for /health and public page endpoints."
+  ]
+}

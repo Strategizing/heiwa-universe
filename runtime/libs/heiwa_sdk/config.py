@@ -1,5 +1,6 @@
 import os
 import sys
+from urllib.parse import urlparse
 
 def get_env(key, default=None, required=True):
     """Strict environment variable fetcher. Crashes on missing required keys."""
@@ -44,7 +45,16 @@ class Settings:
     @property
     def use_postgres(self) -> bool:
         """Check if we should use Postgres."""
-        return bool(self.DATABASE_URL and self.DATABASE_URL.startswith("postgres"))
+        db_url = self.DATABASE_URL
+        if not db_url:
+            return False
+        if not db_url.startswith(("postgres://", "postgresql://")):
+            return False
+        # Railway template placeholders should not force local Postgres mode.
+        if any(token in db_url for token in ("${{", "}}", "{", "}")):
+            return False
+        parsed = urlparse(db_url)
+        return bool(parsed.hostname)
 
 
 settings = Settings()

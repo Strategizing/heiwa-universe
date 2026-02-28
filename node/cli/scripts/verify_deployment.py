@@ -7,8 +7,24 @@ import sys
 import os
 from pathlib import Path
 
-# Ensure libs can be imported
-sys.path.append(str(Path(__file__).parent.parent))
+# Ensure runtime libs can be imported from the monorepo layout.
+MONOREPO_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_ROOT = MONOREPO_ROOT / "runtime"
+if str(RUNTIME_ROOT) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_ROOT))
+
+
+def _ensure_requests_runtime() -> None:
+    try:
+        import requests  # noqa: F401
+    except ModuleNotFoundError:
+        venv_python = MONOREPO_ROOT / ".venv/bin/python"
+        if venv_python.exists() and Path(sys.executable) != venv_python:
+            os.execv(str(venv_python), [str(venv_python), __file__, *sys.argv[1:]])
+        raise
+
+
+_ensure_requests_runtime()
 from libs.heiwa_sdk.sanity.remote import run_remote_check
 
 def main():

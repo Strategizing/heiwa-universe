@@ -1,0 +1,177 @@
+{
+  "version": 1,
+  "default_identity": "operator-general",
+  "identities": [
+    {
+      "id": "operator-general",
+      "description": "General Heiwa operator for day-to-day build/operate tasks.",
+      "trigger_keywords": [
+        "heiwa",
+        "ops",
+        "operate",
+        "runtime",
+        "doctor",
+        "fix"
+      ],
+      "targets": {
+        "tool": "codex",
+        "runtime": "both",
+        "dispatch": [
+          "discord",
+          "ci"
+        ]
+      },
+      "models": {
+        "openclaw": [
+          "ollama/deepseek-coder-v2:16b",
+          "google-gemini-cli/gemini-3-pro-preview"
+        ],
+        "picoclaw": [
+          "openai/gpt-4o",
+          "ollama/qwen2.5-coder:7b"
+        ]
+      },
+      "actions": {
+        "ci_workflow": "deploy.yml",
+        "railway_service": "heiwa-cloud-hq",
+        "discord_channel": "field-intel"
+      }
+    },
+    {
+      "id": "domain-web-initializer",
+      "description": "Domain and website initialization for heiwa.ltd surfaces.",
+      "trigger_keywords": [
+        "domain",
+        "dns",
+        "website",
+        "cloudflare",
+        "status.heiwa.ltd",
+        "auth.heiwa.ltd",
+        "api.heiwa.ltd",
+        "docs.heiwa.ltd"
+      ],
+      "targets": {
+        "tool": "openclaw",
+        "runtime": "both",
+        "dispatch": [
+          "ci",
+          "discord"
+        ]
+      },
+      "models": {
+        "openclaw": [
+          "google-gemini-cli/gemini-3-pro-preview",
+          "google-antigravity/claude-opus-4-5-thinking"
+        ],
+        "picoclaw": [
+          "openai/gpt-4o"
+        ]
+      },
+      "actions": {
+        "ci_workflow": "deploy.yml",
+        "railway_service": "heiwa-cloud-hq",
+        "discord_channel": "engineering"
+      }
+    },
+    {
+      "id": "release-deployer",
+      "description": "Production-minded deploy identity for release and rollout tasks.",
+      "trigger_keywords": [
+        "deploy",
+        "release",
+        "rollout",
+        "production",
+        "staging",
+        "railway"
+      ],
+      "targets": {
+        "tool": "codex",
+        "runtime": "railway",
+        "dispatch": [
+          "ci",
+          "discord"
+        ]
+      },
+      "models": {
+        "openclaw": [
+          "ollama/deepseek-coder-v2:16b"
+        ],
+        "picoclaw": [
+          "openai/gpt-4o"
+        ]
+      },
+      "actions": {
+        "ci_workflow": "deploy.yml",
+        "railway_service": "heiwa-cloud-hq",
+        "discord_channel": "sysops"
+      }
+    },
+    {
+      "id": "incident-response",
+      "description": "Fast-response identity for outages, errors, and urgent incidents.",
+      "trigger_keywords": [
+        "incident",
+        "outage",
+        "error",
+        "failed",
+        "downtime",
+        "urgent"
+      ],
+      "targets": {
+        "tool": "codex",
+        "runtime": "both",
+        "dispatch": [
+          "discord",
+          "ci"
+        ]
+      },
+      "models": {
+        "openclaw": [
+          "ollama/qwen2.5-coder:7b",
+          "ollama/deepseek-coder-v2:16b"
+        ],
+        "picoclaw": [
+          "openai/gpt-4o"
+        ]
+      },
+      "actions": {
+        "ci_workflow": "deploy.yml",
+        "railway_service": "heiwa-cloud-hq",
+        "discord_channel": "sysops"
+      }
+    },
+    {
+      "id": "research-scout",
+      "description": "Research-focused identity for discovery, synthesis, and scouting tasks.",
+      "trigger_keywords": [
+        "research",
+        "analyze",
+        "investigate",
+        "look up",
+        "scout",
+        "find"
+      ],
+      "targets": {
+        "tool": "openclaw",
+        "runtime": "macbook",
+        "dispatch": [
+          "discord"
+        ]
+      },
+      "models": {
+        "openclaw": [
+          "google-gemini-cli/gemini-3-pro-preview",
+          "google-antigravity/claude-opus-4-5-thinking"
+        ],
+        "picoclaw": [
+          "openai/gpt-4o"
+        ]
+      },
+      "actions": {
+        "ci_workflow": "",
+        "railway_service": "",
+        "discord_channel": "field-intel"
+      }
+    }
+  ]
+}

@@ -10,16 +10,15 @@ import py_compile
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def compile_targets() -> list[str]:
     errors: list[str] = []
     targets = [
-        ROOT / "fleets/hub/discord_bot.py",
-        ROOT / "fleets/hub/discord_portal.py",
-        ROOT / "fleets/hub/messenger.py",
-        ROOT / "fleets/hub/config.py",
+        ROOT / "runtime/fleets/hub/discord_portal.py",
+        ROOT / "runtime/fleets/hub/agents/messenger.py",
+        ROOT / "runtime/fleets/hub/config.py",
     ]
     for path in targets:
         if not path.exists():
@@ -34,13 +33,13 @@ def compile_targets() -> list[str]:
 
 def check_env_hooks() -> list[str]:
     issues: list[str] = []
-    config_path = ROOT / "fleets/hub/config.py"
+    config_path = ROOT / "runtime/fleets/hub/config.py"
     if not config_path.exists():
-        return ["missing file: fleets/hub/config.py"]
+        return ["missing file: runtime/fleets/hub/config.py"]
     text = config_path.read_text(encoding="utf-8")
     for key in ("DISCORD_BOT_TOKEN", "DISCORD_GUILD_ID"):
         if key not in text:
-            issues.append(f"fleets/hub/config.py missing env reference: {key}")
+            issues.append(f"runtime/fleets/hub/config.py missing env reference: {key}")
     return issues
 
 

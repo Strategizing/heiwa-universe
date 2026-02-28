@@ -5,10 +5,25 @@ import json
 import uuid
 import subprocess
 import sys
+import shlex
 from pathlib import Path
 
 HEIWA_GLOBAL_DIR = Path(os.path.expanduser("~/.heiwa"))
 IDENTITY_FILE = HEIWA_GLOBAL_DIR / "identity.json"
+MONOREPO_ROOT = Path(__file__).resolve().parents[2]
+NODE_ROOT = MONOREPO_ROOT / "node"
+RUNTIME_ROOT = MONOREPO_ROOT / "runtime"
+
+
+def _resolve_python() -> str:
+    candidates = [
+        MONOREPO_ROOT / ".venv313/bin/python",
+        MONOREPO_ROOT / ".venv/bin/python",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return sys.executable
 
 def init_global_dir():
     HEIWA_GLOBAL_DIR.mkdir(parents=True, exist_ok=True)
@@ -64,16 +79,10 @@ def cmd_login(args):
         print(f"👋 Welcome back, {login_target}.")
 
     # Launch Terminal Chat
-    repo_root = Path(__file__).parent.parent.resolve()
+    python_bin = _resolve_python()
+    chat_script = NODE_ROOT / "cli/scripts/terminal_chat.py"
     
-    # Use monorepo venv python
-    python_bin = repo_root.parent / ".venv/bin/python"
-    if not python_bin.exists():
-        python_bin = sys.executable
-    
-    chat_script = repo_root / "cli/scripts/terminal_chat.py"
-    
-    cmd = [str(python_bin), str(chat_script), login_target, os.uname()[1]]
+    cmd = [python_bin, str(chat_script), login_target, os.uname()[1]]
     subprocess.run(cmd)
 
 def _run_subprocess(cmd):
@@ -86,30 +95,69 @@ def _run_subprocess(cmd):
 def cmd_up(args):
     """Start the local environment."""
     print("🚀 [HEIWA] Starting local Orchestrator environment...")
-    
-    # We must run this from the repo root to maintain module paths
-    repo_root = Path(__file__).parent.parent.resolve()
-    
-    python_bin = "python3"
-    if (repo_root / ".venv313/bin/python").exists():
-        python_bin = str(repo_root / ".venv313/bin/python")
-    elif (repo_root / ".venv/bin/python").exists():
-        python_bin = str(repo_root / ".venv/bin/python")
-        
-    cmd = f"cd {repo_root} && {python_bin} -m fleets.hub.main"
+
+    python_bin = _resolve_python()
+    cmd = (
+        f"cd {shlex.quote(str(MONOREPO_ROOT))} && "
+        f"PYTHONPATH={shlex.quote(str(RUNTIME_ROOT))} "
+        f"{shlex.quote(python_bin)} -m fleets.hub.main"
+    )
     _run_subprocess(cmd)
 
 def cmd_doctor(args):
     """Run local operability checks."""
     print("🩺 [HEIWA] Running diagnostics...")
-    repo_root = Path(__file__).parent.parent.resolve()
-    cmd = f"cd {repo_root} && python3 cli/scripts/doctor.py"
+    python_bin = _resolve_python()
+    doctor_script = NODE_ROOT / "cli/scripts/doctor.py"
+    cmd = (
+        f"cd {shlex.quote(str(MONOREPO_ROOT))} && "
+        f"{shlex.quote(python_bin)} {shlex.quote(str(doctor_script))}"
+    )
     _run_subprocess(cmd)
+
+def cmd_cutover(args):
+    """Run the automated domain cutover sequence."""
+    print("✨ [HEIWA] Initiating automated domain cutover...")
+    python_bin = _resolve_python()
+    cutover_script = NODE_ROOT / "cli/scripts/ops/cutover_domains.py"
+    if cutover_script.exists():
+        cmd = [python_bin, str(cutover_script)]
+        subprocess.run(cmd)
+    else:
+        print("❌ Cutover script not found.")
+
+def cmd_domains(args):
+    """Run domain resolution and health probes."""
+    print("🌍 [HEIWA] Probing domains...")
+    python_bin = _resolve_python()
+    probe_script = NODE_ROOT / "cli/scripts/ops/probe_domains.py"
+    if probe_script.exists():
+        cmd = [python_bin, str(probe_script)]
+        subprocess.run(cmd)
+    else:
+        print("❌ Probe script not found.")
 
 def cmd_deploy(args):
     """Deploy to Railway Hub."""
-    print("�� [HEIWA] Deploying to Cloud HQ (Railway)...")
-    _run_subprocess("railway up")
+    print("🚀 [HEIWA] Deploying to Cloud HQ (Railway)...")
+    service = os.getenv("HEIWA_RAILWAY_SERVICE", "heiwa-cloud-hq")
+    _run_subprocess(f"railway up --service {shlex.quote(service)} --detach")
+
+def cmd_identity(args):
+    """Select a pre-programmed Heiwa identity from conversation intent."""
+    python_bin = _resolve_python()
+    selector = NODE_ROOT / "cli/scripts/ops/identity_selector.py"
+    if not selector.exists():
+        print("❌ Identity selector script not found.")
+        sys.exit(1)
+
+    cmd = [python_bin, str(selector), "--text", args.text]
+    if args.json:
+        cmd.append("--json")
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        sys.exit(e.returncode)
 
 def main():
     parser = argparse.ArgumentParser(description="Heiwa Enterprise CLI")
@@ -128,6 +176,20 @@ def main():
 
     # deploy
     parser_deploy = subparsers.add_parser("deploy", help="Push the current matrix to Railway")
+
+    # domains
+    parser_domains = subparsers.add_parser("domains", help="Probe domain resolution and status")
+
+    # cutover
+    parser_cutover = subparsers.add_parser("run-cutover", help="Run automated domain cutover sequence")
+
+    # identity
+    parser_identity = subparsers.add_parser(
+        "identity",
+        help="Resolve pre-programmed identity from conversation intent",
+    )
+    parser_identity.add_argument("text", help="Conversation/task text used for identity selection")
+    parser_identity.add_argument("--json", action="store_true", help="Emit JSON output")
 
     # update
     parser_update = subparsers.add_parser("update", help="Auto-patch and update the Heiwa Swarm")
@@ -155,6 +217,12 @@ def main():
         cmd_doctor(args)
     elif args.command == "deploy":
         cmd_deploy(args)
+    elif args.command == "domains":
+        cmd_domains(args)
+    elif args.command == "run-cutover":
+        cmd_cutover(args)
+    elif args.command == "identity":
+        cmd_identity(args)
     elif args.command == "update":
         cmd_update(args)
     elif args.command == "logout":
@@ -169,28 +237,22 @@ def main():
 def cmd_research(args):
     """Trigger a web research task via NATS."""
     print(f"🔍 [HEIWA] Initiating research task for: {args.target}")
-    # Load env for NATS
-    load_env = Path(__file__).parent.parent.resolve() / "cli/scripts/terminal_chat.py"
-    # We use a simple subprocess to run a one-off NATS publish
+    # We use a simple placeholder task ID until NATS publish wiring is added.
     task_id = f"research-{uuid.uuid4().hex[:8]}"
-    payload = {
-        "task_id": task_id,
-        "url": args.target,
-        "requested_by": os.environ.get("USER", "terminal"),
-        "timestamp": time.time()
-    }
-    
-    # Logic to publish to NATS would go here, for now we simulate or use a helper
     print(f"📡 Task {task_id} published to mesh. Results will appear in #field-intel.")
 
 def cmd_audit(args):
     """Run a local system audit."""
     print("🛡️ [HEIWA] Running Machine Self-Improvement Audit...")
-    repo_root = Path(__file__).parent.parent.resolve()
-    # Path within the monorepo: heiwa/runtime/...
-    audit_script = repo_root.parent / "runtime/cli/scripts/heiwa_audit.py"
+    python_bin = _resolve_python()
+    audit_script = NODE_ROOT / "cli/scripts/ops/heiwa_360_check.py"
     if audit_script.exists():
-        _run_subprocess(f"python3 {audit_script}")
+        cmd = (
+            f"cd {shlex.quote(str(MONOREPO_ROOT))} && "
+            f"PYTHONPATH={shlex.quote(str(RUNTIME_ROOT))} "
+            f"{shlex.quote(python_bin)} {shlex.quote(str(audit_script))}"
+        )
+        _run_subprocess(cmd)
     else:
         print("❌ Audit script not found in runtime.")
 
@@ -241,9 +303,8 @@ def cmd_update(args):
     """Trigger the auto-patcher and system update."""
     print("✨ [HEIWA] Initiating Swarm Self-Patching sequence...")
     # This will eventually trigger the auto_patcher script on the cloud or local node
-    repo_root = Path(__file__).parent.parent.resolve()
-    print(f"Checking for updates in {repo_root}...")
-    _run_subprocess("git pull")
+    print(f"Checking for updates in {MONOREPO_ROOT}...")
+    _run_subprocess(f"cd {shlex.quote(str(MONOREPO_ROOT))} && git pull --ff-only")
     print("✅ System core updated. Running doctor to verify health...")
     cmd_doctor(args)
 

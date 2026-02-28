@@ -84,9 +84,7 @@ class UIManager:
                 result_text = f"{result[:997]}..."
             else:
                 result_text = result
-            embed.add_field(name="Result", value=f"```
-{result_text}
-```", inline=False)
+            embed.add_field(name="Result", value=f"```\n{result_text}\n```", inline=False)
             
         if snapshot:
             railway = snapshot.get("railway", "Online")

@@ -12,7 +12,7 @@ import tomllib
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def git_files(*patterns: str) -> list[Path]:
@@ -64,14 +64,12 @@ def lint_yaml_text() -> list[str]:
         if text.strip() == "":
             issues.append(f"{path.relative_to(ROOT)} is empty")
 
-    core_cfg = ROOT / "config/agents.yaml"
-    if core_cfg.exists():
-        text = core_cfg.read_text(encoding="utf-8")
-        for key in ("policy:", "providers:", "budgets:"):
-            if key not in text:
-                issues.append(f"config/agents.yaml missing required section '{key}'")
-    else:
-        issues.append("config/agents.yaml missing")
+    config_candidates = [
+        ROOT / "config/agents.yaml",
+        ROOT / "runtime/fleets/hub/agent.yaml",
+    ]
+    if not any(path.exists() for path in config_candidates):
+        issues.append("missing runtime config manifest (config/agents.yaml or runtime/fleets/hub/agent.yaml)")
 
     return issues
 

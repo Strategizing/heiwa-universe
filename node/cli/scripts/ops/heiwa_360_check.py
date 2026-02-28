@@ -17,10 +17,11 @@ import socket
 import subprocess
 import sys
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.request import urlopen
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]
 
 
 def say(level: str, label: str, detail: str) -> None:
@@ -44,6 +45,11 @@ def http_health(url: str, timeout: int = 5) -> tuple[bool, str]:
         with urlopen(url, timeout=timeout) as resp:  # nosec B310
             code = getattr(resp, "status", 200)
             return (200 <= code < 300, f"HTTP {code}")
+    except HTTPError as exc:
+        # Some public endpoints are challenge-guarded but still up.
+        if exc.code in {401, 403}:
+            return (True, f"HTTP {exc.code} (protected)")
+        return (False, f"HTTP {exc.code}")
     except Exception as exc:  # noqa: BLE001
         return (False, str(exc))
 
@@ -67,17 +73,16 @@ def main() -> int:
     warns = 0
 
     critical_files = [
-        ".railwayignore",
-        ".dockerignore",
+        ".env",
         "railway.toml",
-        "cli/scripts/agents/worker_manager.py",
-        "cli/scripts/agents/wrappers/codex_exec.sh",
-        "cli/scripts/agents/wrappers/openclaw_exec.sh",
-        "cli/scripts/agents/wrappers/picoclaw_exec.py",
-        "cli/scripts/agents/wrappers/ollama_exec.py",
-        "config/env/.env.railway.example",
-        "config/env/.env.worker.mac.example",
-        "config/env/.env.worker.pc.example",
+        "core/profiles/heiwa-one-system.yaml",
+        "runtime/fleets/hub/main.py",
+        "runtime/fleets/hub/config.py",
+        "node/cli/scripts/agents/worker_manager.py",
+        "node/cli/scripts/agents/wrappers/codex_exec.sh",
+        "node/cli/scripts/agents/wrappers/openclaw_exec.sh",
+        "node/cli/scripts/agents/wrappers/picoclaw_exec.py",
+        "node/cli/scripts/agents/wrappers/ollama_exec.py",
     ]
     for rel in critical_files:
         p = ROOT / rel
@@ -87,9 +92,19 @@ def main() -> int:
             say("FAIL", "file", f"missing {rel}")
             fails += 1
 
-    for cmd in ("codex", "openclaw", "ollama", "railway"):
+    for cmd in ("codex", "openclaw", "ollama", "railway", "wrangler"):
         if cmd_ok(cmd):
             say("OK", "command", cmd)
+            if cmd == "wrangler":
+                # Check authentication status
+                wrangler_rc = subprocess.call(
+                    ["/usr/bin/env", "bash", "-lc", "wrangler whoami >/dev/null 2>&1"]
+                )
+                if wrangler_rc == 0:
+                    say("OK", "service", "wrangler is authenticated")
+                else:
+                    say("WARN", "service", "wrangler is NOT authenticated (run `wrangler login`)")
+                    warns += 1
         else:
             say("FAIL", "command", f"{cmd} missing")
             fails += 1
@@ -148,7 +163,7 @@ def main() -> int:
     # Railway control-plane health check (best-effort).
     health_urls = [
         "https://heiwa-cloud-hq-brain.up.railway.app/health",
-        "https://hub-api-brain.up.railway.app/health",
+        "https://api.heiwa.ltd/health",
     ]
     for url in health_urls:
         ok, detail = http_health(url)
