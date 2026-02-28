@@ -20,6 +20,8 @@ from heiwa_protocol.protocol import Subject
 
 logger = logging.getLogger("Executor")
 
+from heiwa_sdk.db import Database
+
 class ExecutorAgent(BaseAgent):
     """
     Processes execution requests dispatched by the Planner/Messenger.
@@ -28,10 +30,11 @@ class ExecutorAgent(BaseAgent):
     def __init__(self):
         super().__init__(name="heiwa-executor")
         self.executor_runtime = str(os.getenv("HEIWA_EXECUTOR_RUNTIME", "railway")).strip().lower() or "railway"
-        self.engine = CognitionEngine()
+        self.db = Database()
+        self.engine = CognitionEngine(db=self.db)
 
     async def _handle_exec(self, data: dict[str, Any]) -> None:
-        """Process a single execution request with streaming."""
+        """Process a single execution request with reasoning and conscience."""
         payload = data.get("data", data)
         task_id = payload.get("task_id", "unknown")
         step_id = payload.get("step_id", "unknown")
@@ -46,13 +49,20 @@ class ExecutorAgent(BaseAgent):
         start = time.time()
         full_result = ""
         
-        # Build a system prompt appropriate for the intent
-        system = self._build_system_prompt(intent_class)
+        # Build an augmentation prompt for the intent
+        system_augmentation = self._build_intent_context(intent_class)
 
-        logger.info(f"🚀 Starting execution for {task_id} using {target_model}")
+        logger.info(f"🚀 [SOTA COGNITION] Task: {task_id} | Engine: evaluate_and_stream")
 
         try:
-            async for chunk in self.engine.generate_stream(instruction, target_model, system):
+            # Use evaluate_and_stream for reasoning + conscience + execution
+            async for chunk in self.engine.evaluate_and_stream(
+                origin=self.name,
+                intent=intent_class,
+                instruction=instruction,
+                model=target_model,
+                system=system_augmentation
+            ):
                 full_result += chunk
                 # Stream chunk as a thought for real-time UI feedback
                 await self.speak(Subject.LOG_THOUGHT, {
@@ -62,7 +72,7 @@ class ExecutorAgent(BaseAgent):
                     "stream": True
                 })
         except Exception as e:
-            logger.error(f"Execution failed: {e}")
+            logger.error(f"❌ Execution failed: {e}")
             full_result = f"Error: {e}"
 
         elapsed = round(time.time() - start, 2)
@@ -86,41 +96,13 @@ class ExecutorAgent(BaseAgent):
         logger.info(f"✅ Exec complete: task={task_id} elapsed={elapsed}s")
 
     @staticmethod
-    def _build_system_prompt(intent_class: str) -> str:
-        """Return a focused system prompt for the given intent."""
-        prompts = {
-            "build": (
-                "You are Heiwa, an expert software engineer. "
-                "Write clean, production-ready code. "
-                "Include brief comments explaining non-obvious decisions. "
-                "Return the complete implementation."
-            ),
-            "research": (
-                "You are Heiwa, a meticulous research analyst. "
-                "Provide well-sourced, structured findings. "
-                "Highlight confidence levels and uncertainties. "
-                "Be concise but thorough."
-            ),
-            "deploy": (
-                "You are Heiwa, a DevOps engineer. "
-                "Provide exact commands and configs needed. "
-                "Include health checks and rollback steps. "
-                "Safety is the top priority."
-            ),
-            "operate": (
-                "You are Heiwa, a systems operator. "
-                "Diagnose issues methodically. "
-                "Provide exact commands to run. "
-                "Include verification steps."
-            ),
-            "automation": (
-                "You are Heiwa, an automation specialist. "
-                "Design reliable, idempotent workflows. "
-                "Include error handling and logging. "
-                "Prefer simple, maintainable solutions."
-            ),
+    def _build_intent_context(intent_class: str) -> str:
+        """Return a focused context augmentation for the given intent."""
+        contexts = {
+            "build": "Focus: SOTA Software Engineering. Implementation must be clean, production-ready, and efficient.",
+            "research": "Focus: Meticulous Analysis. Findings must be sourced, structured, and highlight confidence levels.",
+            "deploy": "Focus: DevOps & Infrastructure. Safety first. Include verification and rollback considerations.",
+            "operate": "Focus: Systems Operation. Calculated diagnostics. Provide exact, verified commands.",
+            "automation": "Focus: Idempotent Workflows. Reliable, maintainable, and simple solutions.",
         }
-        return prompts.get(
-            intent_class,
-            "You are Heiwa, a capable AI assistant. Be concise, accurate, and helpful.",
-        )
+        return contexts.get(intent_class, "Focus: Efficient and precise execution.")

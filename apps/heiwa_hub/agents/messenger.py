@@ -452,6 +452,7 @@ class MessengerAgent(BaseAgent):
         if not self.bot.is_ready(): return
         payload = self._unwrap(data)
         node_id = payload.get("node_id", "unknown")
+        agent_name = payload.get("agent_name", "unknown")
         cpu = payload.get("cpu_pct", 0)
         ram = payload.get("ram_pct", 0)
         ram_used = payload.get("ram_used_gb", 0)
@@ -461,14 +462,20 @@ class MessengerAgent(BaseAgent):
         if cid:
             chan = self.bot.get_channel(cid)
             if chan:
-                # We use create_base_embed with metrics for a clean look
+                # Use professional UI for telemetry
                 embed = UIManager.create_base_embed(
-                    f"Node Telemetry: {node_id}",
-                    f"Real-time resource polling for node `{node_id}`.",
+                    f"Node Status: {node_id}",
+                    f"Active Agent: `{agent_name}`",
                     status="online",
-                    metrics={"cpu": f"{cpu}%", "ram": f"{ram}% ({ram_used}GB / {ram_total}GB)"},
-                    snapshot={"railway": "Online", "node_id": node_id, "provider": "System Poll", "tokens": 0}
+                    metrics={"cpu": cpu, "ram": ram},
+                    snapshot={
+                        "railway": "Operational", 
+                        "node_id": node_id, 
+                        "provider": f"System Poll ({agent_name})", 
+                        "tokens": 0
+                    }
                 )
+                embed.add_field(name="Memory Details", value=f"`{ram_used} GB` / `{ram_total} GB`", inline=True)
                 await chan.send(embed=embed)
 
     async def handle_exec_result(self, data: dict[str, Any]) -> None:

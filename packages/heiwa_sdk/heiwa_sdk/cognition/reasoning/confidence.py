@@ -4,7 +4,7 @@ Determines if a Thought executes immediately or waits for the Human Key.
 """
 import logging
 from dataclasses import dataclass
-from ..db import Database, Thought
+from heiwa_sdk.db import Database, Thought
 
 logger = logging.getLogger("confidence")
 
@@ -73,10 +73,10 @@ class ConfidenceGate:
             base -= 0.05
 
         # 3. Success History (The Reputation Score)
-        # TODO: Implement granular Agent Reputation in DB
-        # if self.db:
-        #     history = self.db.get_agent_reputation(thought.origin)
-        #     base *= history.trust_multiplier
+        if self.db:
+            history_multiplier = self.db.get_agent_reputation(thought.origin)
+            base *= history_multiplier
+            logger.info(f"Reputation multiplier for {thought.origin}: {history_multiplier:.2f}")
 
         # Clamp score to [0.0, 1.0]
         base = max(0.0, min(1.0, base))

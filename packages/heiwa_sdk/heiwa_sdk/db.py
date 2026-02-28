@@ -1804,7 +1804,79 @@ class Database:
         finally:
              conn.close()
 
-    # --- Discord Management ---
+    # --- Hive Mind Stream (Cognitive Blackboard) ---
+
+    def insert_thought(self, thought):
+        """Write a thought to the cognitive stream."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        try:
+            if self.use_postgres:
+                self._exec(cursor, """
+                    INSERT INTO stream (stream_id, created_at, origin, intent, thought_type, reasoning, artifact, confidence, parent_id, tags, metadata)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    thought.stream_id, now, thought.origin, thought.intent, 
+                    thought.thought_type, thought.reasoning, 
+                    json.dumps(thought.artifact) if thought.artifact else None,
+                    thought.confidence, thought.parent_id,
+                    json.dumps(thought.tags) if thought.tags else None,
+                    json.dumps(thought.metadata) if thought.metadata else None
+                ))
+            else:
+                self._exec(cursor, """
+                    INSERT INTO stream (stream_id, created_at, origin, intent, thought_type, reasoning, artifact, confidence, parent_id, tags, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    thought.stream_id, now, thought.origin, thought.intent, 
+                    thought.thought_type, thought.reasoning, 
+                    json.dumps(thought.artifact) if thought.artifact else None,
+                    thought.confidence, thought.parent_id,
+                    json.dumps(thought.tags) if thought.tags else None,
+                    json.dumps(thought.metadata) if thought.metadata else None
+                ))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"Insert Thought Error: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+
+    def get_stream_context(self, limit=10):
+        """Fetch the latest thoughts from the stream for context."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            self._exec(cursor, "SELECT * FROM stream ORDER BY created_at DESC LIMIT ?", (limit,))
+            rows = cursor.fetchall()
+            return self._rows_to_dicts(rows, cursor)
+        finally:
+            conn.close()
+
+    def get_agent_reputation(self, agent_name):
+        """Calculate a trust multiplier based on historical PASS/FAIL ratio."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            self._exec(cursor, """
+                SELECT 
+                    COUNT(CASE WHEN status IN ('PASS', 'SUCCESS', 'COMPLETED') THEN 1 END) as success_count,
+                    COUNT(*) as total_count
+                FROM runs
+                WHERE node_id = ? OR model_id = ?
+            """, (agent_name, agent_name))
+            row = cursor.fetchone()
+            if not row or row[1] == 0:
+                return 1.0 # Default neutral trust
+            
+            success_rate = row[0] / row[1]
+            # Multiplier ranges from 0.8 (poor) to 1.2 (excellent)
+            return 0.8 + (success_rate * 0.4)
+        finally:
+            conn.close()
 
     def get_discord_channel(self, purpose):
         """Fetch channel ID by purpose."""

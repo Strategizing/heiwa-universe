@@ -1,166 +1,132 @@
 """
-Cognition: The interface between the Blackboard (DB) and the Nervous System (NATS).
-Handles the atomic broadcast: Memory -> Conscience -> Action.
+Heiwa Cognition Engine — The Unified Brain v3.1.
+
+Implements the Atomic Broadcast pattern: Memory -> Conscience -> Action.
+Integrates LLMProvider for high-speed async streaming.
+Loads "Soul" and "Identity" dynamically to ensure opinionated responses.
+Judges all proposals via ConfidenceGate.
 """
+import asyncio
 import json
 import logging
+import os
+import time
 from datetime import datetime, timezone
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
-from .db import Database, Thought
-from .nervous_system import HeiwaNervousSystem
+from .provider import LLMProvider
+from heiwa_sdk.db import Database, Thought
 from .reasoning.confidence import ConfidenceGate, GateResult
+from heiwa_identity.soul import get_soul, get_identity_meta
 
-logger = logging.getLogger("cognition")
+logger = logging.getLogger("SDK.Cognition.Engine")
 
-
-class Cognition:
+class CognitionEngine:
     """
-    The interface between the Blackboard (DB) and the Nervous System (NATS).
-    
-    Implements the Atomic Broadcast pattern:
-    1. Write to Blackboard (Memory)
-    2. Judge with ConfidenceGate (Conscience)
-    3. Publish to NATS (Action)
+    The Unified Brain of Heiwa.
+    Handles streaming, reasoning, and identity-aware generation.
     """
 
-    # Skill mapping for Antigravity integration
-    SKILL_MAP = {
-        "browser": "skill.browser.navigate",
-        "code": "skill.editor.patch",
-        "terminal": "skill.terminal.run",
-        "file": "skill.file.write",
-    }
-
-    def __init__(self, db: Database = None, nerve: HeiwaNervousSystem = None):
-        self.db = db
-        self.nerve = nerve
+    def __init__(self, db: Optional[Database] = None):
+        self.provider = LLMProvider()
         self.gate = ConfidenceGate(db)
-
-    async def broadcast_thought(self, thought: Thought) -> GateResult:
-        """
-        The Atomic Broadcast:
-        1. Write to Blackboard (Memory)
-        2. Judge with ConfidenceGate (Conscience)
-        3. Publish to NATS (Action)
+        self.db = db
         
-        Returns:
-            GateResult if thought was a proposal, None otherwise
+        # Identity / Soul
+        self.soul = get_soul()
+        self.identity = get_identity_meta()
+        
+        # Load root identity if available (SOTA v3.1)
+        root_identity_path = os.path.join(os.getcwd(), "IDENTITY.md")
+        if os.path.exists(root_identity_path):
+            with open(root_identity_path, "r") as f:
+                self.identity = f.read()
+        
+        root_soul_path = os.path.join(os.getcwd(), "SOUL.md")
+        if os.path.exists(root_soul_path):
+            with open(root_soul_path, "r") as f:
+                self.soul = f.read()
+
+    async def generate_stream(self, 
+                               prompt: str, 
+                               model: str = "google/gemini-2.0-flash", 
+                               system: Optional[str] = None) -> AsyncGenerator[str, None]:
         """
-
-        # 1. Memorize
-        if self.db and not self.db.insert_thought(thought):
-            logger.error("Failed to write thought to Blackboard. Aborting.")
-            return None
-
-        # 2. Judge
-        # We only judge 'proposals' (actions). 'Observations' pass freely.
-        gate_result = None
-        if thought.thought_type == "proposal":
-            gate_result = self.gate.evaluate(thought)
-
-            # Update thought metadata with gate decision
-            thought.metadata["gate_decision"] = gate_result.decision
-            thought.metadata["gate_score"] = gate_result.adjusted_score
-            logger.info(
-                f"Gate Decision: {gate_result.decision} "
-                f"(score: {gate_result.adjusted_score:.2f}) - {gate_result.reason}"
-            )
-
-        # 3. Publish (The Signal)
-        if self.nerve:
-            # Subject format: heiwa.thought.{type}.{origin}
-            subject = f"heiwa.thought.{thought.thought_type}.{thought.origin}"
-
-            payload = thought.to_dict()
-            if gate_result:
-                payload["gate"] = {
-                    "decision": gate_result.decision,
-                    "score": gate_result.adjusted_score,
-                    "reason": gate_result.reason,
-                }
-
-            await self.nerve.publish_directive(subject, payload)
-            logger.info(f"Published thought to: {subject}")
-
-            # 4. Direct Action (If EXECUTE)
-            if gate_result and gate_result.decision == "EXECUTE":
-                await self._trigger_execution(thought)
-
-        return gate_result
-
-    async def _trigger_execution(self, thought: Thought):
+        Stream tokens with identity-aware system prompts.
         """
-        Translates a Thought into a NATS Directive for the Antigravity Node.
-        Maps artifact types to Antigravity Skills.
+        # Inject Soul and Identity into system prompt
+        full_system = f"{self.identity}\n\n{self.soul}\n\n"
+        if system:
+            full_system += f"--- CONTEXTUAL INSTRUCTION ---\n{system}"
+        
+        async for chunk in self.provider.generate_stream(prompt, model, full_system):
+            yield chunk
+
+    async def generate(self, 
+                       prompt: str, 
+                       model: str = "google/gemini-2.0-flash", 
+                       system: Optional[str] = None) -> str:
+        """Non-streaming generation."""
+        full_result = ""
+        async for chunk in self.generate_stream(prompt, model, system):
+            full_result += chunk
+        return full_result
+
+    async def evaluate_and_stream(self,
+                                  origin: str,
+                                  intent: str,
+                                  instruction: str,
+                                  model: str = "google/gemini-2.0-flash",
+                                  system: Optional[str] = None) -> AsyncGenerator[str, None]:
         """
-        if not self.nerve:
-            logger.warning("No nerve connection, cannot trigger execution")
-            return
-
-        # Deduce target skill from artifact type or intent
-        target_subject = "heiwa.directives.generic"
-        artifact_type = thought.artifact.get("type", "none") if thought.artifact else "none"
-
-        # Map artifact type to skill
-        if artifact_type == "code" or artifact_type == "patch":
-            target_subject = self.SKILL_MAP.get("code", target_subject)
-        elif artifact_type == "config":
-            target_subject = self.SKILL_MAP.get("file", target_subject)
-        elif artifact_type == "ref":
-            # Reference artifacts often need browser verification
-            target_subject = self.SKILL_MAP.get("browser", target_subject)
-
-        # Check intent for browser keywords
-        if thought.intent:
-            intent_lower = thought.intent.lower()
-            if any(kw in intent_lower for kw in ["browser", "navigate", "url", "localhost", "verify layout"]):
-                target_subject = self.SKILL_MAP.get("browser", target_subject)
-            elif any(kw in intent_lower for kw in ["terminal", "run", "execute", "command"]):
-                target_subject = self.SKILL_MAP.get("terminal", target_subject)
-
-        # Build directive payload
-        directive_payload = {
-            "task_id": thought.stream_id,
-            "intent": thought.intent,
-            "artifact": thought.artifact,
-            "origin": thought.origin,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-
-        # Attach short-term memory context if DB available
+        The Atomic Broadcast Generation:
+        1. Reason about the intent (Internal Thought).
+        2. Evaluate the plan (ConfidenceGate).
+        3. Stream the execution.
+        """
+        # 0. Context Gathering
+        context = []
         if self.db:
-            directive_payload["context"] = self.db.get_stream_context(limit=5)
-
-        # "Muscle, wake up."
-        await self.nerve.publish_directive(target_subject, directive_payload)
-        logger.info(f"Triggered Execution: {target_subject} for {thought.stream_id}")
-
-    async def create_and_broadcast(
-        self,
-        origin: str,
-        intent: str,
-        thought_type: str,
-        confidence: float,
-        reasoning: str = None,
-        artifact: dict = None,
-        parent_id: str = None,
-        tags: list = None,
-    ) -> tuple[Thought, GateResult]:
-        """
-        Convenience method to create and broadcast a thought in one call.
+            context = self.db.get_stream_context(limit=5)
         
-        Returns:
-            Tuple of (Thought, GateResult)
-        """
+        context_str = "\n".join([f"- {c['origin']}: {c['reasoning']}" for c in context])
+
+        # 1. Internal Reasoning
+        reasoning_prompt = f"Previous context:\n{context_str}\n\nReason about this task: {intent}\nInstruction: {instruction}\nProvide a 2-sentence calculated plan."
+        reasoning = await self.generate(reasoning_prompt, model, system)
+        
+        # 2. Conscience Check
         thought = Thought(
             origin=origin,
             intent=intent,
-            thought_type=thought_type,
-            confidence=confidence,
+            thought_type="proposal",
+            confidence=0.85, # Default high for intent processing
             reasoning=reasoning,
-            artifact=artifact,
-            parent_id=parent_id,
-            tags=tags,
+            artifact={"type": "action", "instruction": instruction}
         )
-        gate_result = await self.broadcast_thought(thought)
-        return thought, gate_result
+        
+        # Atomic Broadcast: Memory
+        if self.db:
+            self.db.insert_thought(thought)
+
+        gate_result = self.gate.evaluate(thought)
+        
+        # Update thought with gate decision (Metadata)
+        thought.metadata["gate_decision"] = gate_result.decision
+        
+        # Emit reasoning as a thought
+        yield f"[REASONING]: {reasoning}\n[GATE]: {gate_result.decision} - {gate_result.reason}\n\n"
+        
+        if gate_result.decision in ["REJECT", "HOLD"]:
+            yield f"⚠️ Execution blocked by Conscience: {gate_result.reason}"
+            return
+
+        # 3. Execution Stream
+        async for chunk in self.provider.generate_stream(instruction, model, system):
+            yield chunk
+
+    async def close(self):
+        await self.provider.close()
+
+# Alias for backward compatibility
+Cognition = CognitionEngine

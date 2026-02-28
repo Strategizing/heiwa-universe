@@ -117,20 +117,11 @@ class TelemetryAgent(BaseAgent):
         pass
 
     async def process_analytics(self):
-        """Analyze usage and poll local Railway metrics."""
+        """Analyze usage and poll local metrics."""
         now = time.time()
         
-        # Poll Railway metrics (vCPU/RAM)
-        import psutil
-        railway_stats = {
-            "node_id": "railway@mesh-brain",
-            "cpu_pct": psutil.cpu_percent(),
-            "ram_pct": psutil.virtual_memory().percent,
-            "ram_used_gb": round(psutil.virtual_memory().used / (1024**3), 2),
-            "ram_total_gb": round(psutil.virtual_memory().total / (1024**3), 2),
-            "timestamp": now
-        }
-        await self.speak(Subject.NODE_TELEMETRY, railway_stats)
+        # BaseAgent heartbeat now handles the broadcast of local metrics automatically.
+        # This method can focus on Swarm-wide analytics and DB state.
 
         if now - self.last_summary_ts < 300: # Every 5 mins
             return

@@ -47,6 +47,8 @@ class BaseAgent(ABC):
                 self.nc = await nats.connect(url, connect_timeout=10)
                 logger.info(f"✅ [{self.name}] Connected to NATS at {_redact_nats_url(url)}")
                 self.running = True
+                # Start telemetry heartbeat
+                asyncio.create_task(self._telemetry_heartbeat())
                 return
             except Exception as e:
                 if attempt == max_retries:
@@ -56,6 +58,25 @@ class BaseAgent(ABC):
                 else:
                     logger.info(f"🔄 [{self.name}] NATS connection failed (Attempt {attempt}/{max_retries}), retrying in {retry_delay}s...")
                     await asyncio.sleep(retry_delay)
+
+    async def _telemetry_heartbeat(self):
+        """Proactively broadcast node resource usage every 30 seconds."""
+        import psutil
+        while self.running and self.nc:
+            try:
+                stats = {
+                    "node_id": self.id,
+                    "agent_name": self.name,
+                    "cpu_pct": psutil.cpu_percent(),
+                    "ram_pct": psutil.virtual_memory().percent,
+                    "ram_used_gb": round(psutil.virtual_memory().used / (1024**3), 2),
+                    "ram_total_gb": round(psutil.virtual_memory().total / (1024**3), 2),
+                    "timestamp": time.time()
+                }
+                await self.speak(Subject.NODE_TELEMETRY, stats)
+            except Exception as e:
+                logger.debug(f"Telemetry heartbeat failed for {self.name}: {e}")
+            await asyncio.sleep(30)
 
     async def speak(self, subject: Subject, data: Dict[str, Any]):
         """Publish a message to the Swarm."""
