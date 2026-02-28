@@ -23,6 +23,8 @@ class Subject(str, Enum):
     NODE_HEARTBEAT = "heiwa.node.heartbeat"    # Node -> Orchestrator (I'm alive)
     NODE_REGISTER = "heiwa.node.register"      # Node -> Orchestrator (Hello, I'm new)
     NODE_TELEMETRY = "heiwa.node.telemetry"    # Node -> Swarm (Resource stats)
+    SWARM_STATUS_QUERY = "heiwa.swarm.status.query"
+    SWARM_STATUS_REPORT = "heiwa.swarm.status.report"
 
     # V2 Mesh Protocol (Decentralized Blackboard)
     MESH_CAPABILITY_BROADCAST = "heiwa.mesh.capability.broadcast" # Agent -> Mesh (Here are my tools)

@@ -1,182 +1,75 @@
 {
-  "version": 7,
+  "version": 8,
   "default_identity": "operator-general",
   "identities": [
     {
       "id": "operator-general",
-      "description": "General Heiwa operator. Always provide a '## EXECUTIVE SUMMARY' in markdown before any technical output. Keep it polished and high-level.",
-      "trigger_keywords": [
-        "heiwa",
-        "ops",
-        "operate",
-        "runtime",
-        "doctor",
-        "fix"
-      ],
-      "targets": {
-        "tool": "openclaw",
-        "runtime": "macbook@heiwa-agile",
-        "required_capabilities": ["standard_compute", "workspace_interaction"],
-        "dispatch": [
-          "discord",
-          "ci"
-        ]
-      },
+      "description": "General Heiwa operator. Standard compute instance.",
+      "trigger_keywords": ["heiwa", "ops", "fix", "status"],
+      "targets": {"tool": "openclaw", "runtime": "macbook@heiwa-agile"},
       "models": {
         "openclaw": [
-          "ollama/deepseek-coder-v2:16b",
           "ollama/qwen2.5-coder:7b",
           "google/gemini-2.5-flash",
-          "groq/llama-3.3-70b-versatile",
           "cerebras/gpt-oss-120b",
-          "openrouter/google/gemini-2.0-flash:free",
-          "google-gemini-cli/gemini-3-flash-preview",
-          "google-antigravity/claude-opus-4-5-thinking"
+          "groq/llama-3.3-70b-versatile"
         ]
       },
       "actions": {
-        "ci_workflow": "deploy.yml",
-        "railway_service": "heiwa-cloud-hq",
         "discord_channel": "central-comms",
         "report_channel": "executive-briefing"
       }
     },
     {
       "id": "architect-strategist",
-      "description": "Heiwa Lead Architect. Focus on long-term strategy, brainstorming, and system evolution. Output should be formatted as a formal proposal or plan.",
-      "trigger_keywords": [
-        "brainstorm",
-        "plan",
-        "architect",
-        "evolve",
-        "improve",
-        "strategy"
-      ],
-      "targets": {
-        "tool": "openclaw",
-        "runtime": "any",
-        "required_capabilities": ["brainstorming", "multi_model_inference"],
-        "dispatch": [
-          "discord"
-        ]
-      },
+      "description": "Heiwa Lead Architect. Brainstorming and strategy instance.",
+      "trigger_keywords": ["brainstorm", "plan", "strategy", "improve"],
+      "targets": {"tool": "openclaw", "runtime": "any"},
       "models": {
         "openclaw": [
-          "ollama/deepseek-coder-v2:16b",
-          "google/gemini-1.5-pro",
           "groq/llama-3.3-70b-versatile",
-          "cerebras/gpt-oss-120b",
-          "google-antigravity/claude-opus-4-5-thinking",
-          "google-antigravity/gemini-3-pro-high"
+          "google/gemini-1.5-pro",
+          "openai-codex/gpt-5.2-codex",
+          "google-antigravity/claude-opus-4-5-thinking"
         ]
       },
       "actions": {
-        "ci_workflow": "",
-        "railway_service": "heiwa-cloud-hq",
         "discord_channel": "roadmap",
         "report_channel": "executive-briefing"
       }
     },
     {
-      "id": "incident-response",
-      "description": "Fast-response triage. Summarize the error, the root cause, and the proposed fix clearly for the operator.",
-      "trigger_keywords": [
-        "incident",
-        "outage",
-        "error",
-        "failed",
-        "downtime",
-        "urgent"
-      ],
-      "targets": {
-        "tool": "openclaw",
-        "runtime": "any",
-        "required_capabilities": ["triage", "quick_fix"],
-        "dispatch": [
-          "discord",
-          "ci"
-        ]
-      },
-      "models": {
-        "openclaw": [
-          "ollama/qwen2.5-coder:7b",
-          "google/gemini-2.5-flash",
-          "groq/llama-3.1-8b-instant",
-          "openrouter/google/gemini-2.0-flash:free"
-        ]
-      },
-      "actions": {
-        "ci_workflow": "deploy.yml",
-        "railway_service": "heiwa-cloud-hq",
-        "discord_channel": "security-ops",
-        "report_channel": "executive-briefing"
-      }
-    },
-    {
       "id": "heavy-reasoner",
-      "description": "Heiwa Heavy Thinker. Utilizes Heavy Compute Node for massive reasoning models. Use for complex logic and deep technical architecture.",
-      "trigger_keywords": [
-        "deepthink",
-        "complex logic",
-        "heavy reasoning",
-        "massive task",
-        "architecture audit"
-      ],
-      "targets": {
-        "tool": "openclaw",
-        "runtime": "wsl@heiwa-thinker",
-        "required_capabilities": ["heavy_compute", "gpu_native"],
-        "dispatch": [
-          "discord"
-        ]
-      },
+      "description": "Heiwa Heavy Thinker. Logic tank instance.",
+      "trigger_keywords": ["deepthink", "logic", "audit"],
+      "targets": {"tool": "openclaw", "runtime": "wsl@heiwa-thinker"},
       "models": {
         "openclaw": [
-          "ollama/deepseek-r1:32b",
           "ollama/deepseek-r1:14b",
-          "ollama/deepseek-r1:8b",
-          "groq/qwen-qwq-32b",
+          "groq/deepseek-r1-distill-llama-70b",
+          "openrouter/qwen/qwen2.5-72b-instruct:free",
           "cerebras/gpt-oss-120b"
         ]
       },
       "actions": {
-        "ci_workflow": "",
-        "railway_service": "",
         "discord_channel": "dev-labs",
         "report_channel": "executive-briefing"
       }
     },
     {
       "id": "research-scout",
-      "description": "Research-focused identity. Synthesize findings into a readable brief.",
-      "trigger_keywords": [
-        "research",
-        "analyze",
-        "investigate",
-        "look up",
-        "scout",
-        "find"
-      ],
-      "targets": {
-        "tool": "openclaw",
-        "runtime": "any",
-        "required_capabilities": ["research", "web_access"],
-        "dispatch": [
-          "discord"
-        ]
-      },
+      "description": "Research-focused instance.",
+      "trigger_keywords": ["research", "analyze", "find"],
+      "targets": {"tool": "openclaw", "runtime": "any"},
       "models": {
         "openclaw": [
-          "ollama/qwen2.5-coder:7b",
           "google/gemini-2.5-flash",
-          "groq/llama-3.3-70b-versatile",
           "openrouter/google/gemini-2.0-flash:free",
-          "google-antigravity/claude-opus-4-5-thinking"
+          "openrouter/mistral/mistral-small-24b-it-free",
+          "groq/llama-3.3-70b-versatile"
         ]
       },
       "actions": {
-        "ci_workflow": "",
-        "railway_service": "",
         "discord_channel": "technical-research",
         "report_channel": "executive-briefing"
       }

@@ -27,6 +27,7 @@ class TelemetryAgent(BaseAgent):
         # Listen for all execution results across the mesh
         await self.listen(Subject.TASK_EXEC_RESULT, self.handle_exec_result)
         await self.listen(Subject.TASK_STATUS, self.handle_status)
+        await self.listen(Subject.SWARM_STATUS_QUERY, self.handle_status_query)
         
         logger.info("📊 Telemetry Agent Active. Monitoring Swarm Usage...")
 
@@ -34,6 +35,15 @@ class TelemetryAgent(BaseAgent):
         while self.running:
             await self.process_analytics()
             await asyncio.sleep(60)
+
+    async def handle_status_query(self, data: dict[str, Any]):
+        """Respond with the latest usage cache and node health."""
+        report = {
+            "models": self.usage_cache,
+            "timestamp": time.time(),
+            "status": "OPERATIONAL"
+        }
+        await self.speak(Subject.SWARM_STATUS_REPORT, report)
 
     async def handle_exec_result(self, data: dict[str, Any]):
         payload = self._unwrap(data)
@@ -67,13 +77,26 @@ class TelemetryAgent(BaseAgent):
         pass
 
     async def process_analytics(self):
-        """Analyze usage and update live rate limit state."""
+        """Analyze usage and poll local Railway metrics."""
         now = time.time()
+        
+        # Poll Railway metrics (vCPU/RAM)
+        import psutil
+        railway_stats = {
+            "node_id": "railway@mesh-brain",
+            "cpu_pct": psutil.cpu_percent(),
+            "ram_pct": psutil.virtual_memory().percent,
+            "ram_used_gb": round(psutil.virtual_memory().used / (1024**3), 2),
+            "ram_total_gb": round(psutil.virtual_memory().total / (1024**3), 2),
+            "timestamp": now
+        }
+        await self.speak(Subject.NODE_TELEMETRY, railway_stats)
+
         if now - self.last_summary_ts < 300: # Every 5 mins
             return
             
         summary = self.db.get_model_usage_summary(minutes=60)
-        # Update internal state which could be queried via NATS
+        # Update internal state
         for s in summary:
             mid = s["model_id"]
             self.usage_cache[mid] = {
@@ -83,7 +106,7 @@ class TelemetryAgent(BaseAgent):
             }
         
         self.last_summary_ts = now
-        logger.info(f"📊 Processed Hourly Analytics for {len(summary)} models.")
+        logger.info(f"📊 Processed Swarm-wide Analytics.")
 
     def _extract_tokens(self, payload: dict[str, Any]) -> dict[str, int]:
         """Attempt to find token usage in various payload formats."""

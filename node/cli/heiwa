@@ -233,6 +233,7 @@ def main():
 
     # status
     parser_status = subparsers.add_parser("status", help="Check swarm connectivity and node health")
+    parser_status.add_argument("--full", action="store_true", help="Perform a swarm-wide telemetry probe")
 
     # research
     parser_research = subparsers.add_parser("research", help="Trigger a web research/scraping task")
@@ -308,24 +309,32 @@ def cmd_status(args):
     nats_url = os.getenv("NATS_URL", "nats://localhost:4222")
     print(f"📡 NATS Mesh: {nats_url}")
     
-    # 3. Check Local LLM
-    print("🧠 Local Brain (Ollama):", end=" ")
+    # 3. Model-Centric Node Check
+    print("\n🧠 Active Model Instances (Local):")
     try:
         import requests
         resp = requests.get("http://localhost:11434/api/tags", timeout=2)
         if resp.status_code == 200:
-            models = [m['name'] for m in resp.json().get('models', [])]
-            print(f"ONLINE ({', '.join(models)})")
+            models = resp.json().get('models', [])
+            for m in models:
+                print(f"   - {m['name']} (Ready)")
         else:
-            print("OFFLINE")
+            print("   - Ollama service unreachable")
     except:
-        print("OFFLINE")
+        print("   - Ollama service unreachable")
 
-    # 4. Check Macbook Health
+    # 4. Local Resource Usage
     import psutil
     ram = psutil.virtual_memory().percent
-    cpu = psutil.cpu_percent()
-    print(f"💻 Macbook: RAM {ram}% | CPU {cpu}%")
+    cpu = psutil.cpu_percent(interval=0.1)
+    print(f"\n📊 Local Hardware Utilization:")
+    print(f"   CPU: {cpu}%")
+    print(f"   RAM: {ram}%")
+
+    if args.full:
+        print("\n🌐 Swarm-wide Telemetry (Requesting from Mesh Brain)...")
+        # Future: Add NATS request/reply logic here to fetch report from TelemetryAgent
+        print("   (Feature coming in next sync: Live Mesh Report)")
 
 def cmd_logout(args):
     """Clear the local node identity."""
