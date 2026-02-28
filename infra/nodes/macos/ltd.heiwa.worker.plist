@@ -6,7 +6,7 @@
     <string>ltd.heiwa.worker</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/dmcgregsauce/heiwa/apps/heiwa-cli/scripts/ops/start_worker_stack.sh</string>
+        <string>/Users/dmcgregsauce/heiwa/apps/heiwa_cli/scripts/ops/start_worker_stack.sh</string>
     </array>
     <key>RunAtLoad</key>
     <true/>

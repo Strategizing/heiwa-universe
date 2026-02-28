@@ -11,7 +11,7 @@ This document tracks the target state for Heiwa's Cloud HQ on Railway.
 If starting from scratch, execute these commands via the Railway CLI:
 
 ```bash
-railway init --name heiwa-hub
+railway init --name heiwa_hub
 
 # Add dependencies
 railway add -d postgres

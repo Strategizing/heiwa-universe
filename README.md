@@ -15,8 +15,8 @@ Heiwa operates as a decentralized execution mesh unified via **Tailscale** and *
 To add a new compute node to the swarm:
 
 ### 🍎 macOS / Linux
-1.  **Provision:** Run `./apps/heiwa-cli/heiwa provision-node <node_id>`.
-2.  **Setup:** Run `./apps/heiwa-cli/scripts/ops/install_worker_service.sh`.
+1.  **Provision:** Run `./apps/heiwa_cli/heiwa provision-node <node_id>`.
+2.  **Setup:** Run `./apps/heiwa_cli/scripts/ops/install_worker_service.sh`.
 
 ### 🪟 Windows (WSL2)
 1.  **Provision & Setup:** Run this in PowerShell:
@@ -36,10 +36,10 @@ Heiwa utilizes a tiered intelligence model:
 ## 💻 CLI Command Center
 The `heiwa` command is your primary interface. It defaults to an interactive chat mode.
 
-- **`./apps/heiwa-cli/heiwa`**: Launch interactive Terminal Chat (Direct NATS bridge).
-- **`./apps/heiwa-cli/heiwa cost`**: Show swarm-wide token usage and dollar spend.
-- **`./apps/heiwa-cli/heiwa status --full`**: Swarm-wide health and resource report.
-- **`./apps/heiwa-cli/heiwa deploy --full`**: Sync Cloudflare WAF and Railway Compute.
+- **`./apps/heiwa_cli/heiwa`**: Launch interactive Terminal Chat (Direct NATS bridge).
+- **`./apps/heiwa_cli/heiwa cost`**: Show swarm-wide token usage and dollar spend.
+- **`./apps/heiwa_cli/heiwa status --full`**: Swarm-wide health and resource report.
+- **`./apps/heiwa_cli/heiwa deploy --full`**: Sync Cloudflare WAF and Railway Compute.
 
 ---
 *“Be genuinely helpful, not performatively helpful. Have opinions. Actions speak louder than filler words.”* — **SOUL.md**

@@ -23,8 +23,8 @@ wsl bash -c "if [ ! -d ~/heiwa ]; then git clone $RepoUrl ~/heiwa; else cd ~/hei
 
 # 4. Trigger Internal Setup
 Write-Host "🛠️  Running internal WSL setup..." -ForegroundColor Green
-wsl bash -c "cd ~/heiwa && chmod +x apps/heiwa-cli/scripts/ops/*.sh && ./apps/heiwa-cli/scripts/ops/setup_wsl_node.sh"
+wsl bash -c "cd ~/heiwa && chmod +x apps/heiwa_cli/scripts/ops/*.sh && ./apps/heiwa_cli/scripts/ops/setup_wsl_node.sh"
 
 Write-Host "`n✨ Bootstrapping Complete." -ForegroundColor Green
 Write-Host "👉 If you have a .env file from your Mac, copy it to WSL: \wsl$\Ubuntu\home\$env:USERNAME\heiwa\.env.worker.local" -ForegroundColor White
-Write-Host "👉 Finally, run this in WSL: cd ~/heiwa && ./apps/heiwa-cli/scripts/ops/start_worker_stack.sh" -ForegroundColor White
+Write-Host "👉 Finally, run this in WSL: cd ~/heiwa && ./apps/heiwa_cli/scripts/ops/start_worker_stack.sh" -ForegroundColor White

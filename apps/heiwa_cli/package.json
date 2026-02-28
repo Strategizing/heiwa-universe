@@ -1,0 +1,14 @@
+{
+  "name": "@heiwa/cli",
+  "version": "2.1.0",
+  "description": "State-Of-The-Art Enterprise CLI for the Heiwa Swarm",
+  "main": "heiwa",
+  "bin": {
+    "heiwa": "heiwa"
+  },
+  "scripts": {
+    "test": "echo "Error: no test specified" && exit 1"
+  },
+  "author": "Heiwa Collective",
+  "license": "ISC"
+}
