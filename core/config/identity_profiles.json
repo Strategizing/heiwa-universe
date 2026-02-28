@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "default_identity": "operator-general",
   "identities": [
     {
@@ -27,15 +27,12 @@
           "ollama/deepseek-coder-v2:16b",
           "ollama/qwen2.5-coder:7b",
           "google/gemini-2.5-flash",
-          "google/gemini-2.0-flash",
-          "google/gemini-1.5-pro",
+          "groq/llama-3.3-70b-versatile",
+          "cerebras/gpt-oss-120b",
+          "openrouter/google/gemini-2.0-flash:free",
           "google-gemini-cli/gemini-3-flash-preview",
-          "google-gemini-cli/gemini-3-pro-preview",
-          "google-antigravity/gemini-3-pro-high",
-          "google-antigravity/claude-opus-4-5-thinking",
-          "openai-codex/gpt-5.2-codex"
-        ],
-        "picoclaw": []
+          "google-antigravity/claude-opus-4-5-thinking"
+        ]
       },
       "actions": {
         "ci_workflow": "deploy.yml",
@@ -67,10 +64,11 @@
         "openclaw": [
           "ollama/deepseek-coder-v2:16b",
           "google/gemini-1.5-pro",
+          "groq/llama-3.3-70b-versatile",
+          "cerebras/gpt-oss-120b",
           "google-antigravity/claude-opus-4-5-thinking",
           "google-antigravity/gemini-3-pro-high"
-        ],
-        "picoclaw": []
+        ]
       },
       "actions": {
         "ci_workflow": "",
@@ -103,10 +101,9 @@
         "openclaw": [
           "ollama/qwen2.5-coder:7b",
           "google/gemini-2.5-flash",
-          "google-gemini-cli/gemini-3-flash-preview",
-          "openai-codex/gpt-5.2-codex"
-        ],
-        "picoclaw": []
+          "groq/llama-3.1-8b-instant",
+          "openrouter/google/gemini-2.0-flash:free"
+        ]
       },
       "actions": {
         "ci_workflow": "deploy.yml",
@@ -138,9 +135,9 @@
           "ollama/deepseek-r1:32b",
           "ollama/deepseek-r1:14b",
           "ollama/deepseek-r1:8b",
-          "ollama/deepseek-coder-v2:16b"
-        ],
-        "picoclaw": []
+          "groq/qwen-qwq-32b",
+          "cerebras/gpt-oss-120b"
+        ]
       },
       "actions": {
         "ci_workflow": "",
@@ -172,10 +169,10 @@
         "openclaw": [
           "ollama/qwen2.5-coder:7b",
           "google/gemini-2.5-flash",
-          "google-gemini-cli/gemini-3-flash-preview",
+          "groq/llama-3.3-70b-versatile",
+          "openrouter/google/gemini-2.0-flash:free",
           "google-antigravity/claude-opus-4-5-thinking"
-        ],
-        "picoclaw": []
+        ]
       },
       "actions": {
         "ci_workflow": "",

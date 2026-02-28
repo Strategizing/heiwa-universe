@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 from fleets.hub.agents.spine import SpineAgent
 from fleets.hub.agents.messenger import MessengerAgent
 from fleets.hub.agents.executor import ExecutorAgent
+from fleets.hub.agents.telemetry import TelemetryAgent
 from fleets.hub.health import start_health_server
 
 # Configure Global Logging
@@ -23,7 +24,8 @@ async def main():
     # Instantiate core fleet components.
     spine = SpineAgent()
     executor = ExecutorAgent()
-    tasks = [spine.run(), executor.run(), start_health_server()]
+    telemetry = TelemetryAgent()
+    tasks = [spine.run(), executor.run(), telemetry.run(), start_health_server()]
 
     # Messenger is optional: run only when token exists (or explicitly forced).
     messenger_mode = os.getenv("HEIWA_ENABLE_MESSENGER", "auto").strip().lower()

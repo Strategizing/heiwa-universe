@@ -20,6 +20,38 @@ from fleets.hub.protocol import Subject
 
 logger = logging.getLogger("WorkerManager")
 
+class RateLimiter:
+    """Tracks local usage per model to enforce soft rate limits before dispatching."""
+    def __init__(self):
+        self.usage: dict[str, list[float]] = {} # model_id -> list of timestamps
+        self.lock = asyncio.Lock()
+
+    async def check(self, model_id: str, rpm_limit: int = 30) -> bool:
+        async with self.lock:
+            now = time.time()
+            window = now - 60
+            
+            # Clean up old timestamps
+            self.usage[model_id] = [ts for ts in self.usage.get(model_id, []) if ts > window]
+            
+            if len(self.usage[model_id]) >= rpm_limit:
+                return False
+            
+            self.usage[model_id].append(now)
+            return True
+
+class ModelRouter:
+    """Smart model selection based on identity fallback list and rate limits."""
+    def __init__(self, limiter: RateLimiter):
+        self.limiter = limiter
+
+    async def select_best(self, models: list[str]) -> str | None:
+        for model in models:
+            # Assume 30 RPM limit for cloud models, higher for local
+            limit = 1000 if "ollama" in model else 30
+            if await self.limiter.check(model, rpm_limit=limit):
+                return model
+        return None
 
 class WorkerManager(BaseAgent):
     """Macbook execution daemon for codex/openclaw/picoclaw/n8n task steps."""
@@ -35,6 +67,8 @@ class WorkerManager(BaseAgent):
         self.root = ROOT
         self.node_id = os.getenv("HEIWA_NODE_ID", "macbook")
         self.node_type = os.getenv("HEIWA_NODE_TYPE", "mobile_node") # mobile_node | heavy_compute
+        self.limiter = RateLimiter()
+        self.router = ModelRouter(self.limiter)
         self.capabilities = {
             item.strip().lower()
             for item in os.getenv("HEIWA_CAPABILITIES", "").split(",")
@@ -48,7 +82,7 @@ class WorkerManager(BaseAgent):
                 self.capabilities = {"standard_compute", "workspace_interaction", "agile_coding"}
 
         self.warm_ttl_sec = int(os.getenv("HEIWA_WORKER_WARM_TTL_SEC", "600"))
-        self.concurrency = int(os.getenv("HEIWA_EXECUTOR_CONCURRENCY", "2"))
+        self.concurrency = int(os.getenv("HEIWA_EXECUTOR_CONCURRENCY", "4"))
         self.llm_mode = os.getenv("HEIWA_LLM_MODE", "local_only").lower()
         self.allowed_outbound_targets = {
             item.strip()
@@ -143,16 +177,25 @@ class WorkerManager(BaseAgent):
                 )
                 
                 # Assign specific models if defined in identity
-                models = selected.get("models", {})
+                # Standardize: check 'openclaw' list as the primary intelligence pool
+                models = selected.get("models", {}).get("openclaw", [])
                 payload["report_channel"] = selected.get("actions", {}).get("report_channel")
-                if tool == "openclaw" and models.get("openclaw"):
-                    # Use the preferred model (e.g. qwen/deepseek)
-                    os.environ["OPENCLAW_MODEL"] = models["openclaw"][0]
-                elif tool == "ollama" and models.get("openclaw"):
-                    # Fallback mapping: use openclaw's model for ollama if applicable
-                    os.environ["HEIWA_OLLAMA_MODEL"] = models["openclaw"][0].split("/")[-1]
-                elif tool == "picoclaw" and models.get("picoclaw"):
-                    os.environ["PICOCLAW_MODEL"] = models["picoclaw"][0]
+                
+                selected_model = await self.router.select_best(models)
+                if not selected_model:
+                    logger.warning("All models for identity %s are rate limited or empty.", selected.get("id"))
+                    selected_model = models[0] if models else None
+
+                if selected_model:
+                    payload["model_id"] = selected_model
+                    # Map to specific tool env vars
+                    if tool == "openclaw":
+                        os.environ["OPENCLAW_MODEL"] = selected_model
+                    elif tool == "ollama":
+                        # Strip provider prefix for ollama native calls if needed
+                        os.environ["HEIWA_OLLAMA_MODEL"] = selected_model.split("/")[-1]
+                    elif tool == "picoclaw":
+                        os.environ["PICOCLAW_MODEL"] = selected_model
             except Exception as e:
                 logger.warning("Failed to resolve identity, using defaults. Error: %s", e)
 
@@ -175,6 +218,7 @@ class WorkerManager(BaseAgent):
                     error=None,
                     artifacts=[{"kind": "dispatch", "value": "capability_mismatch"}],
                     payload=payload,
+                    usage=None,
                 )
                 return
 
@@ -189,6 +233,7 @@ class WorkerManager(BaseAgent):
                     error="outbound_allowlist_empty",
                     artifacts=[],
                     payload=payload,
+                    usage=None,
                 )
                 return
 
@@ -203,6 +248,7 @@ class WorkerManager(BaseAgent):
                     error="llm_mode_violation",
                     artifacts=[],
                     payload=payload,
+                    usage=None,
                 )
                 return
 
@@ -223,6 +269,7 @@ class WorkerManager(BaseAgent):
             summary = ""
             error = None
             artifacts: list[dict[str, str]] = []
+            usage = {}
 
             try:
                 if tool == "codex":
@@ -234,7 +281,17 @@ class WorkerManager(BaseAgent):
                     code, out = await self._run_openclaw(instruction)
                     status = "PASS" if code == 0 else "FAIL"
                     summary = out[:1800] or "OpenClaw execution completed."
-                    artifacts.append({"kind": "stdout", "value": out[:500]})
+                    # Parse JSON output for usage
+                    try:
+                        data = json.loads(out)
+                        # Extract message and usage if available
+                        if isinstance(data, dict):
+                            summary = data.get("message", summary)
+                            usage = data.get("usage", {})
+                            if usage:
+                                artifacts.append({"kind": "usage", "value": json.dumps(usage)})
+                    except:
+                        artifacts.append({"kind": "stdout", "value": out[:500]})
                 elif tool == "picoclaw":
                     code, out = await self._run_picoclaw(instruction)
                     status = "PASS" if code == 0 else "FAIL"
@@ -266,10 +323,11 @@ class WorkerManager(BaseAgent):
                 status=status,
                 summary=summary,
                 duration_ms=int((time.time() - start) * 1000),
-                runtime="macbook",
+                runtime=self.node_id,
                 error=error,
                 artifacts=artifacts,
                 payload=payload,
+                usage=usage
             )
 
     def _is_warm(self, tool: str) -> bool:
@@ -356,6 +414,7 @@ class WorkerManager(BaseAgent):
         error: str | None,
         artifacts: list[dict[str, str]],
         payload: dict[str, Any],
+        usage: dict[str, Any] | None = None,
     ) -> None:
         result = {
             "task_id": task_id,
@@ -363,6 +422,7 @@ class WorkerManager(BaseAgent):
             "status": status,
             "summary": summary,
             "artifacts": artifacts,
+            "usage": usage or {},
             "logs_ref": None,
             "next_actions": [],
             "executor_id": self.name,

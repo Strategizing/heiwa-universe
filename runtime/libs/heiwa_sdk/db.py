@@ -182,7 +182,11 @@ class Database:
                     artifact_index TEXT,
                     node_id TEXT,
                     replay_receipt TEXT,
-                    mode TEXT
+                    mode TEXT,
+                    model_id TEXT,
+                    tokens_input INTEGER,
+                    tokens_output INTEGER,
+                    tokens_total INTEGER
                 )
             """
             )
@@ -516,10 +520,11 @@ class Database:
         """
         )
 
-        # Migration: Add node_id to runs if missing
-        self._safe_alter_column(cursor, "runs", "node_id", "TEXT")
-        # Migration: Add replay_receipt to runs if missing
-        self._safe_alter_column(cursor, "runs", "replay_receipt", "TEXT")
+        # Migration: Add columns if missing
+        for col in ["node_id", "replay_receipt", "model_id"]:
+            self._safe_alter_column(cursor, "runs", col, "TEXT")
+        for col in ["tokens_input", "tokens_output", "tokens_total"]:
+            self._safe_alter_column(cursor, "runs", col, "INTEGER")
 
         # Migration: Add mode to proposals and runs if missing
         self._safe_alter_column(cursor, "proposals", "mode", "TEXT")
@@ -1118,6 +1123,31 @@ class Database:
         finally:
             conn.close()
 
+    def get_model_usage_summary(self, minutes=60):
+        """Fetch model usage stats for the last N minutes."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cutoff = (
+            datetime.datetime.now(datetime.timezone.utc)
+            - datetime.timedelta(minutes=minutes)
+        ).isoformat()
+
+        try:
+            self._exec(
+                cursor,
+                """
+                SELECT model_id, COUNT(*) as request_count, SUM(tokens_total) as total_tokens
+                FROM runs
+                WHERE ended_at > ? AND model_id IS NOT NULL
+                GROUP BY model_id
+            """,
+                (cutoff,),
+            )
+            rows = cursor.fetchall()
+            return self._rows_to_dicts(rows, cursor)
+        finally:
+            conn.close()
+
     def get_last_successful_tick(self):
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -1257,8 +1287,8 @@ class Database:
             self._exec(
                 cursor,
                 """
-                INSERT INTO runs (run_id, proposal_id, started_at, ended_at, status, chain_result, signals, artifact_index, node_id, replay_receipt, mode)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO runs (run_id, proposal_id, started_at, ended_at, status, chain_result, signals, artifact_index, node_id, replay_receipt, mode, model_id, tokens_input, tokens_output, tokens_total)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     run_data["run_id"],
@@ -1272,6 +1302,10 @@ class Database:
                     run_data.get("node_id"),
                     json.dumps(run_data.get("replay_receipt")),
                     run_data.get("mode"),
+                    run_data.get("model_id"),
+                    run_data.get("tokens_input"),
+                    run_data.get("tokens_output"),
+                    run_data.get("tokens_total"),
                 ),
             )
 
