@@ -1,0 +1,46 @@
+{
+    "models": {
+        "primary": "ollama/deepseek-coder-v2:16b",
+        "fallbacks": [
+            "openrouter/qwen/qwen3-vl-30b-a3b-thinking",
+            "google/gemini-3.1-pro-preview"
+        ],
+        "registry": {
+            "google/gemini-3.1-pro-preview": {
+                "alias": "gemini"
+            },
+            "google-antigravity/claude-opus-4-5-thinking": {},
+            "google-gemini-cli/gemini-3-pro-preview": {},
+            "ollama/qwen2.5-coder:7b": {},
+            "ollama/deepseek-coder-v2:16b": {},
+            "openrouter/qwen/qwen3-vl-30b-a3b-thinking": {}
+        }
+    },
+    "mcp_servers": {
+        "docker": {
+            "command": "docker",
+            "args": [
+                "mcp",
+                "gateway",
+                "run"
+            ]
+        },
+        "playwright": {
+            "command": "npx",
+            "args": [
+                "@playwright/mcp@latest"
+            ]
+        },
+        "figma": {
+            "url": "https://mcp.figma.com/mcp"
+        },
+        "notion": {
+            "url": "https://mcp.notion.com/mcp"
+        }
+    },
+    "trust_boundaries": [
+        "/Users/dmcgregsauce/heiwa-limited",
+        "/Users/dmcgregsauce/heiwa",
+        "/Users/dmcgregsauce"
+    ]
+}

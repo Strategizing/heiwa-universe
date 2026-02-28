@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Heiwa Cloud HQ Repo Contract v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "repo_identity",
+    "runtime",
+    "boundaries",
+    "cli_surface",
+    "command_refs",
+    "providers",
+    "observability"
+  ],
+  "properties": {
+    "schema_version": { "const": "cloud_hq_repo_contract_v1" },
+    "repo_identity": {
+      "type": "object",
+      "required": ["repo_name", "role"],
+      "additionalProperties": true,
+      "properties": {
+        "repo_name": { "type": "string" },
+        "github_repo": { "type": "string" },
+        "role": { "type": "string" }
+      }
+    },
+    "runtime": { "type": "object", "additionalProperties": true },
+    "boundaries": { "type": "object", "additionalProperties": true },
+    "cli_surface": {
+      "type": "object",
+      "required": ["primary_entrypoint"],
+      "additionalProperties": true,
+      "properties": {
+        "primary_entrypoint": { "type": "string" },
+        "compatibility_aliases": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "command_refs": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "argv": { "type": "array", "items": { "type": "string" } },
+          "command": { "type": "string" },
+          "cwd": { "type": "string" },
+          "mode": { "type": "string" },
+          "read_only": { "type": "boolean" }
+        },
+        "anyOf": [
+          { "required": ["argv"] },
+          { "required": ["command"] }
+        ]
+      }
+    },
+    "providers": { "type": "object", "additionalProperties": true },
+    "observability": { "type": "object", "additionalProperties": true }
+  }
+}

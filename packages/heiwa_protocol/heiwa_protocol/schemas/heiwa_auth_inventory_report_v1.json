@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Operator Auth Inventory Report v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "heiwa_root",
+    "status",
+    "inventory"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "heiwa_auth_inventory_report_v1"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "heiwa_root": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["ok", "warn", "error"]
+    },
+    "inventory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "adapter": { "type": "string" },
+          "account_id": { "type": "string" },
+          "route": { "type": "string" },
+          "auth_method": { "type": "string" },
+          "presence": { "type": "string", "enum": ["present", "missing", "unknown", "unsupported"] },
+          "details": { "type": "object" }
+        },
+        "required": ["adapter", "account_id", "route", "auth_method", "presence"]
+      }
+    }
+  }
+}

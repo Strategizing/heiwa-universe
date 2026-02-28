@@ -192,6 +192,55 @@ def cmd_deploy(args):
             print("⚠️  RAILWAY_TOKEN not found in environment. Deployment might fail.")
         _run_subprocess(f"railway up --detach")
 
+def cmd_handshake(args):
+    """Validate full vertical NATS path and Auth barrier."""
+    print("🤝 [HEIWA] Initiating NATS Handshake...")
+    python_bin = _resolve_python()
+    handshake_script = APPS_ROOT / "heiwa_cli/scripts/handshake.py"
+    
+    os.environ["PYTHONPATH"] = f"{PACKAGES_ROOT}/heiwa_sdk:{PACKAGES_ROOT}/heiwa_protocol:{PACKAGES_ROOT}/heiwa_identity:{PACKAGES_ROOT}/heiwa_ui:{APPS_ROOT}"
+    
+    res = subprocess.run([str(python_bin), str(handshake_script)])
+    if res.returncode != 0:
+        sys.exit(1)
+
+def cmd_dispatch(args):
+    """One-shot task dispatch to the swarm."""
+    init_global_dir()
+    python_bin = _resolve_python()
+    dispatch_script = APPS_ROOT / "heiwa_cli/scripts/dispatch_once.py"
+    handshake_script = APPS_ROOT / "heiwa_cli/scripts/handshake.py"
+    
+    if not dispatch_script.exists():
+        print(f"❌ Dispatch script not found at {dispatch_script}")
+        sys.exit(1)
+
+    node_name = "macbook@heiwa-agile"
+    if IDENTITY_FILE.exists():
+        with open(IDENTITY_FILE, "r") as f:
+            identity = json.load(f)
+            node_name = identity.get("name", node_name)
+
+    os.environ["PYTHONPATH"] = f"{PACKAGES_ROOT}/heiwa_sdk:{PACKAGES_ROOT}/heiwa_protocol:{PACKAGES_ROOT}/heiwa_identity:{PACKAGES_ROOT}/heiwa_ui:{APPS_ROOT}"
+    
+    # Block dispatch if handshake is red
+    hs_res = subprocess.run([str(python_bin), str(handshake_script), "--quiet"], capture_output=True)
+    if hs_res.returncode != 0:
+        print("❌ [BLOCKED] Dispatch aborted because swarm handshake failed.")
+        print("💡 Run `heiwa handshake` to diagnose connectivity or auth issues.")
+        sys.exit(1)
+
+    cmd_args = [str(python_bin), str(dispatch_script), node_name]
+    if args.prompt:
+        cmd_args.append(args.prompt)
+        
+    try:
+        subprocess.run(cmd_args, check=True)
+    except KeyboardInterrupt:
+        pass
+    except subprocess.CalledProcessError as e:
+        sys.exit(e.returncode)
+
 def main():
     # Load environment early
     try:
@@ -204,8 +253,12 @@ def main():
     parser = argparse.ArgumentParser(description=f"Heiwa Enterprise CLI")
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
-    parser_chat = subparsers.add_parser("chat", help="Launch interactive swarm chat (Default)")
-    parser_chat.add_argument("prompt", nargs="?", help="Optional prompt to dispatch immediately")
+    parser_chat = subparsers.add_parser("chat", help="Launch interactive swarm chat (TUI)")
+    
+    parser_dispatch = subparsers.add_parser("dispatch", help="One-shot task dispatch")
+    parser_dispatch.add_argument("prompt", nargs="?", help="Prompt to dispatch")
+    
+    subparsers.add_parser("handshake", help="Validate full vertical NATS path and Auth barrier")
     
     parser_login = subparsers.add_parser("login", help="Authenticate and provision node identity")
     parser_login.add_argument("name", nargs="?", help="Identity name")
@@ -223,14 +276,19 @@ def main():
     parser_buff.add_argument("instruction", nargs="?", help="Specific improvement directive")
 
     if len(sys.argv) > 1 and sys.argv[1] not in subparsers.choices and not sys.argv[1].startswith("-"):
-        sys.argv.insert(1, "chat")
+        sys.argv.insert(1, "dispatch")
     elif len(sys.argv) == 1:
-        sys.argv.append("chat")
+        # Default behavior is dispatch without args (which should ask for input/show error)
+        sys.argv.insert(1, "dispatch")
 
     args = parser.parse_args()
 
     if args.command == "chat":
         cmd_chat(args)
+    elif args.command == "dispatch":
+        cmd_dispatch(args)
+    elif args.command == "handshake":
+        cmd_handshake(args)
     elif args.command == "login":
         cmd_login(args)
     elif args.command == "deploy":

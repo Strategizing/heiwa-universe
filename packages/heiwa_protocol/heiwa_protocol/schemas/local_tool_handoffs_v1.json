@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Local Tool Handoffs v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "generated_at", "rules"],
+  "properties": {
+    "schema_version": { "const": "local_tool_handoffs_v1" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["from", "to", "use_for"],
+        "properties": {
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "use_for": { "type": "array", "items": { "type": "string" } },
+          "record_evidence": { "type": ["boolean", "string"] },
+          "approval_gated": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

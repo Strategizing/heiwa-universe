@@ -18,6 +18,7 @@ class ModelRouter:
         self.root = self._find_root()
         self.swarm = self._load_json(self.root / "config/swarm/swarm.json")
         self.profiles = self._load_json(self.root / "config/identities/profiles.json")
+        self.ai_config = self._load_json(self.root / "config/swarm/ai_router.json")
 
     def _find_root(self) -> Path:
         current = Path(__file__).resolve()

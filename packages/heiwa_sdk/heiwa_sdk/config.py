@@ -15,27 +15,26 @@ def get_env(key, default=None, required=True):
             sys.exit(1)
     return val
 
-def load_swarm_env():
-    """Enterprise-grade environment loader. Priority: Vault > Local Worker > Standard Env."""
-    # Find monorepo root dynamically
+def _find_monorepo_root() -> Path:
+    """Recursively search for the monorepo root."""
     current = Path(__file__).resolve()
-    monorepo_root = None
     for _ in range(5):
         if (current.parent / "apps").exists() and (current.parent / "packages").exists():
-            monorepo_root = current.parent
-            break
+            return current.parent
         current = current.parent
-    
-    if not monorepo_root:
-        monorepo_root = Path("/Users/dmcgregsauce/heiwa")
-        
+    return Path("/Users/dmcgregsauce/heiwa")
+
+MONOREPO_ROOT = _find_monorepo_root()
+
+def load_swarm_env():
+    """Enterprise-grade environment loader. Priority: Vault > Local Worker > Standard Env."""
     vault_path = Path.home() / ".heiwa" / "vault.env"
     
     # 1. Standard .env (Base)
-    load_dotenv(monorepo_root / ".env")
+    load_dotenv(MONOREPO_ROOT / ".env")
     
     # 2. Worker Local (Specific Node overrides)
-    load_dotenv(monorepo_root / ".env.worker.local", override=True)
+    load_dotenv(MONOREPO_ROOT / ".env.worker.local", override=True)
     
     # 3. Vault (Highest priority secrets)
     if vault_path.exists():
@@ -43,32 +42,77 @@ def load_swarm_env():
 
 class Settings:
     # --- IDENTITY & SOVEREIGNTY ---
-    HEIWA_AUTH_TOKEN = get_env("HEIWA_AUTH_TOKEN", required=False)
-    OWNER_ID = get_env("OWNER_ID", required=False)
+    @property
+    def MONOREPO_ROOT(self): return MONOREPO_ROOT
+    
+    @property
+    def HEIWA_AUTH_TOKEN(self): return get_env("HEIWA_AUTH_TOKEN", required=False)
+    
+    @property
+    def OWNER_ID(self): return get_env("OWNER_ID", required=False)
+    
+    @property
+    def HEIWA_AUTH_MODE(self): return get_env("HEIWA_AUTH_MODE", default="payload_token", required=False)
     
     # --- HUB & MESH ---
-    NATS_URL = get_env("NATS_URL", default="nats://localhost:4222", required=False)
-    HUB_BASE_URL = get_env("HEIWA_HUB_BASE_URL", required=False)
-    PORT = int(get_env("PORT", default=8000, required=False))
+    @property
+    def NATS_URL(self): return get_env("NATS_URL", default="tls://heiwa-cloud-hq-brain.up.railway.app:443", required=False)
+    
+    @property
+    def HEIWA_ENABLE_BRIDGE(self): return get_env("HEIWA_ENABLE_BRIDGE", default="false", required=False).lower() == "true"
+    
+    @property
+    def HUB_BASE_URL(self): return get_env("HEIWA_HUB_BASE_URL", required=False)
+    
+    @property
+    def PORT(self): return int(get_env("PORT", default=8000, required=False))
     
     # --- DATABASE ---
-    DATABASE_URL = get_env("DATABASE_URL", required=False)
-    DATABASE_PATH = get_env("DATABASE_PATH", default="./hub.db", required=False)
+    @property
+    def DATABASE_URL(self): return get_env("DATABASE_URL", required=False)
+    
+    @property
+    def DATABASE_PATH(self): return get_env("DATABASE_PATH", default="./hub.db", required=False)
 
     # --- DISCORD ---
-    DISCORD_BOT_TOKEN = get_env("DISCORD_BOT_TOKEN", required=False)
-    DISCORD_APPLICATION_ID = get_env("DISCORD_APPLICATION_ID", required=False)
-    DISCORD_GUILD_ID = get_env("DISCORD_GUILD_ID", default="0", required=False)
-    DISCORD_WEBHOOK_URL = get_env("DISCORD_WEBHOOK_URL", required=False)
+    @property
+    def DISCORD_BOT_TOKEN(self): return get_env("DISCORD_BOT_TOKEN", required=False)
+    
+    @property
+    def DISCORD_APPLICATION_ID(self): return get_env("DISCORD_APPLICATION_ID", required=False)
+    
+    @property
+    def DISCORD_GUILD_ID(self): return get_env("DISCORD_GUILD_ID", default="0", required=False)
+    
+    @property
+    def DISCORD_WEBHOOK_URL(self): return get_env("DISCORD_WEBHOOK_URL", required=False)
 
     # --- LLM & WORKER ---
-    HEIWA_LLM_MODE = get_env("HEIWA_LLM_MODE", default="local_only", required=False)
-    HEIWA_WORKER_WARM_TTL_SEC = int(get_env("HEIWA_WORKER_WARM_TTL_SEC", default="600", required=False) or "600")
-    HEIWA_EXECUTOR_CONCURRENCY = int(get_env("HEIWA_EXECUTOR_CONCURRENCY", default="4", required=False) or "4")
+    @property
+    def HEIWA_LLM_MODE(self): return get_env("HEIWA_LLM_MODE", default="local_only", required=False)
+    
+    @property
+    def HEIWA_WORKER_WARM_TTL_SEC(self): return int(get_env("HEIWA_WORKER_WARM_TTL_SEC", default="600", required=False) or "600")
+    
+    @property
+    def HEIWA_EXECUTOR_CONCURRENCY(self): return int(get_env("HEIWA_EXECUTOR_CONCURRENCY", default="4", required=False) or "4")
     
     # --- INFRA ---
-    RAILWAY_ENVIRONMENT_NAME = get_env("RAILWAY_ENVIRONMENT_NAME", default="development", required=False)
-    IS_PROD = (RAILWAY_ENVIRONMENT_NAME == "production")
+    @property
+    def RAILWAY_ENVIRONMENT_NAME(self): return get_env("RAILWAY_ENVIRONMENT_NAME", default="development", required=False)
+    
+    @property
+    def IS_PROD(self): return (self.RAILWAY_ENVIRONMENT_NAME == "production")
+    
+    # --- HARVESTED CONFIGS ---
+    @property
+    def AI_ROUTER_PATH(self): return MONOREPO_ROOT / "config/swarm/ai_router.json"
+    
+    @property
+    def MESSAGING_CHANNELS_PATH(self): return MONOREPO_ROOT / "config/swarm/messaging_channels.json"
+    
+    @property
+    def OPERATOR_PROFILE_PATH(self): return MONOREPO_ROOT / "config/swarm/operator_profile.md"
 
     @property
     def use_postgres(self) -> bool:

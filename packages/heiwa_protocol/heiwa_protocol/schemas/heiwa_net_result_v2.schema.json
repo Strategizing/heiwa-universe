@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Heiwa Net Result v2",
+  "description": "Schema for net request results. Captures the outcome of an executed (policy-approved) internet request for the audit trail.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "result_id",
+    "request_id",
+    "decision_id",
+    "completed_at",
+    "status",
+    "redaction_applied"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "heiwa_net_result_v2"
+    },
+    "result_id": {
+      "type": "string",
+      "description": "Unique result identifier (UUID)"
+    },
+    "request_id": {
+      "type": "string",
+      "description": "The request_id from the originating heiwa_net_request_v2"
+    },
+    "decision_id": {
+      "type": "string",
+      "description": "The decision_id from the heiwa_net_decision_v2 that authorized this request"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of request completion"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["success", "error", "timeout", "denied_at_execution"],
+      "description": "Outcome status of the request"
+    },
+    "http_status": {
+      "type": ["integer", "null"],
+      "description": "HTTP status code (if applicable)"
+    },
+    "duration_ms": {
+      "type": "integer",
+      "description": "Request duration in milliseconds"
+    },
+    "response_size_bytes": {
+      "type": ["integer", "null"],
+      "description": "Size of the response body"
+    },
+    "error_summary": {
+      "type": ["string", "null"],
+      "description": "Redacted error summary if the request failed"
+    },
+    "redaction_applied": {
+      "type": "boolean",
+      "description": "Whether sensitive data has been redacted from this result"
+    }
+  }
+}

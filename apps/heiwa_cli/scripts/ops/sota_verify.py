@@ -54,16 +54,23 @@ async def sota_verify(instruction: str):
     await nc.subscribe(Subject.LOG_THOUGHT.value, cb=message_handler)
     await nc.subscribe(Subject.TASK_EXEC_RESULT.value, cb=message_handler)
 
+    token = os.getenv("HEIWA_AUTH_TOKEN")
+    if not token:
+        from heiwa_sdk.config import settings
+        token = getattr(settings, "HEIWA_AUTH_TOKEN", "")
+
     payload = {
         Payload.SENDER_ID: "devon-operator",
         Payload.TIMESTAMP: time.time(),
         Payload.TYPE: Subject.CORE_REQUEST.name,
+        "auth_token": token,
         Payload.DATA: {
             "task_id": task_id,
             "raw_text": instruction,
             "source": "sota-verification",
             "intent_class": "operate",
-            "target_runtime": "any"
+            "target_runtime": "any",
+            "sender_id": "devon-operator"
         }
     }
     

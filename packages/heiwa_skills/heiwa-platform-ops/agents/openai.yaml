@@ -1,0 +1,4 @@
+interface:
+  display_name: "CLI Platform Expert"
+  short_description: "CLI-first CI/CD and platform operations workflows"
+  default_prompt: "Operate provider CLIs safely: inspect context, auth, logs, and deploy state for GitHub, Cloudflare, Railway, and related tools using non-interactive commands first."

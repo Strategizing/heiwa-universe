@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Operator Resource Snapshot v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "host",
+    "cpu",
+    "memory",
+    "disk"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "heiwa_resource_snapshot_v1"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "cpu": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "memory": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "disk": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "battery": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

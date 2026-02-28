@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from heiwa_sdk.db import Database
-from heiwa_sdk.config import load_swarm_env
+from heiwa_sdk import settings, MCPBridge, redact_any, load_swarm_env
 
 # Initialized Environment
 load_swarm_env()
@@ -23,6 +23,8 @@ ASSETS_ROOT = WEB_ROOT / "assets"
 
 if ASSETS_ROOT.exists():
     app.mount("/assets", StaticFiles(directory=str(ASSETS_ROOT)), name="assets")
+
+mcp_bridge = MCPBridge()
 
 
 def _web_file(name: str) -> Path | None:
@@ -75,6 +77,14 @@ async def status_page():
         return FileResponse(page)
     raise HTTPException(status_code=404, detail="status page unavailable")
 
+@app.get("/canvas")
+@app.get("/canvas/")
+async def canvas_page():
+    page = _web_file("canvas/index.html")
+    if page:
+        return FileResponse(page)
+    raise HTTPException(status_code=404, detail="canvas artifact unavailable")
+
 @app.get("/status")
 async def get_public_status():
     """Public telemetry snapshot for the web dashboard."""
@@ -92,37 +102,50 @@ async def get_public_status():
 
 @app.get("/tools")
 async def list_tools():
-    """List available swarm management tools for agents."""
-    return {
-        "tools": [
-            {
-                "name": "heiwa_get_swarm_status",
-                "description": "Retrieve health and resource usage for all active nodes in the mesh.",
-                "input_schema": {"type": "object", "properties": {}}
-            },
-            {
-                "name": "heiwa_get_latest_tasks",
-                "description": "Fetch the 10 most recent swarm directives and their statuses.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "limit": {"type": "integer", "default": 10}
-                    }
+    """List available swarm management tools and bridged MCP tools."""
+    # 1. Native Heiwa Tools
+    native_tools = [
+        {
+            "name": "heiwa_get_swarm_status",
+            "description": "Retrieve health and resource usage for all active nodes in the mesh.",
+            "input_schema": {"type": "object", "properties": {}}
+        },
+        {
+            "name": "heiwa_get_latest_tasks",
+            "description": "Fetch the 10 most recent swarm directives and their statuses.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "default": 10}
                 }
             }
-        ]
-    }
+        }
+    ]
+    
+    # 2. Bridged MCP Tools
+    try:
+        bridged_tools = mcp_bridge.list_tools()
+        # Add a prefix to bridged tools to avoid collisions? 
+        # Or just return them as is if we want transparent bridging.
+    except Exception as exc:
+        logger.error("Failed to list bridged tools: %s", exc)
+        bridged_tools = []
+        
+    return {"native": native_tools, "bridged": bridged_tools}
 
 @app.post("/call/{tool_name}")
 async def call_tool(tool_name: str, arguments: Dict[str, Any]):
-    """Execute a swarm management tool."""
+    """Execute a swarm management tool (Native or Bridged)."""
+    
+    # Redact input for audit/safety
+    safe_args = redact_any(arguments)
+    
     if tool_name == "heiwa_get_swarm_status":
-        # Pull latest telemetry from DB
         summary = db.get_model_usage_summary(minutes=60)
         return {"content": [{"type": "text", "text": json.dumps(summary, indent=2)}]}
     
     elif tool_name == "heiwa_get_latest_tasks":
-        limit = arguments.get("limit", 10)
+        limit = safe_args.get("limit", 10)
         conn = db.get_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM runs ORDER BY ended_at DESC LIMIT %s", (limit,))
@@ -131,8 +154,17 @@ async def call_tool(tool_name: str, arguments: Dict[str, Any]):
         conn.close()
         return {"content": [{"type": "text", "text": json.dumps(tasks, indent=2)}]}
     
-    else:
-        raise HTTPException(status_code=404, detail="Tool not found")
+    # 3. Fallback to Bridged MCP
+    try:
+        result = mcp_bridge.call_tool(tool_name, safe_args)
+        if result["ok"]:
+            return {"content": [{"type": "text", "text": json.dumps(result["result"], indent=2)}]}
+        else:
+            raise HTTPException(status_code=500, detail=result.get("stderr", "MCP tool failed"))
+    except Exception as e:
+        if "Tool not found" in str(e):
+             raise HTTPException(status_code=404, detail="Tool not found")
+        raise
 
 def start_mcp_server():
     import uvicorn

@@ -55,6 +55,30 @@ async def main():
     
     logger.info("🦾 [BOOT] Agents initialized. Awaiting DB sync...")
     
+    async def _start_mcp_servers():
+        import json
+        router_path = ROOT / "config/swarm/ai_router.json"
+        if router_path.exists():
+            config = json.loads(router_path.read_text())
+            mcps = config.get("mcp_servers", {})
+            for name, mcp in mcps.items():
+                logger.info(f"🔌 [MCP] Registered '{name}' via ai_router.json: {mcp}")
+                # actual subprocess spawn omitted to prevent hanging during refactor
+
+    asyncio.create_task(_start_mcp_servers())
+
+    try:
+        spine = SpineAgent()
+        executor = ExecutorAgent()
+        telemetry = TelemetryAgent()
+    except Exception as e:
+        logger.error("🛑 [BOOT_FATAL] Failed to instantiate core agents: %s", e)
+        sys.exit(1)
+        
+    if not all([spine, executor, telemetry]):
+        logger.error("🛑 [BOOT_FATAL] A core agent is undefined. Exiting.")
+        sys.exit(1)
+    
     port = int(os.getenv("PORT", "8080"))
     tasks = [
         asyncio.create_task(spine.run()),

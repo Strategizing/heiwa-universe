@@ -65,14 +65,31 @@ class SpineAgent(BaseAgent):
             logger.error("🛡️  Digital Barrier misconfigured: HEIWA_AUTH_TOKEN is not set. Dropping inbound task.")
             return
 
-        # --- DIGITAL BARRIER CHECK ---
-        auth_token = data.get("auth_token") or data.get("data", {}).get("auth_token")
-        if not auth_token or auth_token != expected_token:
-            logger.warning(f"🛡️  Digital Barrier Breach Attempt: Invalid token from sender {data.get('sender_id')}")
-            return # Silent drop for security
+        from heiwa_hub.envelope import extract_auth_token, extract_payload, normalize_sender
 
-        payload = data.get("data", data)
+        # --- DIGITAL BARRIER CHECK ---
+        sender_id = normalize_sender(data)
+        auth_token = extract_auth_token(data)
+        if not auth_token or auth_token != expected_token:
+            logger.warning(f"🛡️  Digital Barrier Breach Attempt: Invalid token from sender {sender_id}")
+            await self.speak(
+                Subject.TASK_STATUS,
+                {
+                    "accepted": False,
+                    "reason": "Invalid or missing auth token.",
+                    "task_id": data.get("task_id", data.get("data", {}).get("task_id", "unknown")),
+                    "step_id": "spine-orchestrator",
+                    "status": "BLOCKED_AUTH",
+                    "message": "Invalid or missing auth token.",
+                    "runtime": "spine"
+                }
+            )
+            return
+
+        payload = extract_payload(data)
         task_id = payload.get("task_id", f"task-{int(time.time())}")
+        
+        dispatch_status_code = "DISPATCHED_PLAN"
         
         # --- AUTO-PLANNING FOR RAW REQUESTS ---
         if not payload.get("steps") and payload.get("raw_text"):
@@ -88,6 +105,7 @@ class SpineAgent(BaseAgent):
                     response_thread_id=None
                 )
                 payload = task_plan.to_dict()
+                dispatch_status_code = "DISPATCHED_PLAN"
             except Exception as e:
                 logger.error(f"❌ Planning failed: {e}. Falling back to direct execution.")
                 # Fallback: Create a single direct step
@@ -97,6 +115,7 @@ class SpineAgent(BaseAgent):
                     "subject": Subject.TASK_EXEC.value,
                     "target_runtime": "any"
                 }]
+                dispatch_status_code = "DISPATCHED_FALLBACK"
 
         intent = payload.get("intent_class", "unknown")
 
@@ -104,6 +123,8 @@ class SpineAgent(BaseAgent):
 
         # Emit an ACKNOWLEDGED status to Messenger
         ack_payload = {
+            "accepted": True,
+            "reason": None,
             "task_id": task_id,
             "step_id": "spine-orchestrator",
             "status": "ACKNOWLEDGED",
@@ -128,13 +149,16 @@ class SpineAgent(BaseAgent):
                     "target_runtime": "any",
                     "target_tool": "ollama"
                 }]
+                dispatch_status_code = "DISPATCHED_FALLBACK"
             else:
                 await self.speak(
                     Subject.TASK_STATUS,
                     {
+                        "accepted": False,
+                        "reason": "No executable content found in task.",
                         "task_id": task_id,
                         "step_id": "spine-orchestrator",
-                        "status": "BLOCKED",
+                        "status": "BLOCKED_NO_CONTENT",
                         "message": "No executable content found in task.",
                         "runtime": "spine"
                     },
@@ -145,6 +169,8 @@ class SpineAgent(BaseAgent):
             await self.speak(
                 Subject.TASK_STATUS,
                 {
+                    "accepted": False,
+                    "reason": "Spine cannot dispatch because NATS is unavailable.",
                     "task_id": task_id,
                     "step_id": "spine-orchestrator",
                     "status": "FAIL",
@@ -193,9 +219,11 @@ class SpineAgent(BaseAgent):
             await self.speak(
                 Subject.TASK_STATUS,
                 {
+                    "accepted": True,
+                    "reason": None,
                     "task_id": task_id,
                     "step_id": step_id,
-                    "status": "DISPATCHED",
+                    "status": dispatch_status_code,
                     "message": f"Spine dispatched step to {step_subject}.",
                     "runtime": "spine",
                     "response_channel_id": payload.get("response_channel_id"),

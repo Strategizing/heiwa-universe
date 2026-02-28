@@ -34,16 +34,25 @@ async def main():
     # We will subscribe to TASK_STATUS to catch the ACK
     sub = await nc.subscribe(Subject.TASK_STATUS.value)
 
-    # Create the payload to send to Spine
+    token = os.getenv("HEIWA_AUTH_TOKEN")
+    if not token:
+        try:
+            from heiwa_sdk.config import settings
+            token = getattr(settings, "HEIWA_AUTH_TOKEN", "")
+        except ImportError:
+            token = ""
+
     payload = {
         "sender_id": "heiwa-smoke-tester",
         "timestamp": time.time(),
         "type": Subject.CORE_REQUEST.value,
+        "auth_token": token,
         "data": {
             "task_id": task_id,
             "intent_class": "test",
-            "instruction": "Smoke test execution",
+            "raw_text": "Smoke test execution",
             "response_channel_id": "smoke",
+            "sender_id": "heiwa-smoke-tester",
         }
     }
 

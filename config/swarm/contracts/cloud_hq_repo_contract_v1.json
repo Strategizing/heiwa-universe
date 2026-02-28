@@ -1,0 +1,41 @@
+{
+    "schema_version": "cloud_hq_repo_contract_v1",
+    "repo_identity": {
+        "repo_name": "heiwa",
+        "github_repo": "Strategizing/heiwa-universe",
+        "role": "cloud_hq"
+    },
+    "runtime": {
+        "target": "railway_python"
+    },
+    "boundaries": {},
+    "cli_surface": {
+        "primary_entrypoint": "heiwa",
+        "compatibility_aliases": [
+            "heiwa-hub",
+            "heiwa-cli"
+        ]
+    },
+    "command_refs": {
+        "railway_services": {
+            "command": "railway status",
+            "cwd": ".",
+            "mode": "exec",
+            "read_only": true
+        },
+        "railway-deploy-readiness": {
+            "command": "railway up --dry-run",
+            "cwd": ".",
+            "mode": "exec",
+            "read_only": true
+        },
+        "github_env_audit": {
+            "command": "gh api repos/Strategizing/heiwa-universe",
+            "cwd": ".",
+            "mode": "exec",
+            "read_only": true
+        }
+    },
+    "providers": {},
+    "observability": {}
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Heiwa Node Repo Contract v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "repo_identity",
+    "supported_platforms_phase1",
+    "cloud_hq_integration",
+    "boundaries",
+    "capability_surfaces",
+    "observability"
+  ],
+  "properties": {
+    "schema_version": { "const": "heiwa_node_repo_contract_v1" },
+    "repo_identity": {
+      "type": "object",
+      "required": ["repo_name", "role"],
+      "additionalProperties": true,
+      "properties": {
+        "repo_name": { "type": "string" },
+        "role": { "type": "string" },
+        "phase": { "type": "string" }
+      }
+    },
+    "supported_platforms_phase1": { "type": "array", "items": { "type": "string" } },
+    "cloud_hq_integration": { "type": "object", "additionalProperties": true },
+    "boundaries": { "type": "object", "additionalProperties": true },
+    "capability_surfaces": { "type": "object", "additionalProperties": true },
+    "observability": { "type": "object", "additionalProperties": true }
+  }
+}

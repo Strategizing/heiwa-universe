@@ -31,16 +31,23 @@ async def send_command(instruction: str, node_id: str):
     task_id = f"cli-task-{uuid.uuid4().hex[:8]}"
     
     # Wrap in Protocol
+    token = os.getenv("HEIWA_AUTH_TOKEN")
+    if not token:
+        from heiwa_sdk.config import settings
+        token = getattr(settings, "HEIWA_AUTH_TOKEN", "")
+
     payload = {
         Payload.SENDER_ID: node_id,
         Payload.TIMESTAMP: time.time(),
         Payload.TYPE: Subject.CORE_REQUEST.name,
+        "auth_token": token,
         Payload.DATA: {
             "task_id": task_id,
             "raw_text": instruction,
             "source": "cli-dispatch",
             "intent_class": "general",
-            "target_runtime": "any"
+            "target_runtime": "any",
+            "sender_id": node_id
         }
     }
     
