@@ -131,10 +131,11 @@
       },
       "models": {
         "openclaw": [
-          "ollama/deepseek-r1:32b",
+          "ollama/mistral-nemo",
+          "ollama/qwen2.5-coder:14b",
           "ollama/deepseek-r1:14b",
-          "ollama/deepseek-r1:8b",
-          "ollama/deepseek-coder-v2:16b"
+          "ollama/gemma2:9b",
+          "ollama/deepseek-r1:32b"
         ],
         "picoclaw": []
       },
