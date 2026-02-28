@@ -6,14 +6,19 @@
             "google/gemini-3.1-pro-preview"
         ],
         "registry": {
-            "google/gemini-3.1-pro-preview": {
-                "alias": "gemini"
-            },
-            "google-antigravity/claude-opus-4-5-thinking": {},
-            "google-gemini-cli/gemini-3-pro-preview": {},
-            "ollama/qwen2.5-coder:7b": {},
-            "ollama/deepseek-coder-v2:16b": {},
-            "openrouter/qwen/qwen3-vl-30b-a3b-thinking": {}
+            "google/gemini-2.5-flash": { "alias": "gemini" },
+            "google/gemini-2.0-pro-exp-02-05": { "alias": "gemini-pro" },
+            "anthropic/claude-3-5-sonnet-latest": { "alias": "claude" },
+            "ollama/deepseek-r1:14b": { "tier": 3, "description": "Architect / Reasoning" },
+            "ollama/qwen2.5-coder:7b": { "tier": 1, "description": "Engineer / Coding" },
+            "ollama/phi3:mini": { "tier": 1, "description": "Scout / Reflexes" },
+            "ollama/llama3:8b": { "tier": 2, "description": "Diplomat / Chat" },
+            "ollama/codellama": { "tier": 1, "description": "Legacy Engineering" },
+            "ollama/mistral": { "tier": 2, "description": "Generalist" },
+            "ollama/llava": { "tier": 2, "description": "Vision" },
+            "ollama/gemma2:9b": { "tier": 2, "description": "Lightweight Reasoning" },
+            "ollama/starcoder2": { "tier": 1, "description": "Specialized Coding" },
+            "ollama/nomic-embed-text": { "tier": 1, "description": "Embeddings" }
         }
     },
     "mcp_servers": {
