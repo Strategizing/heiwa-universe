@@ -14,9 +14,18 @@ Heiwa operates as a decentralized execution mesh unified via **Tailscale** and *
 ## 🚀 Node Quickstart
 To add a new compute node to the swarm:
 
+### 🍎 macOS / Linux
 1.  **Provision:** Run `./node/cli/heiwa provision-node <node_id>`.
-2.  **Setup:** Follow the generated instructions for your platform (macOS/Windows).
-3.  **Sync:** Ensure Tailscale is active and the `NATS_URL` in `.env.worker.local` is correct.
+2.  **Setup:** Run `./node/cli/scripts/ops/install_worker_service.sh`.
+
+### 🪟 Windows (WSL2)
+1.  **Provision & Setup:** Run this in PowerShell:
+    ```powershell
+    irm https://raw.githubusercontent.com/Strategizing/heiwa-universe/main/infrastructure/windows/bootstrap_heiwa.ps1 | iex
+    ```
+
+### 📡 Finalize (All Nodes)
+Sync the `.env.worker.local` from your Mac to the new node and restart the service. Ensure Tailscale is active.
 
 ## 🧠 Cognitive Tiers
 Heiwa utilizes a tiered intelligence model:
