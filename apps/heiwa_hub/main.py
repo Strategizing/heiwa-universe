@@ -10,6 +10,8 @@ if str(ROOT / "packages/heiwa_sdk") not in sys.path:
     sys.path.insert(0, str(ROOT / "packages/heiwa_sdk"))
 if str(ROOT / "packages/heiwa_protocol") not in sys.path:
     sys.path.insert(0, str(ROOT / "packages/heiwa_protocol"))
+    sys.path.insert(0, str(ROOT / "packages/heiwa_identity"))
+    sys.path.insert(0, str(ROOT / "packages/heiwa_ui"))
 if str(ROOT / "apps") not in sys.path:
     sys.path.insert(0, str(ROOT / "apps"))
 

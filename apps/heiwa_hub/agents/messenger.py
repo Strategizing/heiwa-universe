@@ -14,7 +14,7 @@ from heiwa_hub.agents.base import BaseAgent
 from heiwa_hub.cognition.approval import ApprovalRegistry
 from heiwa_hub.cognition.planner import LocalTaskPlanner
 from heiwa_protocol.protocol import Subject
-from heiwa_sdk.ui import UIManager
+from heiwa_ui.manager import UIManager
 from heiwa_sdk.db import Database
 
 logger = logging.getLogger("Messenger")

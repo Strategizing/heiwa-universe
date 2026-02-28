@@ -14,6 +14,8 @@ if str(ROOT / "packages/heiwa_sdk") not in sys.path:
     sys.path.insert(0, str(ROOT / "packages/heiwa_sdk"))
 if str(ROOT / "packages/heiwa_protocol") not in sys.path:
     sys.path.insert(0, str(ROOT / "packages/heiwa_protocol"))
+    sys.path.insert(0, str(ROOT / "packages/heiwa_identity"))
+    sys.path.insert(0, str(ROOT / "packages/heiwa_ui"))
 if str(ROOT / "apps") not in sys.path:
     sys.path.insert(0, str(ROOT / "apps"))
 
@@ -94,7 +96,7 @@ class WorkerManager(BaseAgent):
 
             # Identity & Model Routing
             try:
-                from apps.heiwa_cli.scripts.ops.identity_selector import select_identity, load_profiles
+                from heiwa_identity.selector import select_identity, load_profiles
                 profiles = load_profiles()
                 selection = select_identity(instruction, profiles)
                 selected = selection.get("selected", {})

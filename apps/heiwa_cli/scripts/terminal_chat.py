@@ -21,6 +21,8 @@ if str(ROOT / "packages/heiwa_sdk") not in sys.path:
     sys.path.insert(0, str(ROOT / "packages/heiwa_sdk"))
 if str(ROOT / "packages/heiwa_protocol") not in sys.path:
     sys.path.insert(0, str(ROOT / "packages/heiwa_protocol"))
+    sys.path.insert(0, str(ROOT / "packages/heiwa_identity"))
+    sys.path.insert(0, str(ROOT / "packages/heiwa_ui"))
 if str(ROOT / "apps") not in sys.path:
     sys.path.insert(0, str(ROOT / "apps"))
 
@@ -30,7 +32,7 @@ load_swarm_env()
 import nats
 from nats.aio.client import Client as NATSClient
 from heiwa_protocol.protocol import Subject
-from heiwa_sdk.ui import UIManager
+from heiwa_ui.manager import UIManager
 from heiwa_sdk.db import Database
 
 from rich.console import Console
