@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+import argparse
+import os
+import json
+import uuid
+import subprocess
+import sys
+import shlex
+from pathlib import Path
+
+# Enterprise Metadata
+VERSION = "2.1.0"
+MONOREPO_ROOT = Path(__file__).resolve().parents[2]
+APPS_ROOT = MONOREPO_ROOT / "apps"
+PACKAGES_ROOT = MONOREPO_ROOT / "packages"
+CONFIG_ROOT = MONOREPO_ROOT / "config"
+
+# Load Environment
+try:
+    from dotenv import load_dotenv
+    # Priority: .env.worker.local -> .env
+    load_dotenv(MONOREPO_ROOT / ".env.worker.local")
+    load_dotenv(MONOREPO_ROOT / ".env")
+except ImportError:
+    pass
+
+# Enterprise Venv Discovery
+VENV_BIN = MONOREPO_ROOT / ".venv/bin/python3"
+if VENV_BIN.exists() and sys.executable != str(VENV_BIN):
+    os.environ["PYTHONPATH"] = f"{PACKAGES_ROOT}:{PACKAGES_ROOT}/sdk:{APPS_ROOT}"
+    os.execv(str(VENV_BIN), [str(VENV_BIN)] + sys.argv)
+
+HEIWA_GLOBAL_DIR = Path(os.path.expanduser("~/.heiwa"))
+IDENTITY_FILE = HEIWA_GLOBAL_DIR / "identity.json"
+
+def _resolve_python() -> str:
+    return sys.executable
+
+def init_global_dir():
+    HEIWA_GLOBAL_DIR.mkdir(parents=True, exist_ok=True)
+    (HEIWA_GLOBAL_DIR / "workspace").mkdir(exist_ok=True)
+    (HEIWA_GLOBAL_DIR / "context").mkdir(exist_ok=True)
+
+def cmd_login(args):
+    """Authenticate and provision the local node identity."""
+    init_global_dir()
+    login_target = args.name if args.name else "devon"
+    is_devon = login_target.lower() == "devon"
+    role = "admin" if is_devon else "heiwa-node"
+    capabilities = ["compute", "orchestration", "browser", "ultimate_access"] if is_devon else ["compute", "orchestration"]
+    
+    identity = {
+        "uuid": str(uuid.uuid4()),
+        "name": login_target,
+        "role": role,
+        "capabilities": capabilities
+    }
+    with open(IDENTITY_FILE, "w") as f:
+        json.dump(identity, f, indent=4)
+    print(f"🚀 Identity initialized: {login_target} ({role})")
+
+def cmd_chat(args):
+    """Launch the high-end interactive Terminal Chat."""
+    init_global_dir()
+    python_bin = _resolve_python()
+    chat_script = APPS_ROOT / "heiwa-cli/scripts/terminal_chat.py"
+    
+    if not chat_script.exists():
+        print(f"❌ Terminal chat script not found at {chat_script}")
+        sys.exit(1)
+
+    node_name = "macbook@heiwa-agile"
+    if IDENTITY_FILE.exists():
+        with open(IDENTITY_FILE, "r") as f:
+            identity = json.load(f)
+            node_name = identity.get("name", node_name)
+
+    # Inject paths for imports
+    os.environ["PYTHONPATH"] = f"{PACKAGES_ROOT}:{PACKAGES_ROOT}/sdk:{APPS_ROOT}"
+    os.execv(python_bin, [python_bin, str(chat_script), node_name])
+
+def cmd_cost(args):
+    """Show swarm-wide token usage and cost report."""
+    print("💰 [HEIWA] Generating Swarm Cost Report...")
+    # Path Hack for SDK
+    sys.path.insert(0, str(PACKAGES_ROOT / "sdk"))
+    from heiwa_sdk.db import Database
+    db = Database()
+    summary = db.get_model_usage_summary(minutes=1440)
+    if not summary:
+        print("   No usage data found for the last 24h.")
+        return
+    
+    print(f"{'Model':<40} | {'Requests':<10} | {'Total Tokens':<12}")
+    print("-" * 68)
+    for row in summary:
+        print(f"{row['model_id']:<40} | {row['request_count']:<10} | {row['total_tokens']:<12}")
+
+def cmd_status(args):
+    """Check swarm connectivity and node health."""
+    print("🛰️ [HEIWA] Probing Swarm Status...")
+    if IDENTITY_FILE.exists():
+        with open(IDENTITY_FILE, "r") as f:
+            identity = json.load(f)
+        print(f"👤 Identity: {identity.get('name')} ({identity.get('role')})")
+    
+    nats_url = os.getenv("NATS_URL", "nats://localhost:4222")
+    print(f"📡 NATS Mesh: {nats_url}")
+    
+    print("\n📊 Local Hardware Utilization:")
+    import psutil
+    print(f"   CPU: {psutil.cpu_percent()}%")
+    print(f"   RAM: {psutil.virtual_memory().percent}%")
+
+def _run_subprocess(cmd):
+    try:
+        subprocess.run(cmd, shell=True, check=True)
+    except subprocess.CalledProcessError as e:
+        sys.exit(e.returncode)
+
+def cmd_deploy(args):
+    """Deploy Infrastructure and Compute."""
+    print("🚀 [HEIWA] Initiating Deployment Sequence...")
+    if args.edge or args.full:
+        print("\n🛡️ Deploying Edge Configuration (Cloudflare WAF/DNS)...")
+        tf_dir = MONOREPO_ROOT / "infra/cloud/cloudflare"
+        if (tf_dir / "main.tf").exists():
+            cmd = f"cd {shlex.quote(str(tf_dir))} && terraform apply -auto-approve"
+            _run_subprocess(cmd)
+    if args.compute or args.full or not (args.edge or args.compute or args.full):
+        print("\n☁️ Deploying Compute to Cloud HQ (Railway)...")
+        _run_subprocess(f"railway up --detach")
+
+def main():
+    parser = argparse.ArgumentParser(description=f"Heiwa Enterprise CLI v{VERSION}")
+    subparsers = parser.add_subparsers(dest="command", help="Command to run")
+
+    parser_chat = subparsers.add_parser("chat", help="Launch interactive swarm chat (Default)")
+    parser_chat.add_argument("prompt", nargs="?", help="Optional prompt to dispatch immediately")
+    
+    parser_login = subparsers.add_parser("login", help="Authenticate and provision node identity")
+    parser_login.add_argument("name", nargs="?", help="Identity name")
+    
+    subparsers.add_parser("status", help="Check swarm connectivity and node health")
+    
+    parser_deploy = subparsers.add_parser("deploy", help="Push the current matrix to Railway or Cloudflare")
+    parser_deploy.add_argument("--edge", action="store_true")
+    parser_deploy.add_argument("--compute", action="store_true")
+    parser_deploy.add_argument("--full", action="store_true")
+
+    subparsers.add_parser("cost", help="Show swarm-wide token usage")
+
+    if len(sys.argv) > 1 and sys.argv[1] not in subparsers.choices and not sys.argv[1].startswith("-"):
+        sys.argv.insert(1, "chat")
+    elif len(sys.argv) == 1:
+        sys.argv.append("chat")
+
+    args = parser.parse_args()
+
+    if args.command == "chat":
+        cmd_chat(args)
+    elif args.command == "login":
+        cmd_login(args)
+    elif args.command == "deploy":
+        cmd_deploy(args)
+    elif args.command == "cost":
+        cmd_cost(args)
+    elif args.command == "status":
+        cmd_status(args)
+
+if __name__ == "__main__":
+    main()

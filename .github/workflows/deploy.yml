@@ -43,7 +43,7 @@ jobs:
           import json, sys, os
           from pathlib import Path
           try:
-              json.loads(Path('core/schemas/artifact_index.schema.json').read_text())
+              json.loads(Path('config/schemas/artifact_index.schema.json').read_text())
               print('Schema valid.')
               sys.exit(0)
           except Exception as e:
@@ -74,6 +74,6 @@ jobs:
       - name: Await Deployment (Sleep)
         run: sleep 45
       - name: Verify Deployment Reachability
-        run: python node/cli/scripts/verify_deployment.py https://api.heiwa.ltd
+        run: python apps/heiwa-cli/scripts/verify_deployment.py https://api.heiwa.ltd
       - name: Verify Domain Routing (Probe)
-        run: python node/cli/scripts/ops/probe_domains.py
+        run: python apps/heiwa-cli/scripts/ops/probe_domains.py
