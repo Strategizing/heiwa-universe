@@ -17,11 +17,16 @@ This document tracks the heterogeneous compute resources available to the Heiwa 
 *   **Preferred Models:** Deepseek Coder V2 (16B), Qwen 2.5 Coder (7B).
 
 ## 🪟 Node 3: Logic Tank (Workstation)
-*   **Platform:** Windows 11 + WSL2 (Ubuntu)
+*   **Platform:** Windows 11 + WSL2 (Ubuntu 22.04+)
 *   **Specs:** Ryzen 7 7700X, RTX 3060 (12GB VRAM), 32GB System RAM.
+*   **Optimizations:** 
+    *   `snapd` purged (Zero loop-mount overhead).
+    *   Native Ollama installation (GPU passthrough).
+    *   Node.js 20.x LTS.
+    *   Host-level `.wslconfig` (10 processors, GUI disabled).
 *   **Primary Role:** Heavy Reasoning, Deep Technical Audit, Large Model Inference.
 *   **Target Runtime:** `workstation`
-*   **Preferred Models:** Deepseek-R1 (32B - *Note: Spills to System RAM*), Deepseek-R1 (14B/7B - *GPU Native*).
+*   **Preferred Models:** Deepseek-R1 (14B/7B - *GPU Native / Lightning Fast*), Deepseek-R1 (32B - *High Precision / Spills to RAM*).
 
 ---
 

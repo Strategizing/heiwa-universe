@@ -7,11 +7,29 @@ cd "$ROOT"
 
 echo "🛠️  Starting Heiwa WSL Node Setup..."
 
-# 1. Update and install dependencies
-sudo apt-get update
-sudo apt-get install -y python3-pip python3-venv nodejs npm git tailscale screen
+# 1. Purge Snap Bloat (Verified optimization)
+if command -v snap &>/dev/null; then
+    echo "🧹 Purging snapd and associated bloat..."
+    sudo apt-get purge -y snapd
+    sudo rm -rf /snap /var/snap /var/lib/snapd
+fi
 
-# 2. Setup Python environment
+# 2. Update and install core dependencies
+sudo apt-get update
+sudo apt-get install -y curl ca-certificates gnupg git screen tailscale
+
+# 2.5 Setup Node.js 20.x (Explicit versioning)
+if ! command -v node &>/dev/null; then
+    echo "📦 Installing Node.js 20.x via NodeSource..."
+    sudo mkdir -p /etc/apt/keyrings
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+    NODE_MAJOR=20
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | sudo tee /etc/apt/sources.list.d/nodesource.list
+    sudo apt-get update
+    sudo apt-get install nodejs -y
+fi
+
+# 3. Setup Python environment
 if [[ ! -d ".venv" ]]; then
     echo "🐍 Creating virtual environment..."
     python3 -m venv .venv
@@ -19,20 +37,21 @@ fi
 .venv/bin/pip install --upgrade pip
 .venv/bin/pip install -r requirements.txt nats-py python-dotenv
 
-# 3. Setup OpenClaw
+# 3.5 Setup OpenClaw (Handle potential 404)
 if ! command -v openclaw &>/dev/null; then
-    echo "🦞 Installing OpenClaw..."
-    sudo npm install -g @openclaw/cli || echo "⚠️  Global npm install failed, try local install later."
+    echo "🦞 Attempting OpenClaw installation..."
+    # Note: Package may be private or in a different registry
+    sudo npm install -g @openclaw/cli || echo "⚠️  OpenClaw CLI install failed. Proceeding with local wrappers."
 fi
 
-# 3.5 Setup Ollama & Models
+# 3.6 Setup Ollama & Models (Native Install)
 if ! command -v ollama &>/dev/null; then
-    echo "🧠 Installing Ollama..."
+    echo "🧠 Installing Ollama natively..."
     curl -fsSL https://ollama.com/install.sh | sh
 fi
 
-echo "📥 Pulling Heavy Reasoner models (this may take a while)..."
-# Start ollama temporarily to pull
+echo "📥 Pulling Heavy Reasoner models..."
+# Ensure ollama is running to pull
 nohup ollama serve >/dev/null 2>&1 &
 sleep 5
 ollama pull deepseek-r1:14b
