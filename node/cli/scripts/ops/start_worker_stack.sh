@@ -14,8 +14,11 @@ mkdir -p "$ROOT/runtime/logs"
 load_env_file() {
     local file="$1"
     is_allowed_key() {
+        if [[ "$1" == HEIWA_* ]]; then
+            return 0
+        fi
         case "$1" in
-            HEIWA_WORKSPACE_ROOT|HEIWA_LLM_MODE|HEIWA_EXECUTOR_CONCURRENCY|HEIWA_WORKER_WARM_TTL_SEC|HEIWA_ALLOWED_OUTBOUND_TARGETS|HEIWA_LOCAL_NATS_URL|HEIWA_USE_REMOTE_NATS|NATS_URL|HEIWA_OLLAMA_LOCAL_URL|OPENCLAW_EXEC_MODE|OPENCLAW_AGENT_ID|OPENCLAW_THINKING|OPENCLAW_TIMEOUT|PICOCLAW_BIN|PICOCLAW_DEFAULT_COMMAND|PICOCLAW_TIMEOUT)
+            NATS_URL|OPENCLAW_*|PICOCLAW_*)
                 return 0
                 ;;
             *)

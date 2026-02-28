@@ -8,10 +8,16 @@ NODE_TYPE="${2:-heavy_compute}"
 echo "🏗️  Preparing Heiwa Node Package for: $NODE_ID ($NODE_TYPE)"
 
 # 1. Generate local env overrides
+HEIWA_TOKEN=$(grep HEIWA_AUTH_TOKEN .env | cut -d'=' -f2- | tr -d '"' | tr -d "'")
+if [[ -z "$HEIWA_TOKEN" ]]; then
+    HEIWA_TOKEN="test-token"
+fi
+
 ENV_CONTENT=$(cat <<EOF
 # Heiwa Node Configuration
 HEIWA_NODE_ID=$NODE_ID
 HEIWA_NODE_TYPE=$NODE_TYPE
+HEIWA_AUTH_TOKEN=$HEIWA_TOKEN
 HEIWA_USE_REMOTE_NATS=1
 NATS_URL=$(grep NATS_URL .env.worker.local | cut -d'=' -f2-)
 HEIWA_LLM_MODE=local_only

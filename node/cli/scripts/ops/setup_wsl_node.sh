@@ -38,6 +38,25 @@ sleep 5
 ollama pull deepseek-r1:14b
 ollama pull qwen2.5-coder:7b
 
+# 3.7 Initialize Modular Vault
+VAULT_DIR="$HOME/.heiwa"
+VAULT_FILE="$VAULT_DIR/vault.env"
+mkdir -p "$VAULT_DIR"
+if [[ ! -f "$VAULT_FILE" ]]; then
+    echo "🔐 Initializing secure vault..."
+    touch "$VAULT_FILE"
+    chmod 600 "$VAULT_FILE"
+    
+    # Pre-populate from provided env if available
+    if [[ -f "$ROOT/.env.worker.local" ]]; then
+        PROVIDED_TOKEN=$(grep HEIWA_AUTH_TOKEN "$ROOT/.env.worker.local" | cut -d'=' -f2-)
+        if [[ -n "$PROVIDED_TOKEN" ]]; then
+            echo "HEIWA_AUTH_TOKEN=$PROVIDED_TOKEN" >> "$VAULT_FILE"
+        fi
+    fi
+    echo "GITHUB_PAT=PLACEHOLDER_TOKEN_PLEASE_REPLACE" >> "$VAULT_FILE"
+fi
+
 # 4. Persistence via systemd (if enabled)
 if [[ -d /run/systemd/system ]]; then
     echo "🔄 Configuring systemd service..."
