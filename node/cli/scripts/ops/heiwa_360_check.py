@@ -29,7 +29,9 @@ def say(level: str, label: str, detail: str) -> None:
 
 
 def cmd_ok(name: str) -> bool:
-    return subprocess.call(["/usr/bin/env", "bash", "-lc", f"command -v {name} >/dev/null"]) == 0
+    import shutil
+
+    return shutil.which(name) is not None
 
 
 def tcp_open(host: str, port: int, timeout: float = 2.0) -> bool:
@@ -72,8 +74,22 @@ def main() -> int:
     fails = 0
     warns = 0
 
-    critical_files = [
-        ".env",
+    env_files = [".env.worker.local", ".env.worker", ".env"]
+    found_env = False
+    for ef in env_files:
+        if (ROOT / ef).exists():
+            say("OK", "file", ef)
+            found_env = True
+            break
+    if not found_env:
+        say(
+            "FAIL",
+            "file",
+            "missing base .env (checked .env.worker.local, .env.worker, .env)",
+        )
+        fails += 1
+
+    remaining_critical = [
         "railway.toml",
         "core/profiles/heiwa-one-system.yaml",
         "runtime/fleets/hub/main.py",
@@ -84,7 +100,7 @@ def main() -> int:
         "node/cli/scripts/agents/wrappers/picoclaw_exec.py",
         "node/cli/scripts/agents/wrappers/ollama_exec.py",
     ]
-    for rel in critical_files:
+    for rel in remaining_critical:
         p = ROOT / rel
         if p.exists():
             say("OK", "file", rel)
@@ -103,7 +119,11 @@ def main() -> int:
                 if wrangler_rc == 0:
                     say("OK", "service", "wrangler is authenticated")
                 else:
-                    say("WARN", "service", "wrangler is NOT authenticated (run `wrangler login`)")
+                    say(
+                        "WARN",
+                        "service",
+                        "wrangler is NOT authenticated (run `wrangler login`)",
+                    )
                     warns += 1
         else:
             say("FAIL", "command", f"{cmd} missing")
@@ -140,10 +160,16 @@ def main() -> int:
     if gateway_rc == 0:
         say("OK", "service", "openclaw gateway reachable")
     else:
-        say("WARN", "service", "openclaw gateway not reachable (wrapper may fallback to --local)")
+        say(
+            "WARN",
+            "service",
+            "openclaw gateway not reachable (wrapper may fallback to --local)",
+        )
         warns += 1
 
-    env_file = ROOT / ".env.worker"
+    env_file = ROOT / ".env.worker.local"
+    if not env_file.exists():
+        env_file = ROOT / ".env.worker"
     if not env_file.exists():
         env_file = ROOT / ".env"
     env = read_env_file(env_file)
@@ -151,7 +177,11 @@ def main() -> int:
         nats_url = env.get("NATS_URL", "")
         db_url = env.get("DATABASE_URL", "")
         if "railway.internal" in nats_url:
-            say("WARN", "env", "NATS_URL uses railway.internal; local workers usually cannot reach this directly")
+            say(
+                "WARN",
+                "env",
+                "NATS_URL uses railway.internal; local workers usually cannot reach this directly",
+            )
             warns += 1
         if "${{" in db_url:
             say("WARN", "env", "DATABASE_URL contains unresolved template placeholders")

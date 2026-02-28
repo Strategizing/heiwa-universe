@@ -22,12 +22,12 @@ sudo apt-get install -y python3-pip python3-venv nodejs git tailscale screen
 sudo apt-get update
 sudo apt-get install -y curl ca-certificates gnupg git screen tailscale
 
-# 2.5 Setup Node.js 20.x (Explicit versioning)
-if ! command -v node &>/dev/null; then
-    echo "📦 Installing Node.js 20.x via NodeSource..."
+# 2.5 Setup Node.js 22.x (Explicit versioning)
+if ! command -v node &>/dev/null || [[ $(node -v | cut -d'v' -f2 | cut -d'.' -f1) -lt 22 ]]; then
+    echo "📦 Installing Node.js 22.x via NodeSource..."
     sudo mkdir -p /etc/apt/keyrings
     curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
-    NODE_MAJOR=20
+    NODE_MAJOR=22
     echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | sudo tee /etc/apt/sources.list.d/nodesource.list
     sudo apt-get update
     sudo apt-get install nodejs -y
