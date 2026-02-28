@@ -23,7 +23,9 @@ class ToolMesh:
             "picoclaw": self.wrappers_dir / "picoclaw_exec.py",
             "ollama": self.wrappers_dir / "ollama_exec.py",
             "opencode": self.wrappers_dir / "opencode_exec.sh",
-            "antigravity": self.wrappers_dir / "antigravity_exec.sh"
+            "antigravity": self.wrappers_dir / "antigravity_exec.sh",
+            "mesh_audit": self.root / "apps/heiwa_cli/scripts/ops/heiwa_360_check.py",
+            "self_buff": self.root / "apps/heiwa_cli/scripts/ops/sota_verify.py" # Temporary mapping
         }
         
         wrapper = wrapper_map.get(tool.lower())

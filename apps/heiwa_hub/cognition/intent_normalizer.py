@@ -11,10 +11,11 @@ INTENT_ENUM = {
     "research",
     "deploy",
     "operate",
+    "mesh_ops",
+    "self_buff",
+    "status_check",
     "automation",
     "files",
-    "notion",
-    "discord",
     "chat",
     "general",
 }
@@ -32,26 +33,28 @@ TIER_ENUM = {
 }
 
 _INTENT_RULES = (
-    ("chat", ("hi", "hello", "hey", "wsg", "sup", "ping", "test", "wake", "status"), "low", False),
+    ("status_check", ("how are we", "looking", "status", "health", "uptime", "pulse", "ready"), "low", False),
+    ("mesh_ops", ("audit", "mesh", "nodes", "sync", "connection", "throughput", "latency"), "medium", True),
+    ("self_buff", ("improve", "optimize", "refactor yourself", "buff", "sota", "upgrade"), "high", True),
+    ("chat", ("hi", "hello", "hey", "wsg", "sup", "ping"), "low", False),
     ("automation", ("automate", "workflow", "schedule", "cron", "n8n"), "high", True),
     ("research", ("research", "analyze", "compare", "summarize", "investigate"), "low", False),
     ("build", ("build", "create", "implement", "code", "script", "project"), "medium", False),
     ("deploy", ("deploy", "release", "ship", "publish", "production"), "high", True),
-    ("operate", ("fix", "debug", "incident", "monitor", "health", "audit", "patch", "optimize", "improve", "self-improve"), "high", True),
-    ("files", ("file", "move", "rename", "delete", "folder", "[ATTACHMENT:", "[MEDIA_TYPE:"), "high", True),
-    ("notion", ("notion", "wiki", "docs", "database", "meeting notes"), "medium", True),
-    ("discord", ("discord", "channel", "dm", "message", "announce"), "high", True),
+    ("operate", ("fix", "debug", "incident", "patch", "optimize"), "high", True),
+    ("files", ("file", "move", "rename", "delete", "folder"), "high", True),
 )
 
 _INTENT_DEFAULTS = {
+    "status_check": ("railway", "ollama", "tier1_local"),
+    "mesh_ops": ("macbook", "codex", "tier3_orchestrator"),
+    "self_buff": ("macbook", "codex", "tier5_heavy_code"),
     "build": ("macbook", "codex", "tier5_heavy_code"),
     "research": ("both", "openclaw", "tier2_fast_context"),
     "deploy": ("macbook", "codex", "tier5_heavy_code"),
     "operate": ("macbook", "codex", "tier5_heavy_code"),
     "automation": ("macbook", "n8n", "tier3_orchestrator"),
     "files": ("macbook", "codex", "tier5_heavy_code"),
-    "notion": ("macbook", "codex", "tier3_orchestrator"),
-    "discord": ("macbook", "codex", "tier3_orchestrator"),
     "chat": ("railway", "ollama", "tier1_local"),
     "general": ("railway", "ollama", "tier1_local"),
 }
@@ -190,7 +193,7 @@ class IntentNormalizer:
             "Classify this request and return JSON only with keys: "
             "intent_class, risk_level, requires_approval, preferred_runtime, preferred_tool, confidence.\n"
             "Enums:\n"
-            "- intent_class: build,research,deploy,operate,automation,files,notion,discord,general\n"
+            f"- intent_class: {','.join(INTENT_ENUM)}\n"
             "- risk_level: low,medium,high\n"
             "- preferred_runtime: railway,macbook,both\n"
             "- preferred_tool: codex,openclaw,picoclaw,n8n,ollama\n"
@@ -269,7 +272,7 @@ class IntentNormalizer:
         ]
         if intent == "research":
             assumptions.append("Cite primary sources and highlight confidence/uncertainty.")
-        if intent in {"deploy", "operate"}:
+        if intent in {"deploy", "operate", "mesh_ops", "self_buff"}:
             assumptions.append("Include health checks and rollback notes in outputs.")
         if missing:
             assumptions.append("Proceed with best-effort defaults for missing details and surface them clearly.")

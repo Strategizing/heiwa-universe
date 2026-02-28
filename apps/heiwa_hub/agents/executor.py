@@ -50,67 +50,63 @@ class ExecutorAgent(BaseAgent):
             await asyncio.sleep(1)
 
     async def _handle_exec(self, data: dict[str, Any]) -> None:
-        """Process a single execution request with reasoning and conscience."""
+        """Process a single execution request with extreme transparency."""
         payload = data.get("data", data)
         task_id = payload.get("task_id", "unknown")
-        step_id = payload.get("step_id", "unknown")
         instruction = payload.get("instruction", "")
         intent_class = payload.get("intent_class", "general")
         target_runtime = payload.get("target_runtime", "railway").lower()
         target_model = payload.get("target_model", "google/gemini-2.0-flash")
 
         if target_runtime not in {self.executor_runtime, "both", "any"}:
-            logger.info(f"⏭️  Skipping task {task_id}: target={target_runtime}, local={self.executor_runtime}")
+            logger.info(f"⏭️  [EXECUTOR] Skipping task {task_id}: target={target_runtime}, local={self.executor_runtime}")
             return
+
+        logger.info(f"🚀 [EXECUTOR] Processing Task: {task_id} | Intent: {intent_class}")
+        await self.speak(Subject.LOG_INFO, {"message": f"🦾 Executor {self.name} starting task {task_id}", "task_id": task_id})
 
         start = time.time()
         full_result = ""
         
-        # Build an augmentation prompt for the intent
-        system_augmentation = self._build_intent_context(intent_class)
-
-        logger.info(f"🚀 [SOTA COGNITION] Task: {task_id} | Engine: evaluate_and_stream")
-
         try:
+            logger.info(f"🧠 [EXECUTOR] Initiating SOTA Cognition for {task_id}...")
             # Use evaluate_and_stream for reasoning + conscience + execution
             async for chunk in self.engine.evaluate_and_stream(
                 origin=self.name,
                 intent=intent_class,
                 instruction=instruction,
                 model=target_model,
-                system=system_augmentation
+                system=self._build_intent_context(intent_class)
             ):
                 full_result += chunk
-                # Stream chunk as a thought for real-time UI feedback
+                # Broadcast every thought chunk back to the CLI
                 await self.speak(Subject.LOG_THOUGHT, {
                     "task_id": task_id,
                     "agent": self.name,
                     "content": chunk,
                     "stream": True
                 })
+            
+            logger.info(f"✅ [EXECUTOR] Generation complete for {task_id}.")
         except Exception as e:
-            logger.error(f"❌ Execution failed: {e}")
+            logger.error(f"❌ [EXECUTOR] Task {task_id} FAILED: {e}")
             full_result = f"Error: {e}"
+            await self.speak(Subject.LOG_ERROR, {"content": str(e), "task_id": task_id})
 
         elapsed = round(time.time() - start, 2)
+        logger.info(f"🏁 [EXECUTOR] Task {task_id} finished in {elapsed}s.")
 
         # Publish final result
         result_payload = {
             "task_id": task_id,
-            "step_id": step_id,
             "status": "PASS" if full_result else "FAIL",
             "summary": full_result,
             "runtime": self.executor_runtime,
-            "executor_id": self.name,
-            "intent_class": intent_class,
             "elapsed_sec": elapsed,
             "target_tool": payload.get("target_tool"),
-            "response_channel_id": payload.get("response_channel_id"),
-            "response_thread_id": payload.get("response_thread_id"),
         }
 
         await self.speak(Subject.TASK_EXEC_RESULT, result_payload)
-        logger.info(f"✅ Exec complete: task={task_id} elapsed={elapsed}s")
 
     @staticmethod
     def _build_intent_context(intent_class: str) -> str:

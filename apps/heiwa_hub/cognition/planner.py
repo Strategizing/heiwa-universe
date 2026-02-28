@@ -201,6 +201,49 @@ class LocalTaskPlanner:
 
         intent = profile.intent_class
 
+        # --- Mesh & Management: High-level 'Magic' actions ---
+        if intent == "status_check":
+            steps.append(
+                StepPlan(
+                    step_id=next_step_id(),
+                    title="Mesh Pulse Diagnostic",
+                    instruction="Analyze the current mesh health and report status.",
+                    subject=Subject.TASK_EXEC.value,
+                    target_runtime="railway",
+                    target_tool="mesh_audit", # New native tool
+                    target_tier="tier1_local",
+                )
+            )
+            return steps
+
+        if intent == "mesh_ops":
+            steps.append(
+                StepPlan(
+                    step_id=next_step_id(),
+                    title="Sovereign Mesh Audit",
+                    instruction=instruction,
+                    subject=Subject.TASK_EXEC.value,
+                    target_runtime="macbook",
+                    target_tool="mesh_audit",
+                    target_tier="tier3_orchestrator",
+                )
+            )
+            return steps
+
+        if intent == "self_buff":
+            steps.append(
+                StepPlan(
+                    step_id=next_step_id(),
+                    title="Native Self-Improvement Sequence",
+                    instruction=instruction,
+                    subject=Subject.TASK_EXEC.value,
+                    target_runtime="macbook",
+                    target_tool="self_buff", # New native tool
+                    target_tier="tier5_heavy_code",
+                )
+            )
+            return steps
+
         # --- LLM-only tasks: Railway executor handles via tiered engine ---
         if intent == "research":
             steps.append(
