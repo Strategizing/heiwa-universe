@@ -46,7 +46,12 @@ async def main():
     """
     print(splash)
     logger = logging.getLogger("Hub")
-    logger.info("Initializing SOTA AI-Dentity Enterprise Kernal...")
+    logger.info("Initializing SOTA AI-Dentity Sovereign Mesh...")
+
+    # 0. Initialize Persistence
+    from heiwa_sdk.db import Database
+    db = Database()
+    db.init_db()
 
     # Instantiate core fleet components.
     spine = SpineAgent()

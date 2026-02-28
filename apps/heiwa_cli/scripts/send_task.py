@@ -7,11 +7,14 @@ import time
 from pathlib import Path
 
 # Ensure project root is on sys.path
-ROOT = Path(__file__).resolve().parents[2]
-RUNTIME_ROOT = ROOT / "runtime"
-if str(RUNTIME_ROOT) not in sys.path:
+ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT / "packages/heiwa_sdk") not in sys.path:
     sys.path.insert(0, str(ROOT / "packages/heiwa_sdk"))
-    sys.path.insert(0, str(ROOT / "packages"))
+if str(ROOT / "packages/heiwa_protocol") not in sys.path:
+    sys.path.insert(0, str(ROOT / "packages/heiwa_protocol"))
+if str(ROOT / "packages/heiwa_identity") not in sys.path:
+    sys.path.insert(0, str(ROOT / "packages/heiwa_identity"))
+if str(ROOT / "apps") not in sys.path:
     sys.path.insert(0, str(ROOT / "apps"))
 
 import nats
