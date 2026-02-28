@@ -32,18 +32,25 @@ class BaseAgent(ABC):
         self.nc: Optional[NATSClient] = None
         self.running = False
 
-    async def connect(self, nats_url: str = None):
-        """Connects to the NATS Swarm. Gracefully degrades if unavailable."""
+    async def connect(self, nats_url: str = None, max_retries: int = 10, retry_delay: int = 5):
+        """Connects to the NATS Swarm with retry logic."""
         import os
         url = nats_url or os.getenv("NATS_URL", "nats://localhost:4222")
-        try:
-            self.nc = await nats.connect(url, connect_timeout=5)
-            logger.info(f"✅ [{self.name}] Connected to NATS at {_redact_nats_url(url)}")
-            self.running = True
-        except Exception as e:
-            logger.warning(f"⚠️ [{self.name}] NATS unavailable: {e}. Running in standalone mode.")
-            self.nc = None
-            self.running = True
+        
+        for attempt in range(1, max_retries + 1):
+            try:
+                self.nc = await nats.connect(url, connect_timeout=10)
+                logger.info(f"✅ [{self.name}] Connected to NATS at {_redact_nats_url(url)}")
+                self.running = True
+                return
+            except Exception as e:
+                if attempt == max_retries:
+                    logger.warning(f"⚠️ [{self.name}] NATS unavailable after {max_retries} attempts: {e}. Running in standalone mode.")
+                    self.nc = None
+                    self.running = True
+                else:
+                    logger.info(f"🔄 [{self.name}] NATS connection failed (Attempt {attempt}/{max_retries}), retrying in {retry_delay}s...")
+                    await asyncio.sleep(retry_delay)
 
     async def speak(self, subject: Subject, data: Dict[str, Any]):
         """Publish a message to the Swarm."""

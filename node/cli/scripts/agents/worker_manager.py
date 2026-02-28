@@ -35,6 +35,18 @@ class WorkerManager(BaseAgent):
         self.root = ROOT
         self.node_id = os.getenv("HEIWA_NODE_ID", "macbook")
         self.node_type = os.getenv("HEIWA_NODE_TYPE", "mobile_node") # mobile_node | heavy_compute
+        self.capabilities = {
+            item.strip().lower()
+            for item in os.getenv("HEIWA_CAPABILITIES", "").split(",")
+            if item.strip()
+        }
+        # Add default capabilities based on node type if none provided
+        if not self.capabilities:
+            if self.node_type == "heavy_compute":
+                self.capabilities = {"heavy_compute", "gpu_native", "standard_compute"}
+            else:
+                self.capabilities = {"standard_compute", "workspace_interaction", "agile_coding"}
+
         self.warm_ttl_sec = int(os.getenv("HEIWA_WORKER_WARM_TTL_SEC", "600"))
         self.concurrency = int(os.getenv("HEIWA_EXECUTOR_CONCURRENCY", "2"))
         self.llm_mode = os.getenv("HEIWA_LLM_MODE", "local_only").lower()
@@ -144,16 +156,24 @@ class WorkerManager(BaseAgent):
             except Exception as e:
                 logger.warning("Failed to resolve identity, using defaults. Error: %s", e)
 
-            if runtime not in {self.node_id, "both", "any"}:
+            required_caps = set(payload.get("required_capabilities") or [])
+            
+            can_execute = False
+            if runtime in {self.node_id, "both", "any", "all"}:
+                can_execute = True
+            elif required_caps and required_caps.issubset(self.capabilities):
+                can_execute = True
+
+            if not can_execute:
                 await self._emit_result(
                     task_id=task_id,
                     step_id=step_id,
                     status="BLOCKED",
-                    summary=f"Skipped on {self.node_id} executor (target_runtime={runtime})",
+                    summary=f"Skipped on {self.node_id} (target_runtime={runtime}, required_caps={required_caps})",
                     duration_ms=int((time.time() - start) * 1000),
                     runtime=self.node_id,
                     error=None,
-                    artifacts=[{"kind": "dispatch", "value": "runtime_mismatch"}],
+                    artifacts=[{"kind": "dispatch", "value": "capability_mismatch"}],
                     payload=payload,
                 )
                 return

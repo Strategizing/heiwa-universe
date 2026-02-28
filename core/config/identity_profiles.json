@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 5,
   "default_identity": "operator-general",
   "identities": [
     {
@@ -15,7 +15,8 @@
       ],
       "targets": {
         "tool": "openclaw",
-        "runtime": "macbook",
+        "runtime": "macbook@heiwa-agile",
+        "required_capabilities": ["standard_compute", "workspace_interaction"],
         "dispatch": [
           "discord",
           "ci"
@@ -56,7 +57,8 @@
       ],
       "targets": {
         "tool": "openclaw",
-        "runtime": "macbook",
+        "runtime": "any",
+        "required_capabilities": ["brainstorming", "multi_model_inference"],
         "dispatch": [
           "discord"
         ]
@@ -90,7 +92,8 @@
       ],
       "targets": {
         "tool": "openclaw",
-        "runtime": "macbook",
+        "runtime": "any",
+        "required_capabilities": ["triage", "quick_fix"],
         "dispatch": [
           "discord",
           "ci"
@@ -114,7 +117,7 @@
     },
     {
       "id": "heavy-reasoner",
-      "description": "Heiwa Heavy Thinker. Utilizes Workstation GPU for massive reasoning models. Use for complex logic and deep technical architecture.",
+      "description": "Heiwa Heavy Thinker. Utilizes Heavy Compute Node for massive reasoning models. Use for complex logic and deep technical architecture.",
       "trigger_keywords": [
         "deepthink",
         "complex logic",
@@ -124,18 +127,18 @@
       ],
       "targets": {
         "tool": "openclaw",
-        "runtime": "workstation",
+        "runtime": "wsl@heiwa-thinker",
+        "required_capabilities": ["heavy_compute", "gpu_native"],
         "dispatch": [
           "discord"
         ]
       },
       "models": {
         "openclaw": [
-          "ollama/mistral-nemo",
-          "ollama/qwen2.5-coder:14b",
+          "ollama/deepseek-r1:32b",
           "ollama/deepseek-r1:14b",
-          "ollama/gemma2:9b",
-          "ollama/deepseek-r1:32b"
+          "ollama/deepseek-r1:8b",
+          "ollama/deepseek-coder-v2:16b"
         ],
         "picoclaw": []
       },
@@ -159,7 +162,8 @@
       ],
       "targets": {
         "tool": "openclaw",
-        "runtime": "macbook",
+        "runtime": "any",
+        "required_capabilities": ["research", "web_access"],
         "dispatch": [
           "discord"
         ]
