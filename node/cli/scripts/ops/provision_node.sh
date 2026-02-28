@@ -22,10 +22,19 @@ echo "$ENV_CONTENT" > ".env.$NODE_ID"
 
 echo "✅ Generated .env.$NODE_ID"
 echo ""
-echo "🚀 NEXT STEPS FOR THE $NODE_ID:"
-echo "1. Install Tailscale and join the Heiwa network."
-echo "2. Clone this repo: git clone https://github.com/Strategizing/heiwa-universe.git"
-echo "3. Copy the env: cp .env.$NODE_ID .env.worker.local"
-echo "4. Run setup: ./node/cli/scripts/ops/install_worker_service.sh"
+echo "✨ The $NODE_ID configuration is ready."
 echo ""
-echo "✨ The $NODE_ID will then automatically link to the Cloud HQ."
+if [[ "$NODE_ID" == "workstation" || "$NODE_TYPE" == "heavy_compute" ]]; then
+    echo "🪟 WINDOWS/WSL SETUP:"
+    echo "1. Ensure Tailscale is running on the Windows host."
+    echo "2. Follow the specialized guide: infrastructure/windows/HEIWA_WSL_SETUP.md"
+    echo "3. Use the WSL setup script: ./node/cli/scripts/ops/setup_wsl_node.sh"
+else
+    echo "🚀 NEXT STEPS FOR THE $NODE_ID (🍎 MAC/LINUX):"
+    echo "1. Install Tailscale and join the Heiwa network."
+    echo "2. Clone this repo: git clone https://github.com/Strategizing/heiwa-universe.git"
+    echo "3. Copy the env: cp .env.$NODE_ID .env.worker.local"
+    echo "4. Run setup: ./node/cli/scripts/ops/install_worker_service.sh"
+fi
+
+
