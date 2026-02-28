@@ -20,7 +20,7 @@ logger = logging.getLogger("Messenger")
 
 STRUCTURE = {
     "🌐 HEIWA COMMAND CENTER": {
-        "text": ["operator-input", "central-command", "local-macbook-comms", "swarm-status"],
+        "text": ["operator-input", "central-command", "executive-reports", "local-macbook-comms", "swarm-status"],
         "visibility": "admin_only"
     },
     "🛠️ DEVELOPMENT & OPS": {
@@ -606,6 +606,15 @@ class MessengerAgent(BaseAgent):
             result=summary
         )
         await target.send(embed=embed)
+
+        # Route to executive reports if requested
+        report_channel_name = payload.get("report_channel")
+        if report_channel_name:
+            report_channel_id = self._get_channel_id(report_channel_name)
+            if report_channel_id and report_channel_id != target.id:
+                report_target = self.bot.get_channel(report_channel_id)
+                if report_target:
+                    await report_target.send(embed=embed)
 
     async def handle_swarm_log(self, data: dict[str, Any]):
         if not self.bot.is_ready():

@@ -119,11 +119,18 @@ class WorkerManager(BaseAgent):
                 selected = selection.get("selected", {})
                 
                 desc = selected.get("description", "Heiwa operator.")
-                # Enrich the prompt with the identity role
-                instruction = f"[ROLE]: {desc}\n\n{instruction}"
+                # Enrich the prompt with the identity role and executive summary requirement
+                instruction = (
+                    f"[ROLE]: {desc}\n"
+                    "Requirement: ALWAYS include a '## EXECUTIVE SUMMARY' in polished markdown "
+                    "at the start of your response. This is for human oversight. "
+                    "Follow it with '---' then any technical details or code.\n\n"
+                    f"{instruction}"
+                )
                 
                 # Assign specific models if defined in identity
                 models = selected.get("models", {})
+                payload["report_channel"] = selected.get("actions", {}).get("report_channel")
                 if tool == "openclaw" and models.get("openclaw"):
                     # Use the preferred model (e.g. qwen/deepseek)
                     os.environ["OPENCLAW_MODEL"] = models["openclaw"][0]
@@ -342,6 +349,7 @@ class WorkerManager(BaseAgent):
             "error": error,
             "response_channel_id": payload.get("response_channel_id"),
             "response_thread_id": payload.get("response_thread_id"),
+            "report_channel": payload.get("report_channel"),
             "target_tool": payload.get("target_tool"),
             "target_runtime": payload.get("target_runtime"),
             "plan_id": payload.get("plan_id"),

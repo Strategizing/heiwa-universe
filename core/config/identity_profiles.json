@@ -1,10 +1,10 @@
 {
-  "version": 2,
+  "version": 3,
   "default_identity": "operator-general",
   "identities": [
     {
       "id": "operator-general",
-      "description": "General Heiwa operator for day-to-day build/operate tasks.",
+      "description": "General Heiwa operator. Always provide a '## EXECUTIVE SUMMARY' in markdown before any technical output. Keep it polished and high-level.",
       "trigger_keywords": [
         "heiwa",
         "ops",
@@ -24,89 +24,62 @@
       "models": {
         "openclaw": [
           "ollama/deepseek-coder-v2:16b",
-          "google-ai-studio/gemini-2.5-flash",
-          "google-gemini-cli/gemini-3-flash-preview",
-          "google-antigravity/claude-opus-4-5-thinking"
-        ],
-        "picoclaw": []
-      },
-      "actions": {
-        "ci_workflow": "deploy.yml",
-        "railway_service": "heiwa-cloud-hq",
-        "discord_channel": "field-intel"
-      }
-    },
-    {
-      "id": "domain-web-initializer",
-      "description": "Domain and website initialization for heiwa.ltd surfaces.",
-      "trigger_keywords": [
-        "domain",
-        "dns",
-        "website",
-        "cloudflare",
-        "status.heiwa.ltd",
-        "auth.heiwa.ltd",
-        "api.heiwa.ltd",
-        "docs.heiwa.ltd"
-      ],
-      "targets": {
-        "tool": "openclaw",
-        "runtime": "macbook",
-        "dispatch": [
-          "ci",
-          "discord"
-        ]
-      },
-      "models": {
-        "openclaw": [
           "ollama/qwen2.5-coder:7b",
-          "google-ai-studio/gemini-2.5-flash",
+          "google/gemini-2.5-flash",
+          "google/gemini-2.0-flash",
+          "google/gemini-1.5-pro",
           "google-gemini-cli/gemini-3-flash-preview",
-          "google-antigravity/claude-opus-4-5-thinking"
+          "google-gemini-cli/gemini-3-pro-preview",
+          "google-antigravity/gemini-3-pro-high",
+          "google-antigravity/claude-opus-4-5-thinking",
+          "openai-codex/gpt-5.2-codex"
         ],
         "picoclaw": []
       },
       "actions": {
         "ci_workflow": "deploy.yml",
         "railway_service": "heiwa-cloud-hq",
-        "discord_channel": "engineering"
+        "discord_channel": "field-intel",
+        "report_channel": "executive-reports"
       }
     },
     {
-      "id": "release-deployer",
-      "description": "Production-minded deploy identity for release and rollout tasks.",
+      "id": "architect-strategist",
+      "description": "Heiwa Lead Architect. Focus on long-term strategy, brainstorming, and system evolution. Output should be formatted as a formal proposal or plan.",
       "trigger_keywords": [
-        "deploy",
-        "release",
-        "rollout",
-        "production",
-        "staging",
-        "railway"
+        "brainstorm",
+        "plan",
+        "architect",
+        "evolve",
+        "improve",
+        "strategy"
       ],
       "targets": {
         "tool": "openclaw",
         "runtime": "macbook",
         "dispatch": [
-          "ci",
           "discord"
         ]
       },
       "models": {
         "openclaw": [
           "ollama/deepseek-coder-v2:16b",
-          "google-ai-studio/gemini-2.5-flash"
+          "google/gemini-1.5-pro",
+          "google-antigravity/claude-opus-4-5-thinking",
+          "google-antigravity/gemini-3-pro-high"
         ],
         "picoclaw": []
       },
       "actions": {
-        "ci_workflow": "deploy.yml",
+        "ci_workflow": "",
         "railway_service": "heiwa-cloud-hq",
-        "discord_channel": "sysops"
+        "discord_channel": "central-command",
+        "report_channel": "executive-reports"
       }
     },
     {
       "id": "incident-response",
-      "description": "Fast-response identity for outages, errors, and urgent incidents.",
+      "description": "Fast-response triage. Summarize the error, the root cause, and the proposed fix clearly for the operator.",
       "trigger_keywords": [
         "incident",
         "outage",
@@ -126,20 +99,22 @@
       "models": {
         "openclaw": [
           "ollama/qwen2.5-coder:7b",
-          "google-ai-studio/gemini-2.5-flash",
-          "google-gemini-cli/gemini-3-flash-preview"
+          "google/gemini-2.5-flash",
+          "google-gemini-cli/gemini-3-flash-preview",
+          "openai-codex/gpt-5.2-codex"
         ],
         "picoclaw": []
       },
       "actions": {
         "ci_workflow": "deploy.yml",
         "railway_service": "heiwa-cloud-hq",
-        "discord_channel": "sysops"
+        "discord_channel": "sysops",
+        "report_channel": "executive-reports"
       }
     },
     {
       "id": "research-scout",
-      "description": "Research-focused identity for discovery, synthesis, and scouting tasks.",
+      "description": "Research-focused identity. Synthesize findings into a readable brief.",
       "trigger_keywords": [
         "research",
         "analyze",
@@ -158,15 +133,17 @@
       "models": {
         "openclaw": [
           "ollama/qwen2.5-coder:7b",
-          "google-ai-studio/gemini-2.5-flash",
-          "google-gemini-cli/gemini-3-flash-preview"
+          "google/gemini-2.5-flash",
+          "google-gemini-cli/gemini-3-flash-preview",
+          "google-antigravity/claude-opus-4-5-thinking"
         ],
         "picoclaw": []
       },
       "actions": {
         "ci_workflow": "",
         "railway_service": "",
-        "discord_channel": "field-intel"
+        "discord_channel": "field-intel",
+        "report_channel": "executive-reports"
       }
     }
   ]
