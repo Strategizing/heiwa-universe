@@ -15,7 +15,7 @@ load_env_file() {
             return 0
         fi
         case "$1" in
-            NATS_URL|OPENCLAW_*|PICOCLAW_*)
+            NATS_URL|OPENCLAW_*|PICOCLAW_*|GOOGLE_API_KEY|GROQ_API_KEY|CEREBRAS_API_KEY|OPENROUTER_API_KEY|MISTRAL_API_KEY|TOGETHER_API_KEY)
                 return 0
                 ;;
             *)
