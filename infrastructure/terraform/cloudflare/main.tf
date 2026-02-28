@@ -78,7 +78,42 @@ resource "cloudflare_ruleset" "heiwa_waf" {
   rules {
     action = "block"
     expression = "(http.request.uri.path contains \"/admin\" and not ip.src in {127.0.0.1})"
-    description = "Block /admin paths unless local (example placeholder)"
+    description = "Block /admin paths unless local"
     enabled = true
+  }
+
+  rules {
+    action = "block"
+    expression = "(http.request.host eq \"api.heiwa.ltd\" or http.request.host eq \"auth.heiwa.ltd\") and not cf.bot_management.verified_bot"
+    description = "Challenge unverified bots hitting compute endpoints"
+    enabled = true
+  }
+}
+
+resource "cloudflare_ruleset" "rate_limiting" {
+  zone_id     = var.zone_id
+  name        = "Heiwa API Rate Limiting"
+  description = "Prevent abuse of Cloud HQ compute"
+  kind        = "zone"
+  phase       = "http_ratelimit"
+
+  rules {
+    action = "block"
+    expression = "(http.request.host eq \"api.heiwa.ltd\" or http.request.host eq \"auth.heiwa.ltd\")"
+    description = "Rate limit API/Auth to 100 req per minute per IP"
+    enabled = true
+    action_parameters {
+      response {
+        status_code = 429
+        content = "{\"error\": \"Rate limit exceeded. Too many requests to Heiwa Swarm API.\"}"
+        content_type = "application/json"
+      }
+    }
+    ratelimit {
+      characteristics = ["ip.src"]
+      period          = 60
+      requests_per_period = 100
+      mitigation_timeout  = 300 # 5 minutes block
+    }
   }
 }

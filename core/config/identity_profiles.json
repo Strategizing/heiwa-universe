@@ -132,6 +132,8 @@
       "models": {
         "openclaw": [
           "ollama/deepseek-r1:32b",
+          "ollama/deepseek-r1:14b",
+          "ollama/deepseek-r1:8b",
           "ollama/deepseek-coder-v2:16b"
         ],
         "picoclaw": []

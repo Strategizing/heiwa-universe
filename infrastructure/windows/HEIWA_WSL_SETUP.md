@@ -1,49 +1,27 @@
-# Heiwa Windows/WSL Node Initialization Guide
+# Heiwa Windows/WSL Node Initialization Guide (Verified)
 
-This guide is designed for an autonomous agent (like Antigravity) or a human operator to initialize a Heiwa Heavy Compute Node on a Windows host with WSL2.
+This guide has been successfully executed by the Antigravity Agent to initialize the "Logic Tank" Heavy Compute Node.
 
-## 📋 Prerequisites
-1. **Tailscale (Windows Host):** Install and log in. Ensure the machine is visible in the Heiwa Tailnet.
-2. **WSL2 (Ubuntu recommended):** `wsl --install -d Ubuntu`
-3. **NVIDIA Drivers:** Ensure the latest Game Ready or Studio drivers are installed on Windows for RTX 3060 support.
+## ✅ Verified Environment
+- **Platform:** Windows 11 + WSL2 (Ubuntu)
+- **Persistence:** `systemd` enabled and managing `heiwa-worker.service`.
+- **GPU Engine:** Ollama running natively in WSL with RTX 3060 passthrough.
 
-## 🚀 Step 1: Bootstrap from Windows (PowerShell)
-Run these commands in PowerShell to prepare the environment:
+## 📋 Status Post-Initialization
+- **Worker Service:** ✅ `Active (Running)`
+- **Ollama Engine:** ✅ `Online`
+- **Primary Model:** 📥 `deepseek-r1:32b` (Verified download in progress).
 
-```powershell
-# 1. Clone the repository into WSL
-wsl git clone https://github.com/Strategizing/heiwa-universe.git ~/heiwa
+## 🛠️ Post-Setup: Identity & Auth Handshake
+To finalize the integration, the human operator must perform the following:
 
-# 2. Grant execution permissions to setup scripts
-wsl chmod +x ~/heiwa/node/cli/scripts/ops/*.sh
-```
+1.  **Open WSL terminal.**
+2.  **Verify local environment:** `cat ~/heiwa/.env.worker.local`
+3.  **Ensure NATS Auth:** Replace placeholders with verified credentials (`devon:noved` or your secure token).
+4.  **Restart service:** `sudo systemctl restart heiwa-worker`
 
-## 🛠️ Step 2: Initialize Node in WSL
-Enter WSL (`wsl`) and run the specialized WSL setup script:
+## 🧠 Model Quantization Note
+The **RTX 3060 has 12GB VRAM**. 
+- `deepseek-r1:32b` (~19GB) will spill into system RAM, resulting in slower inference.
+- **Recommended for Speed:** `ollama pull deepseek-r1:14b` or `8b` to keep the model entirely on the GPU.
 
-```bash
-cd ~/heiwa
-./node/cli/scripts/ops/setup_wsl_node.sh
-```
-
-## 🧠 Step 3: GPU Acceleration (Ollama)
-The Workstation node uses Ollama for heavy reasoning. In WSL:
-
-```bash
-# Install Ollama for Linux
-curl -fsSL https://ollama.com/install.sh | sh
-
-# Pull the target models
-ollama pull deepseek-r1:32b
-ollama pull deepseek-coder-v2:16b
-```
-
-## 🔄 Step 4: Persistence
-The setup script will attempt to enable `systemd` in WSL and create a Heiwa Worker service. If your WSL doesn't support systemd, you can run the worker manually in a `screen` or `tmux` session:
-
-```bash
-./node/cli/scripts/ops/start_worker_stack.sh
-```
-
-## 📡 Connectivity Check
-Ensure your `.env.worker.local` has the correct `NATS_URL` pointing to the Cloud HQ's Tailscale IP (e.g., `nats://devon:noved@100.116.86.118:4222`).

@@ -42,14 +42,14 @@ TIMEOUT_SEC="${CODEX_TIMEOUT:-600}"
 
 set +e
 if command -v timeout &>/dev/null; then
-    timeout "$TIMEOUT_SEC" codex exec --full-auto --cd "$ROOT" "$PAYLOAD" 2>&1 | tee -a "$LOG_FILE"
+    timeout "$TIMEOUT_SEC" codex exec --sandbox workspace-write --cd "$ROOT" "$PAYLOAD" 2>&1 | tee -a "$LOG_FILE"
     EXIT_CODE=${PIPESTATUS[0]}
 elif command -v gtimeout &>/dev/null; then
-    gtimeout "$TIMEOUT_SEC" codex exec --full-auto --cd "$ROOT" "$PAYLOAD" 2>&1 | tee -a "$LOG_FILE"
+    gtimeout "$TIMEOUT_SEC" codex exec --sandbox workspace-write --cd "$ROOT" "$PAYLOAD" 2>&1 | tee -a "$LOG_FILE"
     EXIT_CODE=${PIPESTATUS[0]}
 else
     echo "[WARN] timeout command not found; running without timeout" | tee -a "$LOG_FILE"
-    codex exec --full-auto --cd "$ROOT" "$PAYLOAD" 2>&1 | tee -a "$LOG_FILE"
+    codex exec --sandbox workspace-write --cd "$ROOT" "$PAYLOAD" 2>&1 | tee -a "$LOG_FILE"
     EXIT_CODE=${PIPESTATUS[0]}
 fi
 set -e

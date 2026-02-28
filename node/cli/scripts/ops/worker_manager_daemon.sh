@@ -42,7 +42,9 @@ load_env_file() {
     done <"$file"
 }
 
-if [[ -f "$ROOT/.env.worker" ]]; then
+if [[ -f "$ROOT/.env.worker.local" ]]; then
+    load_env_file "$ROOT/.env.worker.local"
+elif [[ -f "$ROOT/.env.worker" ]]; then
     load_env_file "$ROOT/.env.worker"
 elif [[ -f "$ROOT/.env" ]]; then
     load_env_file "$ROOT/.env"
@@ -56,6 +58,9 @@ export HEIWA_LLM_MODE="${HEIWA_LLM_MODE:-local_only}"
 if [[ "${HEIWA_USE_REMOTE_NATS:-0}" == "1" ]]; then
     export NATS_URL="${NATS_URL:-nats://127.0.0.1:4222}"
 else
+    if [[ -n "${NATS_URL:-}" ]]; then
+        echo "[INFO] Overriding NATS_URL for local worker bus"
+    fi
     export NATS_URL="${HEIWA_LOCAL_NATS_URL:-nats://127.0.0.1:4222}"
 fi
 

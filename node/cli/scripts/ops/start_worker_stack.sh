@@ -45,7 +45,9 @@ load_env_file() {
     done <"$file"
 }
 
-if [[ -f "$ROOT/.env.worker" ]]; then
+if [[ -f "$ROOT/.env.worker.local" ]]; then
+    load_env_file "$ROOT/.env.worker.local"
+elif [[ -f "$ROOT/.env.worker" ]]; then
     load_env_file "$ROOT/.env.worker"
 elif [[ -f "$ROOT/.env" ]]; then
     load_env_file "$ROOT/.env"
