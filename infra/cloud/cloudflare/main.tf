@@ -32,6 +32,14 @@ variable "pages_cname_target" {
 # DNS Records
 # -------------------------------------------------------------------------
 
+resource "cloudflare_record" "root" {
+  zone_id = var.zone_id
+  name    = "@"
+  value   = var.pages_cname_target
+  type    = "CNAME"
+  proxied = true
+}
+
 resource "cloudflare_record" "status" {
   zone_id = var.zone_id
   name    = "status"
