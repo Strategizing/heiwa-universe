@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "default_identity": "operator-general",
   "identities": [
     {
@@ -37,8 +37,8 @@
       "actions": {
         "ci_workflow": "deploy.yml",
         "railway_service": "heiwa-cloud-hq",
-        "discord_channel": "field-intel",
-        "report_channel": "executive-reports"
+        "discord_channel": "central-comms",
+        "report_channel": "executive-briefing"
       }
     },
     {
@@ -73,8 +73,8 @@
       "actions": {
         "ci_workflow": "",
         "railway_service": "heiwa-cloud-hq",
-        "discord_channel": "central-command",
-        "report_channel": "executive-reports"
+        "discord_channel": "roadmap",
+        "report_channel": "executive-briefing"
       }
     },
     {
@@ -108,8 +108,8 @@
       "actions": {
         "ci_workflow": "deploy.yml",
         "railway_service": "heiwa-cloud-hq",
-        "discord_channel": "sysops",
-        "report_channel": "executive-reports"
+        "discord_channel": "security-ops",
+        "report_channel": "executive-briefing"
       }
     },
     {
@@ -142,8 +142,8 @@
       "actions": {
         "ci_workflow": "",
         "railway_service": "",
-        "discord_channel": "executive-reports",
-        "report_channel": "executive-reports"
+        "discord_channel": "dev-labs",
+        "report_channel": "executive-briefing"
       }
     },
     {
@@ -177,8 +177,8 @@
       "actions": {
         "ci_workflow": "",
         "railway_service": "",
-        "discord_channel": "field-intel",
-        "report_channel": "executive-reports"
+        "discord_channel": "technical-research",
+        "report_channel": "executive-briefing"
       }
     }
   ]

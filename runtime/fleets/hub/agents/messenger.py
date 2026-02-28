@@ -19,24 +19,28 @@ from libs.heiwa_sdk.db import Database
 logger = logging.getLogger("Messenger")
 
 STRUCTURE = {
-    "🌐 HEIWA COMMAND CENTER": {
-        "text": ["operator-input", "central-command", "executive-reports", "local-macbook-comms", "swarm-status"],
+    "👑 STRATEGIC HQ": {
+        "text": ["executive-briefing", "governance", "roadmap"],
         "visibility": "admin_only"
     },
-    "🛠️ DEVELOPMENT & OPS": {
-        "text": ["sysops", "engineering", "deployments", "security-audit"],
+    "🎮 MISSION CONTROL": {
+        "text": ["operator-ingress", "central-comms", "swarm-telemetry"],
         "visibility": "admin_only"
     },
-    "🧠 INTELLIGENCE & RESEARCH": {
-        "text": ["field-intel", "research-archive", "scraper-logs"],
+    "⚙️ ENGINEERING HUB": {
+        "text": ["dev-labs", "ci-cd-stream", "infrastructure-as-code", "security-ops"],
         "visibility": "admin_only"
     },
-    "📜 ARCHIVE & LOGS": {
-        "text": ["task-history", "moltbook-logs"],
+    "🔍 RESEARCH LABS": {
+        "text": ["market-intel", "technical-research", "archive-index"],
         "visibility": "admin_only"
     },
-    "📢 PUBLIC SURFACE": {
-        "text": ["general", "announcements", "suggestions"],
+    "📡 SWARM LOGS": {
+        "text": ["node-heartbeats", "audit-log", "error-trace", "thought-stream"],
+        "visibility": "admin_only"
+    },
+    "📢 COMMUNITY SURFACE": {
+        "text": ["welcome", "announcements", "open-forum"],
         "visibility": "public"
     }
 }
@@ -153,15 +157,14 @@ class MessengerAgent(BaseAgent):
             await channel.send(embed=embed)
 
     async def on_message(self, message: discord.Message):
-        raw = (message.content or "").strip()
-        if not raw:
-            return
-
         if message.author == self.bot.user or message.author.bot:
+            raw = (message.content or "").strip()
             if self._allow_selftest_bot_command(message, raw):
                 await self._handle_bot_control_command(message, raw)
             return
 
+        # Explicit Command Check
+        raw = (message.content or "").strip()
         if raw.startswith("!sync"):
             await self._sync_server_structure(message)
             return
@@ -170,6 +173,42 @@ class MessengerAgent(BaseAgent):
             instruction = raw.replace("!dispatch", "", 1).strip()
             await self._ingest_instruction(instruction, message, explicit=True)
             return
+
+        if self.selftest_allow_bot_commands and (raw.startswith("!approve") or raw.startswith("!reject")):
+            await self._handle_text_approval_command(message, raw)
+            return
+
+        if raw.startswith("!"):
+            return
+
+        # Conversational Ingress
+        if self.conversational_mode and self._should_consume_conversation(message):
+            # Capture all media
+            instruction = self._extract_full_content(message)
+            if instruction:
+                await self._ingest_instruction(instruction, message, explicit=False)
+
+    def _extract_full_content(self, message: discord.Message) -> str:
+        """Extract text, attachments, and embed info from a message."""
+        parts = []
+        if message.content:
+            parts.append(self._clean_instruction(message.content))
+        
+        for attachment in message.attachments:
+            parts.append(f"[ATTACHMENT: {attachment.filename}]({attachment.url})")
+            if attachment.content_type and attachment.content_type.startswith("image/"):
+                parts.append("[MEDIA_TYPE: IMAGE]")
+
+        for embed in message.embeds:
+            embed_text = []
+            if embed.title: embed_text.append(f"Title: {embed.title}")
+            if embed.description: embed_text.append(f"Desc: {embed.description}")
+            for field in embed.fields:
+                embed_text.append(f"{field.name}: {field.value}")
+            if embed_text:
+                parts.append(f"[EMBED: {' | '.join(embed_text)}]")
+
+        return "\n".join(parts).strip()
 
     async def _sync_server_structure(self, message: discord.Message):
         """Bootstrap or repair the Discord server structure."""
@@ -275,11 +314,12 @@ class MessengerAgent(BaseAgent):
         if self.bot.user and self.bot.user in message.mentions:
             return True
 
-        # Zero-Mention Channels: Implicitly listen to operator-input and central-command
-        operator_input_id = self._get_channel_id("operator-input")
-        central_command_id = self._get_channel_id("central-command")
+        # Zero-Mention Channels: Implicitly listen to command and comms channels
+        active_purposes = {"operator-ingress", "central-comms", "operator-input", "central-command"}
+        active_ids = {self._get_channel_id(p) for p in active_purposes}
+        active_ids.discard(0)
         
-        if message.channel.id in {operator_input_id, central_command_id}:
+        if message.channel.id in active_ids:
             return True
 
         if self.channel_id and message.channel.id == self.channel_id:
@@ -600,6 +640,7 @@ class MessengerAgent(BaseAgent):
         task_id = str(payload.get("task_id", "n/a"))
         status = str(payload.get("status", "PASS"))
         summary = str(payload.get("summary", "")).strip() or "(no summary)"
+        usage = payload.get("usage")
         
         target = self._resolve_target_channel(payload, task_id)
         if not target:
@@ -610,7 +651,13 @@ class MessengerAgent(BaseAgent):
             task_id, 
             instruction=summary[:100] + "...", 
             status=ui_status, 
-            result=summary
+            result=summary,
+            usage=usage,
+            snapshot={
+                "railway": "Online",
+                "node_id": payload.get("runtime", "unknown"),
+                "provider": payload.get("target_tool", "OpenClaw")
+            }
         )
         await target.send(embed=embed)
 
@@ -622,6 +669,22 @@ class MessengerAgent(BaseAgent):
                 report_target = self.bot.get_channel(report_channel_id)
                 if report_target:
                     await report_target.send(embed=embed)
+
+    async def handle_thought(self, data: dict[str, Any]):
+        """Relay agent reasoning to the designated thought-stream channel."""
+        if not self.bot.is_ready():
+            return
+        payload = self._unwrap(data)
+        agent = payload.get("agent", "unknown")
+        thought = payload.get("content", "")
+        task_id = payload.get("task_id")
+        
+        channel_id = self._get_channel_id("thought-stream")
+        if channel_id:
+            channel = self.bot.get_channel(channel_id)
+            if channel:
+                embed = UIManager.create_thought_embed(agent, thought, task_id)
+                await channel.send(embed=embed)
 
     async def handle_swarm_log(self, data: dict[str, Any]):
         if not self.bot.is_ready():
@@ -680,6 +743,7 @@ class MessengerAgent(BaseAgent):
         await self.listen(Subject.TASK_STATUS, self.handle_task_status)
         await self.listen(Subject.TASK_EXEC_RESULT, self.handle_exec_result)
         await self.listen(Subject.TASK_APPROVAL_DECISION, self.handle_approval_decision_event)
+        await self.listen(Subject.LOG_THOUGHT, self.handle_thought)
         await self.listen(Subject.LOG_INFO, self.handle_swarm_log)
         await self.listen(Subject.LOG_ERROR, self.handle_swarm_log)
 

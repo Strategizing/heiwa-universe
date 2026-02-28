@@ -31,6 +31,7 @@ class Subject(str, Enum):
     # Logs & Telemetry
     LOG_INFO = "heiwa.log.info"
     LOG_ERROR = "heiwa.log.error"
+    LOG_THOUGHT = "heiwa.log.thought"
 
     # Specific Agent Channels (Examples)
     MARKET_UPDATE = "heiwa.market.update"

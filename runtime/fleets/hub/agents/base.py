@@ -69,6 +69,16 @@ class BaseAgent(ABC):
         await self.nc.publish(subject.value, json.dumps(payload).encode())
         logger.debug(f"📢 [{self.name}] Published to {subject.value}")
 
+    async def think(self, thought: str, task_id: str = None, context: Dict[str, Any] = None):
+        """Broadcast a reasoning thought to the swarm."""
+        await self.speak(Subject.LOG_THOUGHT, {
+            "agent": self.name,
+            "task_id": task_id,
+            "content": thought,
+            "context": context or {}
+        })
+        logger.info(f"🧠 [{self.name}] Thought: {thought[:100]}...")
+
     async def listen(self, subject: Subject, callback):
         """Subscribe to a Swarm subject."""
         if not self.nc:
