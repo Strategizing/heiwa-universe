@@ -26,7 +26,7 @@ load_env_file() {
                 ;;
         esac
     }
-    while IFS= read -r raw; do
+    while IFS= read -r raw || [[ -n "$raw" ]]; do
         local line
         line="$(echo "$raw" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
         [[ -z "$line" || "${line:0:1}" == "#" ]] && continue
