@@ -322,10 +322,19 @@ class MessengerAgent(BaseAgent):
     async def handle_thought(self, data: dict[str, Any]):
         if not self.bot.is_ready(): return
         payload = self._unwrap(data)
+        agent = payload.get("agent", "unknown")
+        thought = payload.get("content", "")
+        task_id = payload.get("task_id")
+        
+        # Handle decryption
+        if payload.get("encrypted") and thought.startswith("[ENCRYPTED]: "):
+            encrypted_val = thought.replace("[ENCRYPTED]: ", "", 1)
+            thought = f"🔓 [DECRYPTED]: {self.vault.decrypt(encrypted_val)}"
+
         cid = self._get_channel_id("thought-stream")
         if cid:
             chan = self.bot.get_channel(cid)
-            if chan: await chan.send(embed=UIManager.create_thought_embed(payload.get("agent", "unknown"), payload.get("content", ""), payload.get("task_id")))
+            if chan: await chan.send(embed=UIManager.create_thought_embed(agent, thought, task_id))
 
     async def handle_telemetry(self, data: dict[str, Any]):
         """Post system metrics to the swarm-telemetry channel."""
@@ -376,10 +385,21 @@ class MessengerAgent(BaseAgent):
         target = self._resolve_target_channel(payload, str(payload.get("task_id", "n/a")))
         if target: await target.send(f"📡 **Status Update** `{payload.get('task_id')}`: `{payload.get('status', 'UNKNOWN')}`")
 
+    async def handle_task_progress(self, data: dict[str, Any]) -> None:
+        if not self.bot.is_ready(): return
+        payload = self._unwrap(data)
+        task_id = str(payload.get("task_id", "n/a"))
+        target = self._resolve_target_channel(payload, task_id)
+        if target:
+            content = payload.get("content", "...")
+            # Use a simple message instead of a full embed for progress to avoid noise
+            await target.send(f"⏳ **Task Progress** `{task_id}`: {content}")
+
     async def run(self):
         if not self.token: return
         await self.connect()
         await self.listen(Subject.TASK_STATUS, self.handle_task_status)
+        await self.listen(Subject.TASK_PROGRESS, self.handle_task_progress)
         await self.listen(Subject.TASK_EXEC_RESULT, self.handle_exec_result)
         await self.listen(Subject.TASK_APPROVAL_DECISION, self.handle_approval_decision_event)
         await self.listen(Subject.LOG_THOUGHT, self.handle_thought)

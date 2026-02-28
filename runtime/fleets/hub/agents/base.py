@@ -21,6 +21,8 @@ _NATS_URL_CRED_RE = re.compile(r"(://)[^:@/]+:[^@/]+@")
 def _redact_nats_url(url: str) -> str:
     return _NATS_URL_CRED_RE.sub(r"\1<user>:<redacted>@", url or "")
 
+from libs.heiwa_sdk.vault import InstanceVault
+
 class BaseAgent(ABC):
     """
     Abstract Base Class for all Heiwa Agents.
@@ -31,6 +33,7 @@ class BaseAgent(ABC):
         self.id = IDENTITY.get("uuid", "unknown")
         self.nc: Optional[NATSClient] = None
         self.running = False
+        self.vault = InstanceVault()
 
     async def connect(self, nats_url: str = None, max_retries: int = 10, retry_delay: int = 5):
         """Connects to the NATS Swarm with retry logic."""
@@ -69,12 +72,17 @@ class BaseAgent(ABC):
         await self.nc.publish(subject.value, json.dumps(payload).encode())
         logger.debug(f"📢 [{self.name}] Published to {subject.value}")
 
-    async def think(self, thought: str, task_id: str = None, context: Dict[str, Any] = None):
+    async def think(self, thought: str, task_id: str = None, context: Dict[str, Any] = None, encrypt: bool = False):
         """Broadcast a reasoning thought to the swarm."""
+        content = thought
+        if encrypt:
+            content = f"[ENCRYPTED]: {self.vault.encrypt(thought)}"
+
         await self.speak(Subject.LOG_THOUGHT, {
             "agent": self.name,
             "task_id": task_id,
-            "content": thought,
+            "content": content,
+            "encrypted": encrypt,
             "context": context or {}
         })
         logger.info(f"🧠 [{self.name}] Thought: {thought[:100]}...")

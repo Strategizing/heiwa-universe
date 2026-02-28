@@ -1,20 +1,19 @@
 {
-  "version": 9,
+  "version": 10,
   "default_identity": "operator-general",
   "identities": [
     {
       "id": "operator-general",
-      "description": "General Heiwa operator. Standard compute instance.",
+      "description": "General Swarm Instance. Standard agility and workspace interaction.",
       "trigger_keywords": ["heiwa", "ops", "fix", "status"],
       "targets": {"tool": "openclaw", "runtime": "macbook@heiwa-agile"},
+      "cells": [
+        {"role": "scout", "model": "google/gemini-2.5-flash", "difficulty": "low"},
+        {"role": "builder", "model": "ollama/qwen2.5-coder:7b", "difficulty": "medium"},
+        {"role": "architect", "model": "cerebras/gpt-oss-120b", "difficulty": "high"}
+      ],
       "models": {
-        "openclaw": [
-          "ollama/qwen2.5-coder:7b",
-          "google/gemini-2.5-flash",
-          "cerebras/gpt-oss-120b",
-          "openrouter/qwen/qwen3-coder:free",
-          "groq/llama-3.3-70b-versatile"
-        ]
+        "openclaw": ["ollama/qwen2.5-coder:7b", "google/gemini-2.5-flash", "cerebras/gpt-oss-120b"]
       },
       "actions": {
         "discord_channel": "central-comms",
@@ -23,17 +22,15 @@
     },
     {
       "id": "architect-strategist",
-      "description": "Heiwa Lead Architect. Brainstorming and strategy instance.",
+      "description": "Strategic Evolution Instance. High-level planning and roadmap development.",
       "trigger_keywords": ["brainstorm", "plan", "strategy", "improve"],
       "targets": {"tool": "openclaw", "runtime": "any"},
+      "cells": [
+        {"role": "analyst", "model": "google/gemini-1.5-pro", "difficulty": "medium"},
+        {"role": "visionary", "model": "google-antigravity/claude-opus-4-5-thinking", "difficulty": "high"}
+      ],
       "models": {
-        "openclaw": [
-          "groq/llama-3.3-70b-versatile",
-          "openrouter/qwen/qwen3-coder:free",
-          "google/gemini-1.5-pro",
-          "openai-codex/gpt-5.2-codex",
-          "google-antigravity/claude-opus-4-5-thinking"
-        ]
+        "openclaw": ["groq/llama-3.3-70b-versatile", "google/gemini-1.5-pro", "google-antigravity/claude-opus-4-5-thinking"]
       },
       "actions": {
         "discord_channel": "roadmap",
@@ -42,17 +39,16 @@
     },
     {
       "id": "heavy-reasoner",
-      "description": "Heiwa Heavy Thinker. Logic tank instance.",
+      "description": "Deep Logic Instance. Utilizes high-end VRAM for massive reasoning chains.",
       "trigger_keywords": ["deepthink", "logic", "audit"],
       "targets": {"tool": "openclaw", "runtime": "wsl@heiwa-thinker"},
+      "cells": [
+        {"role": "scout", "model": "groq/deepseek-r1-distill-llama-70b", "difficulty": "low"},
+        {"role": "builder", "model": "ollama/deepseek-r1:14b", "difficulty": "medium"},
+        {"role": "architect", "model": "openrouter/qwen/qwen3-vl-30b-a3b-thinking", "difficulty": "high"}
+      ],
       "models": {
-        "openclaw": [
-          "ollama/deepseek-r1:14b",
-          "openrouter/qwen/qwen3-vl-30b-a3b-thinking",
-          "openrouter/nousresearch/hermes-3-llama-3.1-405b:free",
-          "groq/deepseek-r1-distill-llama-70b",
-          "cerebras/gpt-oss-120b"
-        ]
+        "openclaw": ["ollama/deepseek-r1:14b", "groq/deepseek-r1-distill-llama-70b", "openrouter/qwen/qwen3-vl-30b-a3b-thinking"]
       },
       "actions": {
         "discord_channel": "dev-labs",
@@ -61,17 +57,15 @@
     },
     {
       "id": "research-scout",
-      "description": "Research-focused instance.",
+      "description": "Global Discovery Instance. Specialized in web search and synthesis.",
       "trigger_keywords": ["research", "analyze", "find"],
       "targets": {"tool": "openclaw", "runtime": "any"},
+      "cells": [
+        {"role": "browser", "model": "google/gemini-2.5-flash", "difficulty": "low"},
+        {"role": "synthesizer", "model": "openrouter/mistralai/mistral-small-3.1-24b-instruct:free", "difficulty": "medium"}
+      ],
       "models": {
-        "openclaw": [
-          "google/gemini-2.5-flash",
-          "openrouter/meta-llama/llama-3.3-70b-instruct:free",
-          "openrouter/google/gemini-2.0-flash:free",
-          "openrouter/mistralai/mistral-small-3.1-24b-instruct:free",
-          "groq/llama-3.3-70b-versatile"
-        ]
+        "openclaw": ["google/gemini-2.5-flash", "openrouter/meta-llama/llama-3.3-70b-instruct:free"]
       },
       "actions": {
         "discord_channel": "technical-research",

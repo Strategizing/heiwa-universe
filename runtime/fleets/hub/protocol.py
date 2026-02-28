@@ -20,6 +20,7 @@ class Subject(str, Enum):
     TASK_APPROVAL_REQUEST = "heiwa.tasks.approval.request"
     TASK_APPROVAL_DECISION = "heiwa.tasks.approval.decision"
     TASK_STATUS = "heiwa.tasks.status"
+    TASK_PROGRESS = "heiwa.tasks.progress" # Real-time agent status during long tasks
     NODE_HEARTBEAT = "heiwa.node.heartbeat"    # Node -> Orchestrator (I'm alive)
     NODE_REGISTER = "heiwa.node.register"      # Node -> Orchestrator (Hello, I'm new)
     NODE_TELEMETRY = "heiwa.node.telemetry"    # Node -> Swarm (Resource stats)

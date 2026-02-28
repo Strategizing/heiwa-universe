@@ -338,6 +338,21 @@ class WorkerManager(BaseAgent):
                 error = str(exc)
 
             self.last_used[tool] = time.time()
+            
+            instance_id = f"{tool}@{self.node_id}"
+            instance_name = f"instance-{uuid.uuid4().hex[:8]}"
+            
+            # Create encrypted instance workspace
+            instance_dir = self.root / "runtime" / "instances" / instance_name
+            instance_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Save encrypted execution context
+            ctx_data = json.dumps({"task_id": task_id, "instruction": instruction})
+            encrypted_ctx = self.vault.encrypt(ctx_data)
+            with open(instance_dir / "context.enc", "w") as f:
+                f.write(encrypted_ctx)
+
+            await self.think(f"Spawning instance {instance_name} for task {task_id}", task_id=task_id, encrypt=True)
 
             await self._emit_result(
                 task_id=task_id,

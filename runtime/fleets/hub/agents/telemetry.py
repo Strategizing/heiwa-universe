@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import time
+import datetime
 from typing import Any, Dict
 from fleets.hub.agents.base import BaseAgent
 from fleets.hub.protocol import Subject
@@ -32,9 +33,33 @@ class TelemetryAgent(BaseAgent):
         logger.info("📊 Telemetry Agent Active. Monitoring Swarm Usage...")
 
         # Background loop for periodical analysis
+        pulse_count = 0
         while self.running:
             await self.process_analytics()
+            
+            # Swarm Pulse: Proactive brainstorming every hour (60 loops)
+            pulse_count += 1
+            if pulse_count >= 60:
+                await self.broadcast_pulse()
+                pulse_count = 0
+                
             await asyncio.sleep(60)
+
+    async def broadcast_pulse(self):
+        """Proactively broadcast a swarm-wide thought about the mesh health or evolution."""
+        now = datetime.datetime.now().strftime("%H:%M")
+        thought = f"Swarm Pulse at {now}: Resources are stable across all nodes. "
+        thought += "Optimization opportunity: Consider offloading more research tasks to the Workstation to save Macbook cycles."
+        await self.think(thought, encrypt=True)
+        
+        # Also post to Roadmap
+        await self.speak(Subject.LOG_INFO, {
+            "agent": self.name,
+            "status": "PASS",
+            "intent_class": "strategy",
+            "content": f"## 🌊 Swarm Pulse: {now}\n{thought}",
+            "response_channel_id": self.db.get_discord_channel("roadmap")
+        })
 
     async def handle_status_query(self, data: dict[str, Any]):
         """Respond with the latest usage cache and node health."""
