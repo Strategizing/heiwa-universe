@@ -25,36 +25,9 @@ load_swarm_env()
 from heiwa_hub.agents.base import BaseAgent
 from heiwa_protocol.protocol import Subject
 from heiwa_sdk.tool_mesh import ToolMesh
+from heiwa_sdk.routing import ModelRouter
 
 logger = logging.getLogger("WorkerManager")
-
-class RateLimiter:
-    """Tracks local usage per model to enforce soft rate limits before dispatching."""
-    def __init__(self):
-        self.usage: dict[str, list[float]] = {} 
-        self.lock = asyncio.Lock()
-
-    async def check(self, model_id: str, rpm_limit: int = 30) -> bool:
-        async with self.lock:
-            now = time.time()
-            window = now - 60
-            self.usage[model_id] = [ts for ts in self.usage.get(model_id, []) if ts > window]
-            if len(self.usage[model_id]) >= rpm_limit:
-                return False
-            self.usage[model_id].append(now)
-            return True
-
-class ModelRouter:
-    """Smart model selection based on identity fallback list and rate limits."""
-    def __init__(self, limiter: RateLimiter):
-        self.limiter = limiter
-
-    async def select_best(self, models: list[str]) -> str | None:
-        for model in models:
-            limit = 1000 if "ollama" in model else 30
-            if await self.limiter.check(model, rpm_limit=limit):
-                return model
-        return None
 
 class WorkerManager(BaseAgent):
     """Enterprise-grade execution daemon supporting parallel tools and multi-node mesh."""
@@ -64,8 +37,7 @@ class WorkerManager(BaseAgent):
         self.root = ROOT
         self.node_id = os.getenv("HEIWA_NODE_ID", "macbook@heiwa-agile")
         self.node_type = os.getenv("HEIWA_NODE_TYPE", "mobile_node")
-        self.limiter = RateLimiter()
-        self.router = ModelRouter(self.limiter)
+        self.router = ModelRouter()
         self.mesh = ToolMesh(self.root)
         self.capabilities = {
             item.strip().lower()
@@ -96,21 +68,36 @@ class WorkerManager(BaseAgent):
 
             # Identity & Model Routing
             try:
+                # Determine Identity from Instruction
                 from heiwa_identity.selector import select_identity, load_profiles
                 profiles = load_profiles()
                 selection = select_identity(instruction, profiles)
-                selected = selection.get("selected", {})
+                identity_id = selection.get("selected", {}).get("id", "operator-general")
                 
                 # Check for "Cell" (Multi-Agent) Execution
-                cells = selected.get("cells", [])
+                cells = selection.get("selected", {}).get("cells", [])
                 if cells:
                     await self.execute_cell(task_id, cells, instruction, payload)
-                    return # Cell execution handles its own result emitting
+                    return 
 
-                models = selected.get("models", {}).get("openclaw", [])
-                selected_model = await self.router.select_best(models)
+                # Route to best instance via SDK
+                instance = self.router.route(instruction, identity_id)
+                if not instance:
+                    logger.warning(f"No routable instance for {task_id}")
+                    return
+
+                # Establish True Mesh: Only execute if this node is the intended host
+                host_node = instance.get("host_node", "any")
+                if host_node not in {self.node_id, "any", "all", "railway@mesh-brain"}:
+                    # If this is a cloud-routed task and we are on Railway, proceed.
+                    # Otherwise, if we are a worker and it's not for us, skip.
+                    if not (host_node.startswith("railway") and self.node_id.startswith("railway")):
+                        logger.info(f"⏭️ Skipping task {task_id} (intended for {host_node})")
+                        return
+
+                selected_model = instance.get("model_id")
             except Exception as e:
-                logger.warning(f"Identity resolution failed: {e}")
+                logger.warning(f"Routing failed: {e}")
                 selected_model = None
 
             await self.think(f"Executing {tool} instance for task {task_id}", task_id=task_id)

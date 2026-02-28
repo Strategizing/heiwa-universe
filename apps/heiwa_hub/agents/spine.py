@@ -5,6 +5,7 @@ import time
 from typing import Dict
 from heiwa_hub.agents.base import BaseAgent
 from heiwa_protocol.protocol import Subject, Payload
+from heiwa_hub.cognition.planner import LocalTaskPlanner
 
 logger = logging.getLogger("Spine")
 
@@ -13,6 +14,7 @@ class SpineAgent(BaseAgent):
         super().__init__(name="heiwa-spine")
         # Registry: { "node_uuid": last_seen_timestamp }
         self.fleet_registry: Dict[str, float] = {}
+        self.planner = LocalTaskPlanner()
 
     async def run(self):
         try:
@@ -73,6 +75,21 @@ class SpineAgent(BaseAgent):
 
         payload = data.get("data", data)
         task_id = payload.get("task_id", f"task-{int(time.time())}")
+        
+        # --- AUTO-PLANNING FOR RAW REQUESTS ---
+        if not payload.get("steps") and payload.get("raw_text"):
+            logger.info(f"🔮 Planning raw request for task {task_id}...")
+            task_plan = self.planner.plan(
+                task_id=task_id,
+                raw_text=payload.get("raw_text"),
+                requested_by=data.get("sender_id", "unknown"),
+                source_channel_id=payload.get("source", "cli"),
+                source_message_id=task_id,
+                response_channel_id=payload.get("response_channel_id", "cli"),
+                response_thread_id=None
+            )
+            payload = task_plan.to_dict()
+
         intent = payload.get("intent_class", "unknown")
 
         logger.info(f"📥 Received Task Envelope: {intent} (Task: {task_id})")
