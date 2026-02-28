@@ -140,34 +140,12 @@ class SpineAgent(BaseAgent):
             logger.warning("⚠️ Cannot dispatch %s; NATS unavailable", task_id)
             return
 
-        allowed_exec_subjects = {
-            Subject.TASK_EXEC_REQUEST_CODE.value,
-            Subject.TASK_EXEC_REQUEST_RESEARCH.value,
-            Subject.TASK_EXEC_REQUEST_AUTOMATION.value,
-            Subject.TASK_EXEC_REQUEST_OPERATE.value,
-        }
-
         for step in steps:
             if not isinstance(step, dict):
                 continue
-            step_subject = str(step.get("subject", "")).strip()
+            step_subject = str(step.get("subject", Subject.TASK_EXEC.value)).strip()
             step_id = str(step.get("step_id", "unknown"))
-            if step_subject not in allowed_exec_subjects:
-                logger.warning("⚠️ Invalid exec subject for %s/%s: %s", task_id, step_id, step_subject)
-                await self.speak(
-                    Subject.TASK_STATUS,
-                    {
-                        "task_id": task_id,
-                        "step_id": step_id,
-                        "status": "BLOCKED",
-                        "message": f"Invalid exec subject: {step_subject or 'missing'}",
-                        "runtime": "spine",
-                        "response_channel_id": payload.get("response_channel_id"),
-                        "response_thread_id": payload.get("response_thread_id"),
-                    },
-                )
-                continue
-
+            
             exec_payload = {
                 "task_id": task_id,
                 "plan_id": payload.get("plan_id"),
@@ -191,8 +169,9 @@ class SpineAgent(BaseAgent):
                 Payload.TYPE: "TASK_EXEC_DISPATCH",
                 Payload.DATA: exec_payload,
             }
-            await self.nc.publish(step_subject, json.dumps(wrapped).encode())
-            logger.info("📤 Dispatched %s/%s to %s", task_id, step_id, step_subject)
+            # Use Subject.TASK_EXEC by default for SOTA v3.1
+            await self.nc.publish(Subject.TASK_EXEC.value, json.dumps(wrapped).encode())
+            logger.info("📤 Dispatched %s/%s to %s", task_id, step_id, Subject.TASK_EXEC.value)
 
             await self.speak(
                 Subject.TASK_STATUS,

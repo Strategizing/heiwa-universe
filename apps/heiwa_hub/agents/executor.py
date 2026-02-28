@@ -37,11 +37,12 @@ class ExecutorAgent(BaseAgent):
         """Boot the executor and start listening for work."""
         await self.connect()
         
-        # Listen to all execution variants
+        # Unified Execution Subject for SOTA v3.1
+        await self.listen(Subject.TASK_EXEC, self._handle_exec)
+        
+        # Keep legacy listeners for backward compatibility during transition
         await self.listen(Subject.TASK_EXEC_REQUEST_CODE, self._handle_exec)
         await self.listen(Subject.TASK_EXEC_REQUEST_RESEARCH, self._handle_exec)
-        await self.listen(Subject.TASK_EXEC_REQUEST_AUTOMATION, self._handle_exec)
-        await self.listen(Subject.TASK_EXEC_REQUEST_OPERATE, self._handle_exec)
         
         logger.info(f"🦾 Executor Active ({self.executor_runtime}). Awaiting directives...")
         
