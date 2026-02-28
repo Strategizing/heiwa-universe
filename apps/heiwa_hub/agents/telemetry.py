@@ -30,6 +30,8 @@ class TelemetryAgent(BaseAgent):
         await self.listen(Subject.TASK_EXEC_RESULT, self.handle_exec_result)
         await self.listen(Subject.TASK_STATUS, self.handle_status)
         await self.listen(Subject.SWARM_STATUS_QUERY, self.handle_status_query)
+        await self.listen(Subject.NODE_HEARTBEAT, self.handle_node_heartbeat)
+        await self.listen(Subject.NODE_TELEMETRY, self.handle_node_heartbeat)
         
         logger.info("📊 Telemetry Agent Active. Monitoring Swarm Usage...")
 
@@ -111,6 +113,28 @@ class TelemetryAgent(BaseAgent):
         self.db.record_run(run_data)
         
         logger.info(f"📈 Logged Usage: model={model_id} node={node_id} tokens={tokens.get('total')} cost=${cost}")
+
+    async def handle_node_heartbeat(self, data: dict[str, Any]):
+        """Persist node liveness and stats to the database."""
+        payload = self._unwrap(data)
+        node_id = payload.get("node_id") or payload.get("sender_id")
+        
+        if not node_id:
+            return
+
+        # Prepare metadata for the upsert
+        meta = {
+            "cpu_pct": payload.get("cpu_pct", 0),
+            "ram_pct": payload.get("ram_pct", 0),
+            "ram_used_gb": payload.get("ram_used_gb", 0),
+            "ram_total_gb": payload.get("ram_total_gb", 0),
+            "agent_name": payload.get("agent_name", "unknown")
+        }
+        
+        self.db.upsert_node_heartbeat(
+            node_id=node_id,
+            meta=meta
+        )
 
     async def handle_status(self, data: dict[str, Any]):
         # Optional: track heartbeat/concurrency here

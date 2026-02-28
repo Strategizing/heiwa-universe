@@ -60,7 +60,7 @@ class BaseAgent(ABC):
                     await asyncio.sleep(retry_delay)
 
     async def _telemetry_heartbeat(self):
-        """Proactively broadcast node resource usage every 30 seconds."""
+        """Proactively broadcast node resource usage and liveness every 30 seconds."""
         import psutil
         while self.running and self.nc:
             try:
@@ -71,8 +71,11 @@ class BaseAgent(ABC):
                     "ram_pct": psutil.virtual_memory().percent,
                     "ram_used_gb": round(psutil.virtual_memory().used / (1024**3), 2),
                     "ram_total_gb": round(psutil.virtual_memory().total / (1024**3), 2),
-                    "timestamp": time.time()
+                    "timestamp": time.time(),
+                    "status": "ONLINE"
                 }
+                # Broadcast to both subjects for compatibility or pick one standard
+                await self.speak(Subject.NODE_HEARTBEAT, stats)
                 await self.speak(Subject.NODE_TELEMETRY, stats)
             except Exception as e:
                 logger.debug(f"Telemetry heartbeat failed for {self.name}: {e}")

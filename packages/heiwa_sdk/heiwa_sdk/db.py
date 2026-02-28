@@ -1130,7 +1130,7 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
         cutoff = (
-            datetime.datetime.now(datetime.timezone.utc)
+            datetime.datetime.now()
             - datetime.timedelta(minutes=minutes)
         ).isoformat()
 
@@ -1138,7 +1138,7 @@ class Database:
             self._exec(
                 cursor,
                 """
-                SELECT model_id, COUNT(*) as request_count, SUM(tokens_total) as total_tokens
+                SELECT model_id, COUNT(*) as request_count, SUM(tokens_total) as total_tokens, SUM(cost) as total_cost
                 FROM runs
                 WHERE ended_at > ? AND model_id IS NOT NULL
                 GROUP BY model_id

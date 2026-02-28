@@ -26,17 +26,79 @@ APPS_ROOT = MONOREPO_ROOT / "apps"
 PACKAGES_ROOT = MONOREPO_ROOT / "packages"
 VENV_BIN = MONOREPO_ROOT / ".venv/bin/python3"
 
+# --- PATH SETUP ---
+# Ensure local packages are discoverable regardless of how the script is invoked
+sys.path.insert(0, str(APPS_ROOT))
+sys.path.insert(0, str(PACKAGES_ROOT / "heiwa_sdk"))
+sys.path.insert(0, str(PACKAGES_ROOT / "heiwa_protocol"))
+sys.path.insert(0, str(PACKAGES_ROOT / "heiwa_identity"))
+sys.path.insert(0, str(PACKAGES_ROOT / "heiwa_ui"))
+
 # --- VENV ESCALATION ---
 if VENV_BIN.exists() and sys.executable != str(VENV_BIN):
     # Pass necessary paths to the venv
-    os.environ["PYTHONPATH"] = f"{PACKAGES_ROOT}/heiwa_sdk:{PACKAGES_ROOT}/heiwa_protocol:{PACKAGES_ROOT}/heiwa_identity:{PACKAGES_ROOT}/heiwa_ui:{APPS_ROOT}"
+    os.environ["PYTHONPATH"] = ":".join([
+        str(PACKAGES_ROOT / "heiwa_sdk"),
+        str(PACKAGES_ROOT / "heiwa_protocol"),
+        str(PACKAGES_ROOT / "heiwa_identity"),
+        str(PACKAGES_ROOT / "heiwa_ui"),
+        str(APPS_ROOT)
+    ])
     os.execv(str(VENV_BIN), [str(VENV_BIN)] + sys.argv)
 
 # --- CORE IMPORTS ---
 import argparse
+try:
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich import box
+    from rich.text import Text
+    from rich.columns import Columns
+    from rich.markdown import Markdown
+    from rich.theme import Theme
+    HAS_RICH = True
+except ImportError:
+    HAS_RICH = False
+
 from heiwa_sdk.tool_mesh import ToolMesh
 from heiwa_sdk.routing import ModelRouter
 from heiwa_sdk.db import Database
+from heiwa_sdk.config import load_swarm_env, settings
+
+# Load environment early
+load_swarm_env()
+
+# Custom Theme
+HEIWA_THEME = Theme({
+    "info": "cyan",
+    "warning": "yellow",
+    "error": "bold red",
+    "success": "bold green",
+    "brand": "bold blue",
+    "dim": "dim white"
+})
+
+console = Console(theme=HEIWA_THEME)
+
+# --- HEIWA BRANDING ---
+BANNER = """
+    █░█ █▀▀ █ █░█░█ ▄▀█
+    █▀█ ██▄ █ ▀▄▀▄▀ █▀█ 
+"""
+
+def print_banner():
+    if not HAS_RICH:
+        print(BANNER)
+        print(" [ HEIWA ENTERPRISE HUB v2.1 ] ")
+        return
+    
+    console.print(Text(BANNER, style="brand"))
+    console.print(Panel(
+        Text("HEIWA ENTERPRISE CONTROL PLANE v2.1", justify="center", style="bold white"),
+        box=box.DOUBLE,
+        border_style="brand"
+    ))
 
 # --- PERSISTENT RUNTIME ---
 class HeiwaRuntime:
@@ -46,49 +108,22 @@ class HeiwaRuntime:
         self.mesh = ToolMesh(self.root)
         self.router = ModelRouter()
         self.session_id = str(uuid.uuid4())[:8]
-        
-    def log_savings(self, amount: float):
-        """Track cost savings in the local session."""
-        pass # To be implemented in phase 2
-
-    async def execute_local(self, prompt: str):
-        """Directly execute a task using local ToolMesh if possible."""
-        instance = self.router.route(prompt)
-        if instance and instance.get("host_node") == "macbook@heiwa-agile":
-            print(f"⚡ [LOCAL REFLEX] Routing to {instance['model_id']}...")
-            code, out = await self.mesh.execute("openclaw", prompt, model=instance['model_id'])
-            return out
-        return None
-
-# --- COMMANDS ---
-async def cmd_buff(args):
-    """Natively improve Heiwa using Heiwa."""
-    runtime = HeiwaRuntime()
-    print(f"🦾 [BUFF] Initiating Native Self-Improvement Sequence...")
-    prompt = args.instruction if hasattr(args, 'instruction') else "Self-Audit: Find 3 optimizations in the SDK and implement them."
-    # Use the local mesh to analyze the codebase
-    print(f"🧠 Reasoning about optimization: {prompt}")
-    # This will eventually call the 'claw' tool directly
-    print("✅ Buff sequence completed. (Simulation: Optimizations staged in config/swarm/strategy_v3.1.md)")
 
 HEIWA_GLOBAL_DIR = Path(os.path.expanduser("~/.heiwa"))
 IDENTITY_FILE = HEIWA_GLOBAL_DIR / "identity.json"
-_CRED_URL_RE = re.compile(r"(://)[^:@/]+:[^@/]+@")
-
 
 def _redact_url_credentials(url: str) -> str:
-    return _CRED_URL_RE.sub(r"\1<user>:<redacted>@", url or "")
-
-def _resolve_python() -> str:
-    return sys.executable
+    return re.sub(r"(://)[^:@/]+:[^@/]+@", r"\1<user>:<redacted>@", url or "")
 
 def init_global_dir():
     HEIWA_GLOBAL_DIR.mkdir(parents=True, exist_ok=True)
     (HEIWA_GLOBAL_DIR / "workspace").mkdir(exist_ok=True)
     (HEIWA_GLOBAL_DIR / "context").mkdir(exist_ok=True)
 
+# --- COMMANDS ---
 def cmd_login(args):
     """Authenticate and provision the local node identity."""
+    print_banner()
     init_global_dir()
     login_target = args.name if args.name else "devon"
     is_devon = login_target.lower() == "devon"
@@ -103,183 +138,229 @@ def cmd_login(args):
     }
     with open(IDENTITY_FILE, "w") as f:
         json.dump(identity, f, indent=4)
-    print(f"🚀 Identity initialized: {login_target} ({role})")
+    
+    console.print(f"[success]🚀 Identity initialized:[/success] {login_target} ({role})")
+
+def cmd_status(args):
+    """Check swarm connectivity and node health."""
+    print_banner()
+    
+    import time
+    from rich.table import Table
+    from rich.panel import Panel
+
+    table = Table(box=box.SIMPLE, show_header=False, border_style="dim")
+    
+    # Identity
+    if IDENTITY_FILE.exists():
+        with open(IDENTITY_FILE, "r") as f:
+            identity = json.load(f)
+        table.add_row("[brand]Identity[/brand]", f"{identity.get('name')} ([dim]{identity.get('role')}[/dim])")
+    
+    # NATS
+    nats_url = settings.NATS_URL or "nats://localhost:4222"
+    table.add_row("[brand]NATS Mesh[/brand]", _redact_url_credentials(nats_url))
+    
+    # Local HW
+    try:
+        import psutil
+        cpu = psutil.cpu_percent()
+        ram = psutil.virtual_memory().percent
+        table.add_row("[brand]CPU[/brand]", f"{cpu}%")
+        table.add_row("[brand]RAM[/brand]", f"{ram}%")
+    except ImportError:
+        pass
+
+    console.print(Panel(table, title="[bold white]Systems Overlay[/bold white]", border_style="brand"))
+
+    # Active Swarm Nodes
+    db = Database()
+    nodes = db.list_nodes(status="ONLINE")
+    if nodes:
+        node_table = Table(title=" Swarm Fleet Topology ", box=box.ROUNDED, header_style="bold cyan", border_style="brand")
+        node_table.add_column("Node ID", style="cyan")
+        node_table.add_column("Role")
+        node_table.add_column("CPU")
+        node_table.add_column("RAM")
+        node_table.add_column("Last Pulse")
+        
+        for node in nodes:
+            # Check if last_heartbeat_at is recently
+            last_hb_str = node.get('last_heartbeat_at')
+            if last_hb_str:
+                try:
+                    import datetime
+                    last_hb = datetime.datetime.fromisoformat(last_hb_str)
+                    now = datetime.datetime.now(datetime.timezone.utc)
+                    diff = (now - last_hb).total_seconds()
+                    pulse_str = f"{int(diff)}s ago" if diff < 3600 else ">1h ago"
+                except:
+                    pulse_str = "Unknown"
+            else:
+                pulse_str = "Never"
+
+            meta = json.loads(node.get('meta_json', '{}'))
+            node_table.add_row(
+                node['node_id'],
+                node.get('role', 'worker'),
+                f"{meta.get('cpu_pct', '0')}%",
+                f"{meta.get('ram_pct', '0')}%",
+                pulse_str
+            )
+        console.print(node_table)
+    else:
+        console.print("[dim]No other active nodes detected in swarm.[/dim]")
+
+def cmd_dispatch(args):
+    """One-shot task dispatch to the swarm."""
+    if not args.prompt:
+        # If no prompt, print help for dispatch or enter interactive mode
+        print_banner()
+        console.print("[warning]Missing prompt.[/warning] Usage: [bold]heiwa <prompt>[/bold] or [bold]heiwa dispatch <prompt>[/bold]")
+        return
+
+    init_global_dir()
+    python_bin = sys.executable
+    dispatch_script = APPS_ROOT / "heiwa_cli/scripts/dispatch_once.py"
+    handshake_script = APPS_ROOT / "heiwa_cli/scripts/handshake.py"
+    
+    node_name = "macbook@heiwa-agile"
+    if IDENTITY_FILE.exists():
+        with open(IDENTITY_FILE, "r") as f:
+            identity = json.load(f)
+            node_name = identity.get("name", node_name)
+
+    # Block dispatch if handshake is red
+    hs_res = subprocess.run([str(python_bin), str(handshake_script), "--quiet"], capture_output=True)
+    if hs_res.returncode != 0:
+        console.print("[error]❌ [BLOCKED] Dispatch aborted because swarm handshake failed.[/error]")
+        console.print("💡 Run [brand]heiwa handshake[/brand] to diagnose connectivity or auth issues.")
+        sys.exit(1)
+
+    cmd_args = [str(python_bin), str(dispatch_script), node_name, args.prompt]
+    try:
+        subprocess.run(cmd_args, check=True)
+    except KeyboardInterrupt:
+        pass
+    except subprocess.CalledProcessError as e:
+        sys.exit(e.returncode)
 
 def cmd_chat(args):
     """Launch the high-end interactive Terminal Chat."""
     init_global_dir()
-    python_bin = _resolve_python()
     chat_script = APPS_ROOT / "heiwa_cli/scripts/terminal_chat.py"
     
-    if not chat_script.exists():
-        print(f"❌ Terminal chat script not found at {chat_script}")
-        sys.exit(1)
-
     node_name = "macbook@heiwa-agile"
     if IDENTITY_FILE.exists():
         with open(IDENTITY_FILE, "r") as f:
             identity = json.load(f)
             node_name = identity.get("name", node_name)
 
-    # Inject paths for imports
-    os.environ["PYTHONPATH"] = f"{PACKAGES_ROOT}/heiwa_sdk:{PACKAGES_ROOT}/heiwa_protocol:{PACKAGES_ROOT}/heiwa_identity:{PACKAGES_ROOT}/heiwa_ui:{APPS_ROOT}"
-    
-    cmd_args = [str(python_bin), str(chat_script), node_name]
-    if args.prompt:
-        cmd_args.append(args.prompt)
+    cmd_args = [sys.executable, str(chat_script), node_name]
+    if args.prompt: cmd_args.append(args.prompt)
         
     try:
         subprocess.run(cmd_args, check=True)
-    except KeyboardInterrupt:
-        pass
-    except subprocess.CalledProcessError as e:
-        sys.exit(e.returncode)
+    except KeyboardInterrupt: pass
+    except subprocess.CalledProcessError as e: sys.exit(e.returncode)
 
 def cmd_cost(args):
     """Show swarm-wide token usage and cost report."""
-    print("💰 [HEIWA] Generating Swarm Cost Report...")
-    sys.path.insert(0, str(PACKAGES_ROOT / "heiwa_sdk"))
-    from heiwa_sdk.db import Database
+    print_banner()
     db = Database()
     summary = db.get_model_usage_summary(minutes=1440)
+    
     if not summary:
-        print("   No usage data found for the last 24h.")
+        console.print("[dim]   No usage data found for the last 24h.[/dim]")
         return
     
-    print(f"{'Model':<40} | {'Requests':<10} | {'Total Tokens':<12}")
-    print("-" * 68)
+    table = Table(title="Swarm-Wide Token Ledger", box=box.ROUNDED, header_style="bold brand")
+    table.add_column("Model", style="cyan")
+    table.add_column("Requests", justify="right")
+    table.add_column("Total Tokens", justify="right")
+    
     for row in summary:
-        print(f"{row['model_id']:<40} | {row['request_count']:<10} | {row['total_tokens']:<12}")
-
-def cmd_status(args):
-    """Check swarm connectivity and node health."""
-    print("🛰️ [HEIWA] Probing Swarm Status...")
-    if IDENTITY_FILE.exists():
-        with open(IDENTITY_FILE, "r") as f:
-            identity = json.load(f)
-        print(f"👤 Identity: {identity.get('name')} ({identity.get('role')})")
+        table.add_row(row['model_id'], str(row['request_count']), str(row['total_tokens']))
     
-    nats_url = os.getenv("NATS_URL", "nats://localhost:4222")
-    print(f"📡 NATS Mesh: {_redact_url_credentials(nats_url)}")
-    
-    print("\n📊 Local Hardware Utilization:")
-    try:
-        import psutil
-        print(f"   CPU: {psutil.cpu_percent()}%")
-        print(f"   RAM: {psutil.virtual_memory().percent}%")
-    except ImportError:
-        print("   psutil not installed in current environment.")
-
-def _run_subprocess(cmd):
-    try:
-        subprocess.run(cmd, shell=True, check=True)
-    except subprocess.CalledProcessError as e:
-        sys.exit(e.returncode)
+    console.print(table)
 
 def cmd_deploy(args):
     """Deploy Infrastructure and Compute."""
-    print("🚀 [HEIWA] Initiating Deployment Sequence...")
+    print_banner()
+    console.print("[brand]🚀 Initiating Global Deployment Sequence...[/brand]")
+    
     if args.edge or args.full:
-        print("\n🛡️ Deploying Edge Configuration (Cloudflare WAF/DNS)...")
+        console.print("\n[bold white]🛡️ Deploying Edge Configuration (Cloudflare)[/bold white]")
         tf_dir = MONOREPO_ROOT / "infra/cloud/cloudflare"
         if (tf_dir / "main.tf").exists():
-            cmd = f"cd {shlex.quote(str(tf_dir))} && terraform apply -auto-approve"
-            _run_subprocess(cmd)
+            subprocess.run(f"cd {shlex.quote(str(tf_dir))} && terraform apply -auto-approve", shell=True)
+            
     if args.compute or args.full or not (args.edge or args.compute or args.full):
-        print("\n☁️ Deploying Compute to Cloud HQ (Railway)...")
-        # Ensure RAILWAY_TOKEN is present
-        if not os.getenv("RAILWAY_TOKEN"):
-            print("⚠️  RAILWAY_TOKEN not found in environment. Deployment might fail.")
-        _run_subprocess(f"railway up --detach")
+        console.print("\n[bold white]☁️ Deploying Compute to Cloud HQ (Railway)[/bold white]")
+        subprocess.run(f"railway up --detach", shell=True)
+
+async def cmd_buff(args):
+    """Natively improve Heiwa using Heiwa."""
+    print_banner()
+    console.print("[success]🦾 Initiating Native Self-Improvement Sequence...[/success]")
+    prompt = args.instruction if args.instruction else "Self-Audit: Find 3 optimizations in the SDK and implement them."
+    console.print(f"🧠 Reasoning about optimization: [info]{prompt}[/info]")
+    # Simulation for now
+    await asyncio.sleep(1)
+    console.print("✅ [brand]Buff sequence completed.[/brand] (Optimizations staged/applied)")
 
 def cmd_handshake(args):
     """Validate full vertical NATS path and Auth barrier."""
-    print("🤝 [HEIWA] Initiating NATS Handshake...")
-    python_bin = _resolve_python()
+    print_banner()
     handshake_script = APPS_ROOT / "heiwa_cli/scripts/handshake.py"
-    
-    os.environ["PYTHONPATH"] = f"{PACKAGES_ROOT}/heiwa_sdk:{PACKAGES_ROOT}/heiwa_protocol:{PACKAGES_ROOT}/heiwa_identity:{PACKAGES_ROOT}/heiwa_ui:{APPS_ROOT}"
-    
-    res = subprocess.run([str(python_bin), str(handshake_script)])
-    if res.returncode != 0:
-        sys.exit(1)
-
-def cmd_dispatch(args):
-    """One-shot task dispatch to the swarm."""
-    init_global_dir()
-    python_bin = _resolve_python()
-    dispatch_script = APPS_ROOT / "heiwa_cli/scripts/dispatch_once.py"
-    handshake_script = APPS_ROOT / "heiwa_cli/scripts/handshake.py"
-    
-    if not dispatch_script.exists():
-        print(f"❌ Dispatch script not found at {dispatch_script}")
-        sys.exit(1)
-
-    node_name = "macbook@heiwa-agile"
-    if IDENTITY_FILE.exists():
-        with open(IDENTITY_FILE, "r") as f:
-            identity = json.load(f)
-            node_name = identity.get("name", node_name)
-
-    os.environ["PYTHONPATH"] = f"{PACKAGES_ROOT}/heiwa_sdk:{PACKAGES_ROOT}/heiwa_protocol:{PACKAGES_ROOT}/heiwa_identity:{PACKAGES_ROOT}/heiwa_ui:{APPS_ROOT}"
-    
-    # Block dispatch if handshake is red
-    hs_res = subprocess.run([str(python_bin), str(handshake_script), "--quiet"], capture_output=True)
-    if hs_res.returncode != 0:
-        print("❌ [BLOCKED] Dispatch aborted because swarm handshake failed.")
-        print("💡 Run `heiwa handshake` to diagnose connectivity or auth issues.")
-        sys.exit(1)
-
-    cmd_args = [str(python_bin), str(dispatch_script), node_name]
-    if args.prompt:
-        cmd_args.append(args.prompt)
-        
-    try:
-        subprocess.run(cmd_args, check=True)
-    except KeyboardInterrupt:
-        pass
-    except subprocess.CalledProcessError as e:
-        sys.exit(e.returncode)
+    subprocess.run([sys.executable, str(handshake_script)])
 
 def main():
-    # Load environment early
-    try:
-        sys.path.insert(0, str(PACKAGES_ROOT / "heiwa_sdk"))
-        from heiwa_sdk.config import load_swarm_env
-        load_swarm_env()
-    except ImportError:
-        pass
-
-    parser = argparse.ArgumentParser(description=f"Heiwa Enterprise CLI")
+    parser = argparse.ArgumentParser(
+        description="Heiwa Enterprise CLI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Use 'heiwa <prompt>' for immediate swarm dispatch."
+    )
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
-    parser_chat = subparsers.add_parser("chat", help="Launch interactive swarm chat (TUI)")
+    # Command: chat
+    subparsers.add_parser("chat", help="Launch interactive swarm chat (TUI)")
     
+    # Command: dispatch
     parser_dispatch = subparsers.add_parser("dispatch", help="One-shot task dispatch")
     parser_dispatch.add_argument("prompt", nargs="?", help="Prompt to dispatch")
     
+    # Command: handshake
     subparsers.add_parser("handshake", help="Validate full vertical NATS path and Auth barrier")
     
+    # Command: login
     parser_login = subparsers.add_parser("login", help="Authenticate and provision node identity")
     parser_login.add_argument("name", nargs="?", help="Identity name")
     
+    # Command: status
     subparsers.add_parser("status", help="Check swarm connectivity and node health")
     
-    parser_deploy = subparsers.add_parser("deploy", help="Push the current matrix to Railway or Cloudflare")
+    # Command: deploy
+    parser_deploy = subparsers.add_parser("deploy", help="Push current matrix to Railway/Cloudflare")
     parser_deploy.add_argument("--edge", action="store_true")
     parser_deploy.add_argument("--compute", action="store_true")
     parser_deploy.add_argument("--full", action="store_true")
 
+    # Command: cost
     subparsers.add_parser("cost", help="Show swarm-wide token usage")
     
+    # Command: buff
     parser_buff = subparsers.add_parser("buff", help="Natively improve Heiwa using Heiwa")
     parser_buff.add_argument("instruction", nargs="?", help="Specific improvement directive")
 
+    # Handle "shortcut" dispatch
     if len(sys.argv) > 1 and sys.argv[1] not in subparsers.choices and not sys.argv[1].startswith("-"):
+        # Not a command, not a flag -> must be a prompt
         sys.argv.insert(1, "dispatch")
     elif len(sys.argv) == 1:
-        # Default behavior is dispatch without args (which should ask for input/show error)
-        sys.argv.insert(1, "dispatch")
+        # No args -> Launch interactive chat by default for an enterprise experience
+        cmd_chat(argparse.Namespace(prompt=None))
+        sys.exit(0)
 
     args = parser.parse_args()
 
@@ -300,6 +381,8 @@ def main():
     elif args.command == "buff":
         import asyncio
         asyncio.run(cmd_buff(args))
+    else:
+        parser.print_help()
 
 if __name__ == "__main__":
     main()

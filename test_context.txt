@@ -1,0 +1,2 @@
+This is a test context file for Heiwa CLI.
+It contains important system information.
