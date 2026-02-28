@@ -2,7 +2,7 @@ import asyncio
 import os
 import json
 from datetime import datetime, timezone
-from heiwa_hub.config import Config
+from heiwa_sdk.config import settings as Config
 from heiwa_hub.dispatch import Dispatcher
 from heiwa_sdk.notifier import send_notification
 

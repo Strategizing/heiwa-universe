@@ -2,7 +2,11 @@ import os
 import json
 from datetime import datetime, timezone, timedelta
 
-from heiwa_hub.config import IDENTITY, TAILSCALE_IP
+from heiwa_identity.node import load_node_identity, get_tailscale_ip
+from heiwa_protocol.protocol import Subject, Payload
+
+IDENTITY = load_node_identity()
+TAILSCALE_IP = get_tailscale_ip()
 from heiwa_sdk.db import Database
 
 class Dispatcher:

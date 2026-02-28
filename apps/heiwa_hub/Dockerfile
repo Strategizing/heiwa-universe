@@ -26,7 +26,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH" \
     LOG_LEVEL="INFO" \
-    PYTHONPATH="/app/packages:/app/packages/heiwa_sdk:/app/apps"
+    PYTHONPATH="/app/packages/heiwa_sdk:/app/packages/heiwa_protocol:/app/packages/heiwa_identity:/app/packages/heiwa_ui:/app/apps"
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -60,7 +60,7 @@ RUN chmod +x /app/start.sh
 RUN echo '{"uuid": "heiwa-cloud-hq", "role": "orchestrator", "capabilities": ["routing", "discord"]}' > identity.json
 
 # Expose ports
-EXPOSE 8080 4222
+EXPOSE 8080 4222 8000
 
 # Entrypoint
 CMD ["bash", "/app/start.sh"]

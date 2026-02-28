@@ -203,5 +203,5 @@ fi
 
 echo "[HEIWA] Launching Core Collective..."
 cd /app || exit 1
-export PYTHONPATH=$PYTHONPATH:/app/packages:/app/packages/heiwa_sdk:/app/apps
+export PYTHONPATH=$PYTHONPATH:/app/packages/heiwa_sdk:/app/packages/heiwa_protocol:/app/packages/heiwa_identity:/app/packages/heiwa_ui:/app/apps
 exec python -m apps.heiwa_hub.main

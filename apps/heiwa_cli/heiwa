@@ -1,32 +1,45 @@
 #!/usr/bin/env python3
 import os
 import sys
-from pathlib import Path
-
-# --- VENV DISCOVERY (Must be first) ---
-MONOREPO_ROOT = Path(__file__).resolve().parents[2]
-VENV_BIN = MONOREPO_ROOT / ".venv/bin/python3"
-APPS_ROOT = MONOREPO_ROOT / "apps"
-PACKAGES_ROOT = MONOREPO_ROOT / "packages"
-
-if VENV_BIN.exists() and sys.executable != str(VENV_BIN):
-    os.environ["PYTHONPATH"] = f"{PACKAGES_ROOT}/heiwa_sdk:{PACKAGES_ROOT}/heiwa_protocol:{APPS_ROOT}"
-    os.execv(str(VENV_BIN), [str(VENV_BIN)] + sys.argv)
-
-# --- IMPORTS (After Venv) ---
-import argparse
 import json
 import uuid
 import subprocess
 import shlex
+from pathlib import Path
 
-# Load Environment
+# --- SOTA ROOT DISCOVERY ---
+def find_monorepo_root(start_path: Path) -> Path:
+    """Recursively search for the monorepo root containing 'apps' and 'packages'."""
+    current = start_path.resolve()
+    for _ in range(5): # Limit depth
+        if (current / "apps").exists() and (current / "packages").exists():
+            return current
+        if current.parent == current:
+            break
+        current = current.parent
+    # Fallback to hardcoded path if discovery fails
+    return Path("/Users/dmcgregsauce/heiwa")
+
+MONOREPO_ROOT = find_monorepo_root(Path(__file__).resolve().parent)
+APPS_ROOT = MONOREPO_ROOT / "apps"
+PACKAGES_ROOT = MONOREPO_ROOT / "packages"
+VENV_BIN = MONOREPO_ROOT / ".venv/bin/python3"
+
+# --- VENV ESCALATION ---
+if VENV_BIN.exists() and sys.executable != str(VENV_BIN):
+    # Pass necessary paths to the venv
+    os.environ["PYTHONPATH"] = f"{PACKAGES_ROOT}/heiwa_sdk:{PACKAGES_ROOT}/heiwa_protocol:{PACKAGES_ROOT}/heiwa_identity:{PACKAGES_ROOT}/heiwa_ui:{APPS_ROOT}"
+    os.execv(str(VENV_BIN), [str(VENV_BIN)] + sys.argv)
+
+# --- CORE IMPORTS ---
+import argparse
+
+# Load SOTA Environment via SDK
 try:
     sys.path.insert(0, str(PACKAGES_ROOT / "heiwa_sdk"))
     from heiwa_sdk.config import load_swarm_env
     load_swarm_env()
 except ImportError:
-    # Basic fallback if venv somehow failed to provide dotenv
     pass
 
 HEIWA_GLOBAL_DIR = Path(os.path.expanduser("~/.heiwa"))
@@ -75,13 +88,12 @@ def cmd_chat(args):
             node_name = identity.get("name", node_name)
 
     # Inject paths for imports
-    os.environ["PYTHONPATH"] = f"{PACKAGES_ROOT}/heiwa_sdk:{PACKAGES_ROOT}/heiwa_protocol:{APPS_ROOT}"
+    os.environ["PYTHONPATH"] = f"{PACKAGES_ROOT}/heiwa_sdk:{PACKAGES_ROOT}/heiwa_protocol:{PACKAGES_ROOT}/heiwa_identity:{PACKAGES_ROOT}/heiwa_ui:{APPS_ROOT}"
     os.execv(python_bin, [python_bin, str(chat_script), node_name])
 
 def cmd_cost(args):
     """Show swarm-wide token usage and cost report."""
     print("💰 [HEIWA] Generating Swarm Cost Report...")
-    # Path Hack for SDK
     sys.path.insert(0, str(PACKAGES_ROOT / "heiwa_sdk"))
     from heiwa_sdk.db import Database
     db = Database()
@@ -107,9 +119,12 @@ def cmd_status(args):
     print(f"📡 NATS Mesh: {nats_url}")
     
     print("\n📊 Local Hardware Utilization:")
-    import psutil
-    print(f"   CPU: {psutil.cpu_percent()}%")
-    print(f"   RAM: {psutil.virtual_memory().percent}%")
+    try:
+        import psutil
+        print(f"   CPU: {psutil.cpu_percent()}%")
+        print(f"   RAM: {psutil.virtual_memory().percent}%")
+    except ImportError:
+        print("   psutil not installed in current environment.")
 
 def _run_subprocess(cmd):
     try:
@@ -128,6 +143,9 @@ def cmd_deploy(args):
             _run_subprocess(cmd)
     if args.compute or args.full or not (args.edge or args.compute or args.full):
         print("\n☁️ Deploying Compute to Cloud HQ (Railway)...")
+        # Ensure RAILWAY_TOKEN is present
+        if not os.getenv("RAILWAY_TOKEN"):
+            print("⚠️  RAILWAY_TOKEN not found in environment. Deployment might fail.")
         _run_subprocess(f"railway up --detach")
 
 def main():

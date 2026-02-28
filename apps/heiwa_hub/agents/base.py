@@ -8,8 +8,10 @@ from typing import Any, Dict, Optional
 import nats
 from nats.aio.client import Client as NATSClient
 
-from heiwa_hub.config import IDENTITY
+from heiwa_identity.node import load_node_identity
 from heiwa_protocol.protocol import Subject, Payload
+
+IDENTITY = load_node_identity()
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
