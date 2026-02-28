@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 9,
   "default_identity": "operator-general",
   "identities": [
     {
@@ -12,6 +12,7 @@
           "ollama/qwen2.5-coder:7b",
           "google/gemini-2.5-flash",
           "cerebras/gpt-oss-120b",
+          "openrouter/qwen/qwen3-coder:free",
           "groq/llama-3.3-70b-versatile"
         ]
       },
@@ -28,6 +29,7 @@
       "models": {
         "openclaw": [
           "groq/llama-3.3-70b-versatile",
+          "openrouter/qwen/qwen3-coder:free",
           "google/gemini-1.5-pro",
           "openai-codex/gpt-5.2-codex",
           "google-antigravity/claude-opus-4-5-thinking"
@@ -46,8 +48,9 @@
       "models": {
         "openclaw": [
           "ollama/deepseek-r1:14b",
+          "openrouter/qwen/qwen3-vl-30b-a3b-thinking",
+          "openrouter/nousresearch/hermes-3-llama-3.1-405b:free",
           "groq/deepseek-r1-distill-llama-70b",
-          "openrouter/qwen/qwen2.5-72b-instruct:free",
           "cerebras/gpt-oss-120b"
         ]
       },
@@ -64,8 +67,9 @@
       "models": {
         "openclaw": [
           "google/gemini-2.5-flash",
+          "openrouter/meta-llama/llama-3.3-70b-instruct:free",
           "openrouter/google/gemini-2.0-flash:free",
-          "openrouter/mistral/mistral-small-24b-it-free",
+          "openrouter/mistralai/mistral-small-3.1-24b-instruct:free",
           "groq/llama-3.3-70b-versatile"
         ]
       },

@@ -139,6 +139,11 @@ start_nats() {
 }
 
 start_openclaw_gateway() {
+    # Ensure OpenClaw auth is synced with vault
+    local py_bin
+    py_bin=$(choose_python)
+    "$py_bin" "$ROOT/node/cli/scripts/ops/sync_openclaw_auth.py" || true
+
     if ! command -v openclaw >/dev/null 2>&1; then
         echo "[WARN] openclaw not installed; skipping gateway"
         return

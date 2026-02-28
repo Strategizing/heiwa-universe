@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "instances": [
     {
       "model_id": "ollama/deepseek-r1:14b",
@@ -44,21 +44,28 @@
       "cost_tier": "free_api"
     },
     {
-      "model_id": "openrouter/google/gemini-2.0-flash:free",
+      "model_id": "openrouter/qwen/qwen3-vl-30b-a3b-thinking",
+      "host_node": "railway@mesh-brain",
+      "role": "heavy-reasoner",
+      "capability": "heavy_compute",
+      "cost_tier": "free_api"
+    },
+    {
+      "model_id": "openrouter/qwen/qwen3-coder:free",
+      "host_node": "railway@mesh-brain",
+      "role": "architect-strategist",
+      "capability": "agile_coding",
+      "cost_tier": "free_api"
+    },
+    {
+      "model_id": "openrouter/meta-llama/llama-3.3-70b-instruct:free",
       "host_node": "railway@mesh-brain",
       "role": "research-scout",
       "capability": "research",
       "cost_tier": "free_api"
     },
     {
-      "model_id": "openrouter/mistral/mistral-small-24b-it-free",
-      "host_node": "railway@mesh-brain",
-      "role": "research-scout",
-      "capability": "research",
-      "cost_tier": "free_api"
-    },
-    {
-      "model_id": "openrouter/qwen/qwen2.5-72b-instruct:free",
+      "model_id": "openrouter/nousresearch/hermes-3-llama-3.1-405b:free",
       "host_node": "railway@mesh-brain",
       "role": "heavy-reasoner",
       "capability": "heavy_compute",
