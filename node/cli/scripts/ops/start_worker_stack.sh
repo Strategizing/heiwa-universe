@@ -48,6 +48,10 @@ load_env_file() {
     done <"$file"
 }
 
+if [[ -f "$HOME/.heiwa/vault.env" ]]; then
+    load_env_file "$HOME/.heiwa/vault.env"
+fi
+
 if [[ -f "$ROOT/.env.worker.local" ]]; then
     load_env_file "$ROOT/.env.worker.local"
 elif [[ -f "$ROOT/.env.worker" ]]; then

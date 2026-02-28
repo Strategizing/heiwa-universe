@@ -14,6 +14,10 @@ if command -v snap &>/dev/null; then
     sudo rm -rf /snap /var/snap /var/lib/snapd
 fi
 
+# 1.5 Update and install basic dependencies
+sudo apt-get update
+sudo apt-get install -y python3-pip python3-venv nodejs git tailscale screen
+
 # 2. Update and install core dependencies
 sudo apt-get update
 sudo apt-get install -y curl ca-certificates gnupg git screen tailscale
