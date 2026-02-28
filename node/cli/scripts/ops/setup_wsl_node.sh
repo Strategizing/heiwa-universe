@@ -25,6 +25,19 @@ if ! command -v openclaw &>/dev/null; then
     sudo npm install -g @openclaw/cli || echo "⚠️  Global npm install failed, try local install later."
 fi
 
+# 3.5 Setup Ollama & Models
+if ! command -v ollama &>/dev/null; then
+    echo "🧠 Installing Ollama..."
+    curl -fsSL https://ollama.com/install.sh | sh
+fi
+
+echo "📥 Pulling Heavy Reasoner models (this may take a while)..."
+# Start ollama temporarily to pull
+nohup ollama serve >/dev/null 2>&1 &
+sleep 5
+ollama pull deepseek-r1:14b
+ollama pull qwen2.5-coder:7b
+
 # 4. Persistence via systemd (if enabled)
 if [[ -d /run/systemd/system ]]; then
     echo "🔄 Configuring systemd service..."
