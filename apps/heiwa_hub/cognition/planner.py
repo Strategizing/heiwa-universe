@@ -175,6 +175,8 @@ class LocalTaskPlanner:
         instruction = profile.normalized_instruction
         steps: list[StepPlan] = []
 
+        from heiwa_protocol.protocol import Subject
+
         def next_step_id() -> str:
             nonlocal step_num
             step_num += 1
@@ -189,7 +191,7 @@ class LocalTaskPlanner:
                         "Create a concise execution brief and assumptions before execution.\n"
                         f"{instruction}"
                     ),
-                    subject="heiwa.tasks.exec.request.research",
+                    subject=Subject.TASK_EXEC.value,
                     target_runtime="railway",
                     target_tool="ollama",
                     target_tier="tier1_local",
@@ -206,7 +208,7 @@ class LocalTaskPlanner:
                     step_id=next_step_id(),
                     title="Gather and synthesize findings",
                     instruction=instruction,
-                    subject="heiwa.tasks.exec.request.research",
+                    subject=Subject.TASK_EXEC.value,
                     target_runtime="railway",
                     target_tool="openclaw",
                     target_tier=profile.preferred_tier,
@@ -222,7 +224,7 @@ class LocalTaskPlanner:
                     step_id=next_step_id(),
                     title="Implement code changes",
                     instruction=instruction,
-                    subject="heiwa.tasks.exec.request.code",
+                    subject=Subject.TASK_EXEC.value,
                     target_runtime=profile.preferred_runtime,
                     target_tool="codex",
                     target_tier=profile.preferred_tier,
@@ -237,7 +239,7 @@ class LocalTaskPlanner:
                     step_id=next_step_id(),
                     title="Run automation pipeline",
                     instruction=instruction,
-                    subject="heiwa.tasks.exec.request.automation",
+                    subject=Subject.TASK_EXEC.value,
                     target_runtime=profile.preferred_runtime,
                     target_tool="n8n",
                     target_tier=profile.preferred_tier,
@@ -252,7 +254,7 @@ class LocalTaskPlanner:
                     step_id=next_step_id(),
                     title="Execute controlled operation",
                     instruction=instruction,
-                    subject="heiwa.tasks.exec.request.operate",
+                    subject=Subject.TASK_EXEC.value,
                     target_runtime=profile.preferred_runtime,
                     target_tool="codex",
                     target_tier=profile.preferred_tier,
@@ -267,7 +269,7 @@ class LocalTaskPlanner:
                     step_id=next_step_id(),
                     title="Execute integration task",
                     instruction=instruction,
-                    subject="heiwa.tasks.exec.request.operate",
+                    subject=Subject.TASK_EXEC.value,
                     target_runtime="railway",
                     target_tool="ollama",
                     target_tier=profile.preferred_tier,
@@ -282,7 +284,7 @@ class LocalTaskPlanner:
                 step_id=next_step_id(),
                 title="General orchestration response",
                 instruction=instruction,
-                subject="heiwa.tasks.exec.request.research",
+                subject=Subject.TASK_EXEC.value,
                 target_runtime="railway",
                 target_tool="ollama",
                 target_tier=profile.preferred_tier,

@@ -117,20 +117,29 @@ class SpineAgent(BaseAgent):
 
         steps = payload.get("steps") or []
         if not isinstance(steps, list) or not steps:
-            await self.speak(
-                Subject.TASK_STATUS,
-                {
-                    "task_id": task_id,
-                    "step_id": "spine-orchestrator",
-                    "status": "BLOCKED",
-                    "message": "No executable steps present in task envelope.",
-                    "runtime": "spine",
-                    "response_channel_id": payload.get("response_channel_id"),
-                    "response_thread_id": payload.get("response_thread_id"),
-                },
-            )
-            logger.warning("⚠️ No steps to dispatch for task %s", task_id)
-            return
+            logger.warning(f"⚠️ No steps planned for task {task_id}. Creating fallback step.")
+            # Ensure we have at least one step to execute if raw_text exists
+            raw_text = payload.get("raw_text") or data.get("raw_text")
+            if raw_text:
+                steps = [{
+                    "step_id": "auto-reflex",
+                    "instruction": raw_text,
+                    "subject": Subject.TASK_EXEC.value,
+                    "target_runtime": "any",
+                    "target_tool": "ollama"
+                }]
+            else:
+                await self.speak(
+                    Subject.TASK_STATUS,
+                    {
+                        "task_id": task_id,
+                        "step_id": "spine-orchestrator",
+                        "status": "BLOCKED",
+                        "message": "No executable content found in task.",
+                        "runtime": "spine"
+                    },
+                )
+                return
 
         if not self.nc:
             await self.speak(
