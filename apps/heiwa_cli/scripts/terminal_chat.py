@@ -271,7 +271,7 @@ class HeiwaShell:
         await self.nc.publish(Subject.CORE_REQUEST.value, json.dumps(payload).encode())
         console.print(f"[bold yellow]▶ DISPATCHED:[/bold yellow] [dim]{task_id}[/dim]")
 
-    async def run(self):
+    async def run(self, initial_prompt: Optional[str] = None):
         console.clear()
         console.print(Align.center(Panel(
             Text.assemble(
@@ -287,6 +287,14 @@ class HeiwaShell:
                 console.print("[yellow]⚠️  Running in Offline Mode.[/yellow]")
             else:
                 console.print("[green]✅ Handshake Complete. Barrier Syncronized.[/green]")
+
+        if initial_prompt:
+            console.print(f"[bold magenta]▶ PROMPT DISPATCH:[/bold magenta] {initial_prompt}")
+            await self.send_task(initial_prompt)
+            # Short wait for any thoughts or early result
+            await asyncio.sleep(2)
+            self.running = False
+            return
 
         while self.running:
             try:
@@ -313,4 +321,5 @@ class HeiwaShell:
 
 if __name__ == "__main__":
     node_name = load_node_identity().get("name", "macbook-agile")
-    asyncio.run(HeiwaShell(node_name).run())
+    prompt = sys.argv[2] if len(sys.argv) > 2 else None
+    asyncio.run(HeiwaShell(node_name).run(initial_prompt=prompt))

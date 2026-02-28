@@ -33,6 +33,21 @@ class ExecutorAgent(BaseAgent):
         self.db = Database()
         self.engine = CognitionEngine(db=self.db)
 
+    async def run(self):
+        """Boot the executor and start listening for work."""
+        await self.connect()
+        
+        # Listen to all execution variants
+        await self.listen(Subject.TASK_EXEC_REQUEST_CODE, self._handle_exec)
+        await self.listen(Subject.TASK_EXEC_REQUEST_RESEARCH, self._handle_exec)
+        await self.listen(Subject.TASK_EXEC_REQUEST_AUTOMATION, self._handle_exec)
+        await self.listen(Subject.TASK_EXEC_REQUEST_OPERATE, self._handle_exec)
+        
+        logger.info(f"🦾 Executor Active ({self.executor_runtime}). Awaiting directives...")
+        
+        while self.running:
+            await asyncio.sleep(1)
+
     async def _handle_exec(self, data: dict[str, Any]) -> None:
         """Process a single execution request with reasoning and conscience."""
         payload = data.get("data", data)

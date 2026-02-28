@@ -95,7 +95,12 @@ def cmd_chat(args):
 
     # Inject paths for imports
     os.environ["PYTHONPATH"] = f"{PACKAGES_ROOT}/heiwa_sdk:{PACKAGES_ROOT}/heiwa_protocol:{PACKAGES_ROOT}/heiwa_identity:{PACKAGES_ROOT}/heiwa_ui:{APPS_ROOT}"
-    os.execv(python_bin, [python_bin, str(chat_script), node_name])
+    
+    cmd_args = [python_bin, str(chat_script), node_name]
+    if args.prompt:
+        cmd_args.append(args.prompt)
+        
+    os.execv(python_bin, cmd_args)
 
 def cmd_cost(args):
     """Show swarm-wide token usage and cost report."""
