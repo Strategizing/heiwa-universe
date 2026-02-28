@@ -1,4 +1,4 @@
-#!/Users/dmcgregsauce/heiwa/.venv/bin/python3
+#!/usr/bin/env python3
 import argparse
 import os
 import json
@@ -7,6 +7,13 @@ import subprocess
 import sys
 import shlex
 from pathlib import Path
+
+MONOREPO_ROOT = Path(__file__).resolve().parents[2]
+
+# Enterprise Venv Discovery
+VENV_BIN = MONOREPO_ROOT / ".venv/bin/python3"
+if VENV_BIN.exists() and sys.executable != str(VENV_BIN):
+    os.execv(str(VENV_BIN), [str(VENV_BIN)] + sys.argv)
 
 HEIWA_GLOBAL_DIR = Path(os.path.expanduser("~/.heiwa"))
 IDENTITY_FILE = HEIWA_GLOBAL_DIR / "identity.json"
@@ -67,7 +74,7 @@ def cmd_login(args):
         print(f"👋 Welcome back, {login_target}.")
 
 def cmd_chat(args):
-    """Launch the interactive Terminal Chat."""
+    """Launch the high-end interactive Terminal Chat."""
     init_global_dir()
     python_bin = _resolve_python()
     chat_script = NODE_ROOT / "cli/scripts/terminal_chat.py"
@@ -76,14 +83,15 @@ def cmd_chat(args):
         print("❌ Terminal chat script not found.")
         sys.exit(1)
 
-    node_name = "devon-cli"
+    node_name = "macbook@heiwa-agile"
     if IDENTITY_FILE.exists():
         with open(IDENTITY_FILE, "r") as f:
             identity = json.load(f)
             node_name = identity.get("name", node_name)
 
-    cmd = [python_bin, str(chat_script), node_name]
-    subprocess.run(cmd)
+    # Use exec to replace current process with the chat shell
+    os.environ["PYTHONPATH"] = str(RUNTIME_ROOT)
+    os.execv(python_bin, [python_bin, str(chat_script), node_name])
 
 def cmd_cost(args):
     """Show swarm-wide token usage and cost report."""
