@@ -18,28 +18,27 @@ class ToolMesh:
     async def execute(self, tool: str, instruction: str, model: Optional[str] = None) -> Tuple[int, str]:
         """Execute a tool with given instruction and optional model override."""
         wrapper_map = {
-            "codex": self.wrappers_dir / "codex_exec.sh",
-            "openclaw": self.wrappers_dir / "openclaw_exec.sh",
-            "picoclaw": self.wrappers_dir / "picoclaw_exec.py",
-            "ollama": self.wrappers_dir / "ollama_exec.py",
-            "opencode": self.wrappers_dir / "opencode_exec.sh",
-            "antigravity": self.wrappers_dir / "antigravity_exec.sh",
-            "mesh_audit": self.root / "apps/heiwa_cli/scripts/ops/heiwa_360_check.py",
-            "self_buff": self.root / "apps/heiwa_cli/scripts/ops/sota_verify.py" # Temporary mapping
+            "heiwa_code": self.wrappers_dir / "codex_exec.sh",
+            "heiwa_claw": self.wrappers_dir / "openclaw_exec.sh",
+            "heiwa_reflex": self.wrappers_dir / "ollama_exec.py",
+            "heiwa_ops": self.root / "apps/heiwa_cli/scripts/ops/heiwa_360_check.py",
+            "heiwa_buff": self.root / "apps/heiwa_cli/scripts/ops/sota_verify.py",
+            "codex": self.wrappers_dir / "codex_exec.sh", # Legacy alias
+            "openclaw": self.wrappers_dir / "openclaw_exec.sh", # Legacy alias
+            "ollama": self.wrappers_dir / "ollama_exec.py" # Legacy alias
         }
         
         wrapper = wrapper_map.get(tool.lower())
         if not wrapper or not wrapper.exists():
-            return 2, f"Tool wrapper not found: {tool} at {wrapper}"
+            return 2, f"❌ [SOVEREIGN MESH] Tool '{tool}' not localized in universe."
             
         # Set environment overrides for the subprocess
         env = os.environ.copy()
         if model:
-            env["OPENCLAW_MODEL"] = model
-            env["PICOCLAW_MODEL"] = model
-            env["HEIWA_OLLAMA_MODEL"] = model.split("/")[-1]
+            env["HEIWA_ACTIVE_MODEL"] = model
+            env["OPENCLAW_MODEL"] = model # Legacy support
             
-        logger.info(f"🛠️  Executing tool={tool} model={model or 'default'}")
+        logger.info(f"🌐 [HEIWA TOOLMESH] Invoking Localization: {tool} (Model: {model or 'Auto'})")
         
         # Use different execution methods based on extension
         if wrapper.suffix == ".sh":

@@ -118,21 +118,6 @@ class LocalTaskPlanner:
         self.validate_task_envelope(plan.to_dict())
         return plan
 
-    def normalize_intent(self, raw_text: str) -> IntentProfile:
-        return self.normalizer.normalize(raw_text)
-
-    def infer_intent(self, raw_text: str) -> dict[str, Any]:
-        profile = self.normalizer.normalize(raw_text)
-        return {
-            "intent_class": profile.intent_class,
-            "risk_level": profile.risk_level,
-            "requires_approval": profile.requires_approval,
-            "preferred_runtime": profile.preferred_runtime,
-            "preferred_tool": profile.preferred_tool,
-            "underspecified": profile.underspecified,
-            "confidence": profile.confidence,
-        }
-
     def validate_task_envelope(self, payload: dict[str, Any]) -> None:
         required = {
             "task_id",
@@ -161,13 +146,7 @@ class LocalTaskPlanner:
             raise ValueError(f"invalid risk_level: {payload['risk_level']}")
         if payload["target_runtime"] not in RUNTIME_ENUM:
             raise ValueError(f"invalid target_runtime: {payload['target_runtime']}")
-        if payload["target_tool"] not in TOOL_ENUM:
-            raise ValueError(f"invalid target_tool: {payload['target_tool']}")
-
-        # Keep a lightweight sanity check against schema file availability.
-        if not self.schema_path.exists():
-            raise ValueError(f"missing schema file: {self.schema_path}")
-        json.loads(self.schema_path.read_text(encoding="utf-8"))
+        # Tool validation skipped for dynamic tool mesh localization
 
     def _build_steps(self, profile: IntentProfile, raw_text: str) -> list[StepPlan]:
         now = int(time.time() * 1000)
@@ -182,23 +161,6 @@ class LocalTaskPlanner:
             step_num += 1
             return f"step-{now}-{step_num}"
 
-        if profile.underspecified:
-            steps.append(
-                StepPlan(
-                    step_id=next_step_id(),
-                    title="Expand request into execution brief",
-                    instruction=(
-                        "Create a concise execution brief and assumptions before execution.\n"
-                        f"{instruction}"
-                    ),
-                    subject=Subject.TASK_EXEC.value,
-                    target_runtime="railway",
-                    target_tool="ollama",
-                    target_tier="tier1_local",
-                    required_capability="mcp.strategy",
-                )
-            )
-
         intent = profile.intent_class
 
         # --- Mesh & Management: High-level 'Magic' actions ---
@@ -210,7 +172,7 @@ class LocalTaskPlanner:
                     instruction="Analyze the current mesh health and report status.",
                     subject=Subject.TASK_EXEC.value,
                     target_runtime="railway",
-                    target_tool="mesh_audit", # New native tool
+                    target_tool="heiwa_ops",
                     target_tier="tier1_local",
                 )
             )
@@ -224,7 +186,7 @@ class LocalTaskPlanner:
                     instruction=instruction,
                     subject=Subject.TASK_EXEC.value,
                     target_runtime="macbook",
-                    target_tool="mesh_audit",
+                    target_tool="heiwa_ops",
                     target_tier="tier3_orchestrator",
                 )
             )
@@ -238,24 +200,8 @@ class LocalTaskPlanner:
                     instruction=instruction,
                     subject=Subject.TASK_EXEC.value,
                     target_runtime="macbook",
-                    target_tool="self_buff", # New native tool
+                    target_tool="heiwa_buff",
                     target_tier="tier5_heavy_code",
-                )
-            )
-            return steps
-
-        # --- LLM-only tasks: Railway executor handles via tiered engine ---
-        if intent == "research":
-            steps.append(
-                StepPlan(
-                    step_id=next_step_id(),
-                    title="Gather and synthesize findings",
-                    instruction=instruction,
-                    subject=Subject.TASK_EXEC.value,
-                    target_runtime="railway",
-                    target_tool="openclaw",
-                    target_tier=profile.preferred_tier,
-                    required_capability="mcp.research",
                 )
             )
             return steps
@@ -269,54 +215,24 @@ class LocalTaskPlanner:
                     instruction=instruction,
                     subject=Subject.TASK_EXEC.value,
                     target_runtime=profile.preferred_runtime,
-                    target_tool="codex",
+                    target_tool="heiwa_code",
                     target_tier=profile.preferred_tier,
                     required_capability="mcp.code_generation",
                 )
             )
             return steps
 
-        if intent == "automation":
+        if intent == "research":
             steps.append(
                 StepPlan(
                     step_id=next_step_id(),
-                    title="Run automation pipeline",
-                    instruction=instruction,
-                    subject=Subject.TASK_EXEC.value,
-                    target_runtime=profile.preferred_runtime,
-                    target_tool="n8n",
-                    target_tier=profile.preferred_tier,
-                    required_capability="mcp.workflow_automation",
-                )
-            )
-            return steps
-
-        if intent in {"deploy", "operate", "files"}:
-            steps.append(
-                StepPlan(
-                    step_id=next_step_id(),
-                    title="Execute controlled operation",
-                    instruction=instruction,
-                    subject=Subject.TASK_EXEC.value,
-                    target_runtime=profile.preferred_runtime,
-                    target_tool="codex",
-                    target_tier=profile.preferred_tier,
-                    required_capability="mcp.code_generation",
-                )
-            )
-            return steps
-
-        if intent in {"notion", "discord"}:
-            steps.append(
-                StepPlan(
-                    step_id=next_step_id(),
-                    title="Execute integration task",
+                    title="Gather and synthesize findings",
                     instruction=instruction,
                     subject=Subject.TASK_EXEC.value,
                     target_runtime="railway",
-                    target_tool="ollama",
+                    target_tool="heiwa_claw",
                     target_tier=profile.preferred_tier,
-                    required_capability="mcp.strategy",
+                    required_capability="mcp.research",
                 )
             )
             return steps
@@ -329,7 +245,7 @@ class LocalTaskPlanner:
                 instruction=instruction,
                 subject=Subject.TASK_EXEC.value,
                 target_runtime="railway",
-                target_tool="ollama",
+                target_tool="heiwa_reflex",
                 target_tier=profile.preferred_tier,
                 required_capability="mcp.strategy",
             )

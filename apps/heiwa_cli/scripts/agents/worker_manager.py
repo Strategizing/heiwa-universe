@@ -151,10 +151,20 @@ class WorkerManager(BaseAgent):
         await self.speak(Subject.TASK_EXEC_RESULT, result)
 
     async def run(self):
+        """Boot the worker manager and start listening for mesh-wide tasks."""
         await self.connect()
-        for sub in [Subject.TASK_EXEC_REQUEST_CODE, Subject.TASK_EXEC_REQUEST_RESEARCH, Subject.TASK_EXEC_REQUEST_OPERATE]:
-            await self.listen(sub, self.execute)
-        while True: await asyncio.sleep(1)
+        
+        # Unified Execution Subject for SOTA v3.1
+        await self.listen(Subject.TASK_EXEC, self.execute)
+        
+        # Legacy listeners for backward compatibility
+        await self.listen(Subject.TASK_EXEC_REQUEST_CODE, self.execute)
+        await self.listen(Subject.TASK_EXEC_REQUEST_RESEARCH, self.execute)
+        
+        logger.info(f"🦾 Heiwa Worker Manager Active ({self.node_id}). Listening for mesh directives...")
+        
+        while True:
+            await asyncio.sleep(1)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
