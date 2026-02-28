@@ -33,5 +33,13 @@ Heiwa utilizes a tiered intelligence model:
 2.  **Cloud API:** Gemini 2.5 Flash, Gemini 1.5 Pro
 3.  **Pro/Premium:** Gemini 3 Flash, Claude Opus, Codex
 
+## 💻 CLI Command Center
+The `heiwa` command is your primary interface. It defaults to an interactive chat mode.
+
+- **`./node/cli/heiwa`**: Launch interactive Terminal Chat (Direct NATS bridge).
+- **`./node/cli/heiwa cost`**: Show swarm-wide token usage and dollar spend.
+- **`./node/cli/heiwa status --full`**: Swarm-wide health and resource report.
+- **`./node/cli/heiwa deploy --full`**: Sync Cloudflare WAF and Railway Compute.
+
 ---
 *“Be genuinely helpful, not performatively helpful. Have opinions. Actions speak louder than filler words.”* — **SOUL.md**

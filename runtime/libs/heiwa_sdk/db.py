@@ -186,7 +186,8 @@ class Database:
                     model_id TEXT,
                     tokens_input INTEGER,
                     tokens_output INTEGER,
-                    tokens_total INTEGER
+                    tokens_total INTEGER,
+                    cost REAL
                 )
             """
             )
@@ -525,6 +526,7 @@ class Database:
             self._safe_alter_column(cursor, "runs", col, "TEXT")
         for col in ["tokens_input", "tokens_output", "tokens_total"]:
             self._safe_alter_column(cursor, "runs", col, "INTEGER")
+        self._safe_alter_column(cursor, "runs", "cost", "REAL")
 
         # Migration: Add mode to proposals and runs if missing
         self._safe_alter_column(cursor, "proposals", "mode", "TEXT")
@@ -1287,8 +1289,8 @@ class Database:
             self._exec(
                 cursor,
                 """
-                INSERT INTO runs (run_id, proposal_id, started_at, ended_at, status, chain_result, signals, artifact_index, node_id, replay_receipt, mode, model_id, tokens_input, tokens_output, tokens_total)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO runs (run_id, proposal_id, started_at, ended_at, status, chain_result, signals, artifact_index, node_id, replay_receipt, mode, model_id, tokens_input, tokens_output, tokens_total, cost)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     run_data["run_id"],
@@ -1306,6 +1308,7 @@ class Database:
                     run_data.get("tokens_input"),
                     run_data.get("tokens_output"),
                     run_data.get("tokens_total"),
+                    run_data.get("cost"),
                 ),
             )
 

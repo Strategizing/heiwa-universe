@@ -18,3 +18,4 @@ requests>=2.32.0
 tenacity>=8.2.0
 psycopg2-binary>=2.9.9
 cryptography>=42.0.0
+rich>=13.0.0

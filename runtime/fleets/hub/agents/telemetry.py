@@ -7,6 +7,7 @@ from typing import Any, Dict
 from fleets.hub.agents.base import BaseAgent
 from fleets.hub.protocol import Subject
 from libs.heiwa_sdk.db import Database
+from libs.heiwa_sdk.cost import CostEstimator
 
 logger = logging.getLogger("Telemetry")
 
@@ -79,6 +80,9 @@ class TelemetryAgent(BaseAgent):
         # Extract token usage from artifacts or payload
         tokens = self._extract_tokens(payload)
         
+        # Calculate cost
+        cost = CostEstimator.calculate(model_id, tokens.get("input", 0), tokens.get("output", 0))
+
         # Log to Sovereignty (DB)
         run_data = {
             "run_id": f"run-{int(time.time()*1000)}",
@@ -90,12 +94,13 @@ class TelemetryAgent(BaseAgent):
             "tokens_input": tokens.get("input", 0),
             "tokens_output": tokens.get("output", 0),
             "tokens_total": tokens.get("total", 0),
+            "cost": cost,
             "duration_ms": payload.get("duration_ms", 0),
             "mode": "PRODUCTION"
         }
         self.db.record_run(run_data)
         
-        logger.info(f"📈 Logged Usage: model={model_id} node={node_id} tokens={tokens.get('total')}")
+        logger.info(f"📈 Logged Usage: model={model_id} node={node_id} tokens={tokens.get('total')} cost=${cost}")
 
     async def handle_status(self, data: dict[str, Any]):
         # Optional: track heartbeat/concurrency here

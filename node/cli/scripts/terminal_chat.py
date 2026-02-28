@@ -1,156 +1,130 @@
 import asyncio
-import os
 import json
-import time
+import os
 import sys
 import uuid
-import httpx
-import psutil
-from datetime import datetime
-from nats.aio.client import Client as NATS
+from pathlib import Path
+from typing import Any, Dict
 
-# Load environment variables from heiwa monorepo root
-def load_env():
-    # Try multiple possible paths for .env
-    paths = [
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../.env")),
-        os.path.expanduser("~/heiwa/.env"),
-        ".env"
-    ]
-    for path in paths:
-        if os.path.exists(path):
-            with open(path) as f:
-                for line in f:
-                    if line.strip() and not line.startswith('#'):
-                        try:
-                            key, val = line.strip().split('=', 1)
-                            os.environ[key] = val.strip('"').strip("'")
-                        except ValueError:
-                            pass
-            return True
-    return False
+# Ensure project root is on sys.path
+ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_ROOT = ROOT / "runtime"
+if str(RUNTIME_ROOT) not in sys.path:
+    sys.path.insert(0, str(RUNTIME_ROOT))
 
-load_env()
+import nats
+from nats.aio.client import Client as NATSClient
+from fleets.hub.protocol import Subject, Payload
+from rich.console import Console
+from rich.markdown import Markdown
+from rich.panel import Panel
+from rich.live import Live
+from rich.prompt import Prompt
+from rich.spinner import Spinner
 
-NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+console = Console()
 
 class TerminalChat:
-    def __init__(self, username, node_id):
-        self.username = username
+    """
+    Direct CLI access to the Heiwa Swarm.
+    Bypasses external comms for high-efficiency local-to-mesh interaction.
+    """
+    def __init__(self, node_id: str):
         self.node_id = node_id
-        self.nc = NATS()
-        self.session_id = f"session-{uuid.uuid4().hex[:8]}"
-        self.history = []
-        self.start_time = time.time()
+        self.nc: NATSClient = nats.Client()
+        self.running = True
+        self.task_cache: Dict[str, Any] = {}
 
     async def connect(self):
+        nats_url = os.getenv("NATS_URL", "nats://localhost:4222")
         try:
-            # We use a short timeout to prevent hanging if Railway is unreachable
-            await self.nc.connect(NATS_URL, connect_timeout=2)
-            return True
-        except Exception:
-            return False
+            await self.nc.connect(nats_url)
+            console.print(f"[green]✅ Connected to Heiwa Mesh:[/green] {nats_url}")
+        except Exception as e:
+            console.print(f"[red]❌ Connection failed:[/red] {e}")
+            sys.exit(1)
 
-    async def get_response(self, prompt):
-        # Try local Ollama first (Tier 1)
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(
-                    f"{OLLAMA_URL}/api/generate",
-                    json={
-                        "model": "qwen2.5-coder:7b",
-                        "prompt": f"You are Heiwa Node Assistant. User is {self.username}. Be concise.\n\nUser: {prompt}",
-                        "stream": False
-                    }
-                )
-                if resp.status_code == 200:
-                    return resp.json().get("response", ""), "Ollama (Local)"
-        except Exception:
-            pass
+        # Listen for results directed to this CLI instance
+        await self.nc.subscribe(Subject.TASK_EXEC_RESULT.value, cb=self.handle_result)
+        await self.nc.subscribe(Subject.LOG_THOUGHT.value, cb=self.handle_thought)
 
-        # Fallback to Gemini (Tier 2)
-        if GEMINI_API_KEY:
-            try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-                payload = {
-                    "contents": [{"parts": [{"text": f"User is {self.username}. Be concise.\n\nUser: {prompt}"}]}]
-                }
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    resp = await client.post(url, json=payload)
-                    data = resp.json()
-                    if "candidates" in data:
-                        return data["candidates"][0]["content"]["parts"][0]["text"], "Gemini (Cloud)"
-            except Exception as e:
-                return f"Error connecting to AI: {e}", "Error"
+    async def handle_result(self, msg):
+        payload = json.loads(msg.data.decode())
+        data = payload.get("data", {})
+        task_id = data.get("task_id")
+        
+        if task_id in self.task_cache:
+            summary = data.get("summary", "")
+            console.print("\n")
+            console.print(Panel(Markdown(summary), title=f"Result: {task_id}", border_style="green"))
+            console.print(f"[dim]Duration: {data.get('duration_ms', 0)}ms | Node: {data.get('runtime', 'unknown')}[/dim]")
+            del self.task_cache[task_id]
 
-        return "No AI providers available. Check your NATS/API config.", "None"
+    async def handle_thought(self, msg):
+        payload = json.loads(msg.data.decode())
+        data = payload.get("data", {})
+        content = data.get("content", "")
+        agent = data.get("agent", "unknown")
+        
+        # Display thoughts in a subtle way
+        console.print(f"[italic cyan]🧠 {agent}:[/italic cyan] [dim]{content[:100]}...[/dim]")
 
-    async def send_summary(self, delete=False):
-        if delete:
-            print("🗑️ Session summary deleted.")
-            return
-
-        summary_text = f"--- HEIWA SESSION SUMMARY ---\nID: {self.session_id}\nUser: {self.username}\nNode: {self.node_id}\nDuration: {int(time.time() - self.start_time)}s\nMessages: {len(self.history)}\n\n"
-        for h in self.history:
-            summary_text += f"{h['role']}: {h['content'][:150]}...\n"
-
-        if self.nc.is_connected:
-            payload = {
-                "task_id": self.session_id,
-                "agent": "TerminalChat",
-                "content": summary_text,
-                "result_type": "text",
-                "status": "PASS",
-                "timestamp": time.time()
+    async def send_task(self, instruction: str):
+        task_id = f"cli-{uuid.uuid4().hex[:8]}"
+        self.task_cache[task_id] = True
+        
+        payload = {
+            Payload.SENDER_ID: self.node_id,
+            Payload.TIMESTAMP: asyncio.get_event_loop().time(),
+            Payload.TYPE: Subject.CORE_REQUEST.name,
+            Payload.DATA: {
+                "task_id": task_id,
+                "raw_text": instruction,
+                "source": "cli",
+                "intent_class": "general",
+                "target_runtime": "any"
             }
-            # Publish to the global log subject so Railway's Messenger picks it up
-            await self.nc.publish("heiwa.log.info", json.dumps(payload).encode())
-            print(f"✅ Summary pushed to Cloud Swarm (#moltbook-logs).")
-        else:
-            print("⚠️ Cloud Swarm offline. Summary saved locally to ~/.heiwa/context/")
-            log_path = os.path.expanduser(f"~/.heiwa/context/{self.session_id}.txt")
-            with open(log_path, "w") as f:
-                f.write(summary_text)
+        }
+        
+        await self.nc.publish(Subject.CORE_REQUEST.value, json.dumps(payload).encode())
+        console.print(f"[yellow]🚀 Task dispatched: {task_id}[/yellow]")
 
-    async def run(self):
-        print(f"\n🦁 HEIWA TERMINAL: {self.username} @ {self.node_id}")
-        is_connected = await self.connect()
-        print(f"📡 Swarm: {'CONNECTED' if is_connected else 'OFFLINE (Standalone)'}")
+    async def start(self):
+        await self.connect()
         
-        ram = psutil.virtual_memory().percent
-        print(f"💻 Health: RAM {ram}% | vCPU Active")
-        print("-" * 50)
-        
-        while True:
+        console.print(Panel.fit(
+            "Heiwa Terminal Access\nType 'exit' to quit, 'help' for commands.",
+            title="[bold magenta]HEIWA v2[/bold magenta]",
+            border_style="magenta"
+        ))
+
+        while self.running:
             try:
-                user_input = input(f"[{self.username}] > ").strip()
-                if not user_input: continue
-                if user_input.lower() in ["exit", "quit", "logout"]:
-                    break
+                # Use prompt for input
+                user_input = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: Prompt.ask("\n[bold blue]heiwa[/bold blue] > ")
+                )
                 
-                self.history.append({"role": "user", "content": user_input})
+                if user_input.lower() in ["exit", "quit"]:
+                    self.running = False
+                    continue
                 
-                print("🧠 thinking...", end="\r")
-                response, provider = await self.get_response(user_input)
-                print(f"[{provider}] {response}")
+                if not user_input.strip():
+                    continue
                 
-                self.history.append({"role": "assistant", "content": response})
+                await self.send_task(user_input)
+                # Small sleep to allow thoughts/results to stream in
+                await asyncio.sleep(0.5)
                 
             except KeyboardInterrupt:
-                break
+                self.running = False
+            except Exception as e:
+                console.print(f"[red]Error:[/red] {e}")
 
-        print("\n" + "-" * 50)
-        save_req = input("Push session to Cloud Swarm? (Y/n): ").lower() != 'n'
-        await self.send_summary(delete=not save_req)
-        
-        if self.nc.is_connected:
-            await self.nc.close()
-        print("🔒 Node detached. Session closed.")
+        await self.nc.close()
+        console.print("[yellow]🔒 Session closed.[/yellow]")
 
 if __name__ == "__main__":
-    username = sys.argv[1] if len(sys.argv) > 1 else "devon"
-    node_id = sys.argv[2] if len(sys.argv) > 2 else "terminal"
-    chat = TerminalChat(username, node_id)
-    asyncio.run(chat.run())
+    node_id = sys.argv[1] if len(sys.argv) > 1 else "cli-user"
+    chat = TerminalChat(node_id)
+    asyncio.run(chat.start())
