@@ -327,6 +327,30 @@ class MessengerAgent(BaseAgent):
             chan = self.bot.get_channel(cid)
             if chan: await chan.send(embed=UIManager.create_thought_embed(payload.get("agent", "unknown"), payload.get("content", ""), payload.get("task_id")))
 
+    async def handle_telemetry(self, data: dict[str, Any]):
+        """Post system metrics to the swarm-telemetry channel."""
+        if not self.bot.is_ready(): return
+        payload = self._unwrap(data)
+        node_id = payload.get("node_id", "unknown")
+        cpu = payload.get("cpu_pct", 0)
+        ram = payload.get("ram_pct", 0)
+        ram_used = payload.get("ram_used_gb", 0)
+        ram_total = payload.get("ram_total_gb", 0)
+        
+        cid = self._get_channel_id("swarm-telemetry")
+        if cid:
+            chan = self.bot.get_channel(cid)
+            if chan:
+                # We use create_base_embed with metrics for a clean look
+                embed = UIManager.create_base_embed(
+                    f"Node Telemetry: {node_id}",
+                    f"Real-time resource polling for node `{node_id}`.",
+                    status="online",
+                    metrics={"cpu": f"{cpu}%", "ram": f"{ram}% ({ram_used}GB / {ram_total}GB)"},
+                    snapshot={"railway": "Online", "node_id": node_id, "provider": "System Poll", "tokens": 0}
+                )
+                await chan.send(embed=embed)
+
     async def handle_exec_result(self, data: dict[str, Any]) -> None:
         if not self.bot.is_ready(): return
         payload = self._unwrap(data)
@@ -359,6 +383,7 @@ class MessengerAgent(BaseAgent):
         await self.listen(Subject.TASK_EXEC_RESULT, self.handle_exec_result)
         await self.listen(Subject.TASK_APPROVAL_DECISION, self.handle_approval_decision_event)
         await self.listen(Subject.LOG_THOUGHT, self.handle_thought)
+        await self.listen(Subject.NODE_TELEMETRY, self.handle_telemetry)
         await self.listen(Subject.LOG_INFO, self.handle_swarm_log)
         await self.listen(Subject.LOG_ERROR, self.handle_swarm_log)
         logger.info("Starting Discord Gateway...")

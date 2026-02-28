@@ -178,10 +178,31 @@ start_worker_manager() {
     fi
 }
 
+start_mini_thinker() {
+    if ! is_tcp_open 127.0.0.1 4222; then
+        return
+    fi
+    if pgrep -f "node/agents/mini_thinker.py" >/dev/null 2>&1; then
+        echo "[OK] mini_thinker already running"
+        return
+    fi
+    echo "[INFO] Starting mini_thinker ..."
+    local py_bin
+    py_bin=$(choose_python)
+    nohup "$py_bin" "$ROOT/node/agents/mini_thinker.py" >"$ROOT/runtime/logs/mini_thinker.log" 2>&1 &
+    sleep 1
+    if pgrep -f "node/agents/mini_thinker.py" >/dev/null 2>&1; then
+        echo "[OK] mini_thinker started"
+    else
+        echo "[WARN] mini_thinker exited; check runtime/logs/mini_thinker.log"
+    fi
+}
+
 echo "--- HEIWA WORKER STACK START ---"
 start_ollama
 start_nats
 start_openclaw_gateway
 start_worker_manager
+start_mini_thinker
 echo "--- HEIWA WORKER STACK CHECK ---"
 "$(choose_python)" "$ROOT/node/cli/scripts/ops/heiwa_360_check.py" || true
