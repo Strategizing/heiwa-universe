@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "default_identity": "operator-general",
   "identities": [
     {
@@ -14,8 +14,8 @@
         "fix"
       ],
       "targets": {
-        "tool": "codex",
-        "runtime": "both",
+        "tool": "openclaw",
+        "runtime": "macbook",
         "dispatch": [
           "discord",
           "ci"
@@ -24,12 +24,11 @@
       "models": {
         "openclaw": [
           "ollama/deepseek-coder-v2:16b",
-          "google-gemini-cli/gemini-3-pro-preview"
+          "google-ai-studio/gemini-2.5-flash",
+          "google-gemini-cli/gemini-3-flash-preview",
+          "google-antigravity/claude-opus-4-5-thinking"
         ],
-        "picoclaw": [
-          "openai/gpt-4o",
-          "ollama/qwen2.5-coder:7b"
-        ]
+        "picoclaw": []
       },
       "actions": {
         "ci_workflow": "deploy.yml",
@@ -52,7 +51,7 @@
       ],
       "targets": {
         "tool": "openclaw",
-        "runtime": "both",
+        "runtime": "macbook",
         "dispatch": [
           "ci",
           "discord"
@@ -60,12 +59,12 @@
       },
       "models": {
         "openclaw": [
-          "google-gemini-cli/gemini-3-pro-preview",
+          "ollama/qwen2.5-coder:7b",
+          "google-ai-studio/gemini-2.5-flash",
+          "google-gemini-cli/gemini-3-flash-preview",
           "google-antigravity/claude-opus-4-5-thinking"
         ],
-        "picoclaw": [
-          "openai/gpt-4o"
-        ]
+        "picoclaw": []
       },
       "actions": {
         "ci_workflow": "deploy.yml",
@@ -85,8 +84,8 @@
         "railway"
       ],
       "targets": {
-        "tool": "codex",
-        "runtime": "railway",
+        "tool": "openclaw",
+        "runtime": "macbook",
         "dispatch": [
           "ci",
           "discord"
@@ -94,11 +93,10 @@
       },
       "models": {
         "openclaw": [
-          "ollama/deepseek-coder-v2:16b"
+          "ollama/deepseek-coder-v2:16b",
+          "google-ai-studio/gemini-2.5-flash"
         ],
-        "picoclaw": [
-          "openai/gpt-4o"
-        ]
+        "picoclaw": []
       },
       "actions": {
         "ci_workflow": "deploy.yml",
@@ -118,8 +116,8 @@
         "urgent"
       ],
       "targets": {
-        "tool": "codex",
-        "runtime": "both",
+        "tool": "openclaw",
+        "runtime": "macbook",
         "dispatch": [
           "discord",
           "ci"
@@ -128,11 +126,10 @@
       "models": {
         "openclaw": [
           "ollama/qwen2.5-coder:7b",
-          "ollama/deepseek-coder-v2:16b"
+          "google-ai-studio/gemini-2.5-flash",
+          "google-gemini-cli/gemini-3-flash-preview"
         ],
-        "picoclaw": [
-          "openai/gpt-4o"
-        ]
+        "picoclaw": []
       },
       "actions": {
         "ci_workflow": "deploy.yml",
@@ -160,12 +157,11 @@
       },
       "models": {
         "openclaw": [
-          "google-gemini-cli/gemini-3-pro-preview",
-          "google-antigravity/claude-opus-4-5-thinking"
+          "ollama/qwen2.5-coder:7b",
+          "google-ai-studio/gemini-2.5-flash",
+          "google-gemini-cli/gemini-3-flash-preview"
         ],
-        "picoclaw": [
-          "openai/gpt-4o"
-        ]
+        "picoclaw": []
       },
       "actions": {
         "ci_workflow": "",
