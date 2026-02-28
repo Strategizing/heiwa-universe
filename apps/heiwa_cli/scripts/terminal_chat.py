@@ -270,6 +270,7 @@ class HeiwaShell:
         }
         await self.nc.publish(Subject.CORE_REQUEST.value, json.dumps(payload).encode())
         console.print(f"[bold yellow]▶ DISPATCHED:[/bold yellow] [dim]{task_id}[/dim]")
+        return task_id
 
     async def run(self, initial_prompt: Optional[str] = None):
         console.clear()
@@ -290,9 +291,17 @@ class HeiwaShell:
 
         if initial_prompt:
             console.print(f"[bold magenta]▶ PROMPT DISPATCH:[/bold magenta] {initial_prompt}")
-            await self.send_task(initial_prompt)
-            # Short wait for any thoughts or early result
-            await asyncio.sleep(2)
+            task_id = await self.send_task(initial_prompt)
+            
+            # Wait for result or timeout
+            start_wait = time.time()
+            timeout = 60
+            while task_id in self.task_cache and (time.time() - start_wait) < timeout:
+                await asyncio.sleep(0.5)
+            
+            if task_id in self.task_cache:
+                console.print(f"\n[yellow]⚠️  Task {task_id} timed out after {timeout}s.[/yellow]")
+            
             self.running = False
             return
 

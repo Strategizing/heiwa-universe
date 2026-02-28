@@ -56,10 +56,11 @@ class ExecutorAgent(BaseAgent):
         step_id = payload.get("step_id", "unknown")
         instruction = payload.get("instruction", "")
         intent_class = payload.get("intent_class", "general")
-        target_runtime = payload.get("target_runtime", "railway")
+        target_runtime = payload.get("target_runtime", "railway").lower()
         target_model = payload.get("target_model", "google/gemini-2.0-flash")
 
-        if target_runtime not in {self.executor_runtime, "both"}:
+        if target_runtime not in {self.executor_runtime, "both", "any"}:
+            logger.info(f"⏭️  Skipping task {task_id}: target={target_runtime}, local={self.executor_runtime}")
             return
 
         start = time.time()

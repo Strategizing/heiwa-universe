@@ -58,8 +58,17 @@ async def main():
     executor = ExecutorAgent()
     telemetry = TelemetryAgent()
     
+    logger.info("🦾 [BOOT] Agents initialized. Starting execution tasks...")
+    
     port = int(os.getenv("PORT", "8080"))
-    tasks = [spine.run(), executor.run(), telemetry.run(), _start_server(port=port)]
+    tasks = [
+        asyncio.create_task(spine.run()),
+        asyncio.create_task(executor.run()),
+        asyncio.create_task(telemetry.run()),
+        asyncio.create_task(_start_server(port=port))
+    ]
+    
+    logger.info("✅ [BOOT] All core services dispatched.")
 
     # Messenger is optional: run only when token exists (or explicitly forced).
     messenger_mode = os.getenv("HEIWA_ENABLE_MESSENGER", "auto").strip().lower()

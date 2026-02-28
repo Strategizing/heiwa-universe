@@ -79,16 +79,26 @@ class SpineAgent(BaseAgent):
         # --- AUTO-PLANNING FOR RAW REQUESTS ---
         if not payload.get("steps") and payload.get("raw_text"):
             logger.info(f"🔮 Planning raw request for task {task_id}...")
-            task_plan = self.planner.plan(
-                task_id=task_id,
-                raw_text=payload.get("raw_text"),
-                requested_by=data.get("sender_id", "unknown"),
-                source_channel_id=payload.get("source", "cli"),
-                source_message_id=task_id,
-                response_channel_id=payload.get("response_channel_id", "cli"),
-                response_thread_id=None
-            )
-            payload = task_plan.to_dict()
+            try:
+                task_plan = self.planner.plan(
+                    task_id=task_id,
+                    raw_text=payload.get("raw_text"),
+                    requested_by=data.get("sender_id", "unknown"),
+                    source_channel_id=payload.get("source", "cli"),
+                    source_message_id=task_id,
+                    response_channel_id=payload.get("response_channel_id", "cli"),
+                    response_thread_id=None
+                )
+                payload = task_plan.to_dict()
+            except Exception as e:
+                logger.error(f"❌ Planning failed: {e}. Falling back to direct execution.")
+                # Fallback: Create a single direct step
+                payload["steps"] = [{
+                    "step_id": "fallback-exec",
+                    "instruction": payload.get("raw_text"),
+                    "subject": Subject.TASK_EXEC.value,
+                    "target_runtime": "any"
+                }]
 
         intent = payload.get("intent_class", "unknown")
 
