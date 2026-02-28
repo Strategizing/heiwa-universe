@@ -44,3 +44,10 @@
 - `config/swarm/operator_profile.md`: Ideological core
 - `config/identities/`: Persona and identity profiles
 - `packages/heiwa_protocol/schemas/`: Immutable contracts
+
+## Security Hardening
+
+- **Master Key**: Set `HEIWA_MASTER_KEY` in your shell environment to override the default vault key.
+- **Redaction**: Patterns are managed in `packages/heiwa_sdk/heiwa_sdk/security.py`. Update as new sensitive patterns emerge.
+- **Access Control**: Keep `~/.heiwa/vault.env` permissions strictly limited (`chmod 600`).
+- **NATS Security**: Ensure the `NATS_URL` uses `tls://` and authenticated subjects for production traffic.

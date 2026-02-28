@@ -16,6 +16,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from .provider import LLMProvider
 from heiwa_sdk.db import Database, Thought
+from heiwa_sdk.security import redact_text
 from .reasoning.confidence import ConfidenceGate, GateResult
 from heiwa_identity.soul import get_soul, get_identity_meta
 
@@ -60,7 +61,7 @@ class CognitionEngine:
             full_system += f"--- CONTEXTUAL INSTRUCTION ---\n{system}"
         
         async for chunk in self.provider.generate_stream(prompt, model, full_system):
-            yield chunk
+            yield redact_text(chunk)
 
     async def generate(self, 
                        prompt: str, 
@@ -123,7 +124,7 @@ class CognitionEngine:
 
         # 3. Execution Stream
         async for chunk in self.provider.generate_stream(instruction, model, system):
-            yield chunk
+            yield redact_text(chunk)
 
     async def close(self):
         await self.provider.close()

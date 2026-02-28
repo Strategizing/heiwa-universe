@@ -5,10 +5,11 @@ from typing import Any, List, Tuple, Optional
 
 REDACTION_PATTERNS = [
     (re.compile(r"(gho|github_pat)_[A-Za-z0-9_]+"), r"\1_<redacted>"),
-    (re.compile(r"sk-[A-Za-z0-9_-]+"), "sk-<redacted>"),
+    (re.compile(r"(sk|csk|gsk|sk-or-v1)-[A-Za-z0-9_-]+"), r"\1-<redacted>"),
+    (re.compile(r"AIzaSy[A-Za-z0-9_-]+"), "AIzaSy<redacted>"),
     (re.compile(r"(Authorization:\s*Bearer\s+)[^\s]+", re.I), r"\1<redacted>"),
     (re.compile(r"(nats://[^:@/\s]+:)[^@/\s]+@", re.I), r"\1<redacted>@"),
-    (re.compile(r"([A-Z0-9_]*(TOKEN|SECRET|PASSWORD|KEY)[A-Z0-9_]*=)[^\s]+"), r"\1<redacted>"),
+    (re.compile(r"([A-Z0-9_]*(TOKEN|SECRET|PASSWORD|KEY|AUTH)[A-Z0-9_]*=)[\"']?[^\s\"']+[\"']?"), r"\1<redacted>"),
 ]
 
 def redact_text(text: str) -> str:
