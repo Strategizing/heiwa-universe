@@ -31,10 +31,14 @@ def load_swarm_env():
     vault_path = Path.home() / ".heiwa" / "vault.env"
     
     # 1. Standard .env (Base)
-    load_dotenv(MONOREPO_ROOT / ".env")
+    env_path = MONOREPO_ROOT / ".env"
+    if env_path.exists():
+        load_dotenv(env_path, override=True)
     
     # 2. Worker Local (Specific Node overrides)
-    load_dotenv(MONOREPO_ROOT / ".env.worker.local", override=True)
+    worker_env = MONOREPO_ROOT / ".env.worker.local"
+    if worker_env.exists():
+        load_dotenv(worker_env, override=True)
     
     # 3. Vault (Highest priority secrets)
     if vault_path.exists():
