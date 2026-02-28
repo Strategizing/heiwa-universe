@@ -22,10 +22,8 @@ class SpineAgent(BaseAgent):
         except Exception:
             logger.warning("⚠️ NATS unavailable. Spine running in local mode.")
 
-        # 1. Open Ears
+        # 1. Open Ears - Using Enum members
         await self.listen(Subject.NODE_HEARTBEAT, self.handle_heartbeat)
-        
-        # Re-enabling Spine routing until V2 Strategist is fully implemented
         await self.listen(Subject.CORE_REQUEST, self.handle_request)
         await self.listen(Subject.TASK_NEW, self.handle_request)
 
@@ -179,9 +177,9 @@ class SpineAgent(BaseAgent):
                 Payload.TYPE: "TASK_EXEC_DISPATCH",
                 Payload.DATA: exec_payload,
             }
-            # Use Subject.TASK_EXEC by default for SOTA v3.1
-            await self.nc.publish(Subject.TASK_EXEC.value, json.dumps(wrapped).encode())
-            logger.info("📤 Dispatched %s/%s to %s", task_id, step_id, Subject.TASK_EXEC.value)
+            # Use Subject.TASK_EXEC enum member for SOTA v3.1
+            await self.speak(Subject.TASK_EXEC, exec_payload)
+            logger.info("📤 Dispatched %s/%s to %s", task_id, step_id, Subject.TASK_EXEC)
 
             await self.speak(
                 Subject.TASK_STATUS,

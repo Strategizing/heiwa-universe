@@ -37,10 +37,10 @@ class ExecutorAgent(BaseAgent):
         """Boot the executor and start listening for work."""
         await self.connect()
         
-        # Unified Execution Subject for SOTA v3.1
+        # Unified Execution Subject for SOTA v3.1 - Using Enum member
         await self.listen(Subject.TASK_EXEC, self._handle_exec)
         
-        # Keep legacy listeners for backward compatibility during transition
+        # Keep legacy listeners for backward compatibility - Using Enum members
         await self.listen(Subject.TASK_EXEC_REQUEST_CODE, self._handle_exec)
         await self.listen(Subject.TASK_EXEC_REQUEST_RESEARCH, self._handle_exec)
         
