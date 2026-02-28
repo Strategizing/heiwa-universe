@@ -23,12 +23,21 @@ from heiwa_hub.agents.messenger import MessengerAgent
 from heiwa_hub.agents.executor import ExecutorAgent
 from heiwa_hub.agents.telemetry import TelemetryAgent
 from heiwa_hub.health import start_health_server
+from heiwa_hub.mcp_server import app as mcp_app
 
 # Configure Global Logging
 logging.basicConfig(
     level=logging.INFO, 
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+
+async def _start_mcp():
+    import uvicorn
+    logger = logging.getLogger("Hub.MCP")
+    logger.info("📡 Heiwa MCP Server booting on port 8000...")
+    config = uvicorn.Config(mcp_app, host="0.0.0.0", port=8000, log_level="info")
+    server = uvicorn.Server(config)
+    await server.serve()
 
 async def main():
     print("--- HEIWA LIMITED: CORE COLLECTIVE ---")
@@ -37,7 +46,7 @@ async def main():
     spine = SpineAgent()
     executor = ExecutorAgent()
     telemetry = TelemetryAgent()
-    tasks = [spine.run(), executor.run(), telemetry.run(), start_health_server()]
+    tasks = [spine.run(), executor.run(), telemetry.run(), start_health_server(), _start_mcp()]
 
     # Messenger is optional: run only when token exists (or explicitly forced).
     messenger_mode = os.getenv("HEIWA_ENABLE_MESSENGER", "auto").strip().lower()

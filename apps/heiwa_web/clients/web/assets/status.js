@@ -1,5 +1,6 @@
 const DEFAULT_ENDPOINTS = [
   "https://heiwa-cloud-hq-brain.up.railway.app/health",
+  "https://heiwa-cloud-hq-brain.up.railway.app/status",
   "https://api.heiwa.ltd/health",
 ];
 

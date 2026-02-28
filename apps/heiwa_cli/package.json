@@ -4,7 +4,7 @@
   "description": "State-Of-The-Art Enterprise CLI for the Heiwa Swarm",
   "main": "heiwa",
   "bin": {
-    "heiwa": "heiwa"
+    "heiwa": "bin/heiwa"
   },
   "scripts": {
     "test": "echo "Error: no test specified" && exit 1"
