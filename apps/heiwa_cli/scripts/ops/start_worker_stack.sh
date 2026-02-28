@@ -139,11 +139,6 @@ start_nats() {
 }
 
 start_openclaw_gateway() {
-    # Ensure OpenClaw auth is synced with vault
-    local py_bin
-    py_bin=$(choose_python)
-    "$py_bin" "$ROOT/apps/heiwa_cli/scripts/ops/sync_openclaw_auth.py" || true
-
     if ! command -v openclaw >/dev/null 2>&1; then
         echo "[WARN] openclaw not installed; skipping gateway"
         return
@@ -208,6 +203,5 @@ start_ollama
 start_nats
 start_openclaw_gateway
 start_worker_manager
-start_mini_thinker
 echo "--- HEIWA WORKER STACK CHECK ---"
 "$(choose_python)" "$ROOT/apps/heiwa_cli/scripts/ops/heiwa_360_check.py" || true
