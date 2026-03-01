@@ -20,9 +20,15 @@
             "allow_from": []
         },
         "discord": {
+            "enabled": true,
+            "token": "${{ DISCORD_BOT_TOKEN }}",
+            "allow_from": ["@me", "@Heiwa Admin"]
+        },
+        "bluebubbles": {
             "enabled": false,
-            "token": "",
-            "allow_from": []
+            "server_url": "${{ BLUEBUBBLES_SERVER_URL }}",
+            "password": "${{ BLUEBUBBLES_PASSWORD }}",
+            "allow_from": ["@me"]
         },
         "maixcam": {
             "enabled": false,

@@ -1,11 +1,19 @@
 {
     "models": {
-        "primary": "ollama/deepseek-coder-v2:16b",
+        "primary": "google/gemini-2.0-pro-exp",
         "fallbacks": [
-            "openrouter/qwen/qwen3-vl-30b-a3b-thinking",
-            "google/gemini-3.1-pro-preview"
+            "google/gemini-1.5-pro",
+            "google/gemini-1.5-flash",
+            "ollama/qwen2.5-coder:7b"
         ],
         "registry": {
+            "tier_1_local": { "id": "ollama/qwen2.5-coder:7b", "provider": "ollama" },
+            "tier_2_fast": { "id": "google/gemini-2.0-flash", "provider": "google" },
+            "tier_3_baseline": { "id": "google/gemini-1.5-pro", "provider": "google" },
+            "tier_4_overflow": { "id": "google/gemini-2.0-pro-exp", "provider": "google" },
+            "tier_5_codex": { "id": "codex/gpt-5.3-codex", "provider": "codex" },
+            "tier_6_premium": { "id": "antigravity/gemini-3.1-pro", "provider": "antigravity" },
+            "tier_7_supreme": { "id": "antigravity/claude-opus-4-6-thinking", "provider": "antigravity" },
             "google/gemini-2.5-flash": { "alias": "gemini" },
             "google/gemini-2.0-pro-exp-02-05": { "alias": "gemini-pro" },
             "anthropic/claude-3-5-sonnet-latest": { "alias": "claude" },

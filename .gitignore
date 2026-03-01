@@ -72,3 +72,4 @@ runtime/logs/
 
 # Wrangler
 .wrangler/
+docs_and_deps/
