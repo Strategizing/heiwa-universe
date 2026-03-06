@@ -60,7 +60,7 @@ python apps/heiwa_hub/actions/smoke_test_discord.py
 ## Locked Interface Contract
 
 The full design review with all interface details is at:
-**`/Users/dmcgregsauce/.gemini/antigravity/brain/117dce7b-90ea-4baf-a67e-986904210529/broker_extraction_design_review.md`**
+**`config/swarm/BROKER_DESIGN_REVIEW.md`**
 
 ### The Short Version
 
@@ -249,7 +249,7 @@ Phase B Step 5: Dual-mode smoke test — pass with and without broker
 
 ## Questions? Read These Files
 
-1. Full design review: `/Users/dmcgregsauce/.gemini/antigravity/brain/117dce7b-90ea-4baf-a67e-986904210529/broker_extraction_design_review.md`
+1. Full design review: `config/swarm/BROKER_DESIGN_REVIEW.md`
 2. Build blueprint: `config/swarm/BUILD_BLUEPRINT_2026-03-06.md`
 3. System identity: `SOUL.md`
-4. Agent conventions: `AGENTS.md` (root level, not the SpacetimeDB copy in apps/)
+4. Agent conventions: `AGENTS.md`

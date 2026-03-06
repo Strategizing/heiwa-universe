@@ -1,212 +1,241 @@
-# AGENTS.md - Your Workspace
+# AGENTS.md — Heiwa Engineering Agent Reference
 
-This folder is home. Treat it that way.
+> **Last Updated:** 2026-03-06 by Antigravity
+> **Canonical Source:** This file is the single reference for any AI agent working on Heiwa.
+> **Rule:** Read `SOUL.md` first (identity), then this file (how to work), then your handoff document (what to build).
 
-## First Run
+---
 
-If `BOOTSTRAP.md` exists, that's your birth certificate. Follow it, figure out who you are, then delete it. You won't need it again.
+## 1. Boot Sequence
 
-## Every Session
+Before doing any work on Heiwa:
 
-Before doing anything else:
+1. **Read `SOUL.md`** — who you are, how you behave
+2. **Read this file** — architecture, conventions, constraints
+3. **Read your handoff document** (e.g., `CODEX_HANDOFF_PHASE_B.md`) — your specific task
+4. **Read `config/swarm/BUILD_BLUEPRINT_2026-03-06.md`** — the current build plan and phase targets
+5. **Check `.env`** — verify environment variables are correct for your task
 
-1. Read `SOUL.md` — this is who you are
-2. Read `USER.md` — this is who you're helping
-3. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
-4. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
+Do not ask permission for these reads. Just do them.
 
-Don't ask permission. Just do it.
+---
 
-## Memory
+## 2. Heiwa Architecture (Current State)
 
-You wake up fresh each session. These files are your continuity:
+### System Overview
 
-- **Daily notes:** `memory/YYYY-MM-DD.md` (create `memory/` if needed) — raw logs of what happened
-- **Long-term:** `MEMORY.md` — your curated memories, like a human's long-term memory
+Heiwa is a sovereign AI orchestration swarm. It receives tasks from multiple surfaces (Discord, CLI, API), classifies and scores them, plans execution steps, dispatches work to agent executors, and delivers results back to the requesting surface.
 
-Capture what matters. Decisions, context, things to remember. Skip the secrets unless asked to keep them.
+### Agent Registry
 
-### 🧠 MEMORY.md - Your Long-Term Memory
+| Agent | File | Role | State Access |
+|:---|:---|:---|:---|
+| **Spine** | `apps/heiwa_hub/agents/spine.py` | Orchestrator. Auth gate, planning, dispatch. Single state owner. | DB read/write |
+| **Executor** | `apps/heiwa_hub/agents/executor.py` | Worker. Receives planned steps, runs LLM inference or tools, returns results. | NATS only |
+| **Messenger** | `apps/heiwa_hub/agents/messenger.py` | Discord gateway. Ingests commands, delivers results to channels/threads. | Discord API |
+| **Telemetry** | `apps/heiwa_hub/agents/telemetry.py` | Monitoring. CPU/RAM stats, node heartbeats, fleet health. | NATS only |
+| **Broker** *(Phase B)* | `apps/heiwa_hub/agents/broker.py` | Enricher. Intent → risk → compute class. Pure NATS, zero state. | NATS only |
+| **Codex** | `apps/heiwa_hub/agents/codex.py` | Builder proposal agent. Listens for code tasks, produces implementations. | NATS only |
+| **OpenClaw** | `apps/heiwa_hub/agents/openclaw.py` | Strategist proposal agent. Listens for strategy tasks, produces proposals. | NATS only |
 
-- **ONLY load in main session** (direct chats with your human)
-- **DO NOT load in shared contexts** (Discord, group chats, sessions with other people)
-- This is for **security** — contains personal context that shouldn't leak to strangers
-- You can **read, edit, and update** MEMORY.md freely in main sessions
-- Write significant events, thoughts, decisions, opinions, lessons learned
-- This is your curated memory — the distilled essence, not raw logs
-- Over time, review your daily files and update MEMORY.md with what's worth keeping
+All agents extend `BaseAgent` from `apps/heiwa_hub/agents/base.py`.
 
-### 📝 Write It Down - No "Mental Notes"!
+### Cognition Pipeline
 
-- **Memory is limited** — if you want to remember something, WRITE IT TO A FILE
-- "Mental notes" don't survive session restarts. Files do.
-- When someone says "remember this" → update `memory/YYYY-MM-DD.md` or relevant file
-- When you learn a lesson → update AGENTS.md, TOOLS.md, or the relevant skill
-- When you make a mistake → document it so future-you doesn't repeat it
-- **Text > Brain** 📝
+| Module | File | Purpose |
+|:---|:---|:---|
+| **IntentNormalizer** | `apps/heiwa_hub/cognition/intent_normalizer.py` | Keyword-based intent classification (13 intent classes) |
+| **RiskScorer** | `apps/heiwa_hub/cognition/risk_scorer.py` | 3-layer risk scoring (intent defaults → keyword escalators → surface trust) |
+| **LocalTaskPlanner** | `apps/heiwa_hub/cognition/planner.py` | Step decomposition from raw text into executable plan |
+| **ApprovalGate** | `apps/heiwa_hub/cognition/approval.py` | Human-in-the-loop for high-risk operations |
+| **CognitionEngine** | `apps/heiwa_hub/cognition/llm_local.py` | Tiered LLM inference (local Ollama → remote models) |
 
-## Safety
+### NATS Subject Topology
 
-- Don't exfiltrate private data. Ever.
-- Don't run destructive commands without asking.
-- `trash` > `rm` (recoverable beats gone forever)
-- When in doubt, ask.
+```
+# Task Lifecycle
+heiwa.core.request          # Legacy ingress (User/API → Spine)
+heiwa.tasks.new             # V2 ingress (Discord/Gateway → Spine)
+heiwa.tasks.exec            # Dispatch (Spine → Executor)
+heiwa.tasks.exec.result     # Results (Executor → Messenger)
+heiwa.tasks.status          # Lifecycle events (all agents emit, Messenger consumes)
+heiwa.tasks.progress        # Real-time progress during long tasks
 
-## External vs Internal
+# Broker (Phase B — being built)
+heiwa.broker.route          # Spine → Broker (send envelope for enrichment)
+heiwa.broker.route.result.* # Broker → Spine (reply with enriched envelope)
 
-**Safe to do freely:**
+# Node Management
+heiwa.node.heartbeat        # Liveness pulses
+heiwa.node.telemetry        # Resource usage stats
+heiwa.node.register         # New node announcement
 
-- Read files, explore, organize, learn
-- Search the web, check calendars
-- Work within this workspace
+# Mesh (V2 Decentralized)
+heiwa.mesh.capability.broadcast
+heiwa.mesh.task.bid
+heiwa.mesh.task.claim
 
-**Ask first:**
-
-- Sending emails, tweets, public posts
-- Anything that leaves the machine
-- Anything you're uncertain about
-
-## Group Chats
-
-You have access to your human's stuff. That doesn't mean you _share_ their stuff. In groups, you're a participant — not their voice, not their proxy. Think before you speak.
-
-### 💬 Know When to Speak!
-
-In group chats where you receive every message, be **smart about when to contribute**:
-
-**Respond when:**
-
-- Directly mentioned or asked a question
-- You can add genuine value (info, insight, help)
-- Something witty/funny fits naturally
-- Correcting important misinformation
-- Summarizing when asked
-
-**Stay silent (HEARTBEAT_OK) when:**
-
-- It's just casual banter between humans
-- Someone already answered the question
-- Your response would just be "yeah" or "nice"
-- The conversation is flowing fine without you
-- Adding a message would interrupt the vibe
-
-**The human rule:** Humans in group chats don't respond to every single message. Neither should you. Quality > quantity. If you wouldn't send it in a real group chat with friends, don't send it.
-
-**Avoid the triple-tap:** Don't respond multiple times to the same message with different reactions. One thoughtful response beats three fragments.
-
-Participate, don't dominate.
-
-### 😊 React Like a Human!
-
-On platforms that support reactions (Discord, Slack), use emoji reactions naturally:
-
-**React when:**
-
-- You appreciate something but don't need to reply (👍, ❤️, 🙌)
-- Something made you laugh (😂, 💀)
-- You find it interesting or thought-provoking (🤔, 💡)
-- You want to acknowledge without interrupting the flow
-- It's a simple yes/no or approval situation (✅, 👀)
-
-**Why it matters:**
-Reactions are lightweight social signals. Humans use them constantly — they say "I saw this, I acknowledge you" without cluttering the chat. You should too.
-
-**Don't overdo it:** One reaction per message max. Pick the one that fits best.
-
-## Tools
-
-Skills provide your tools. When you need one, check its `SKILL.md`. Keep local notes (camera names, SSH details, voice preferences) in `TOOLS.md`.
-
-**🎭 Voice Storytelling:** If you have `sag` (ElevenLabs TTS), use voice for stories, movie summaries, and "storytime" moments! Way more engaging than walls of text. Surprise people with funny voices.
-
-**📝 Platform Formatting:**
-
-- **Discord/WhatsApp:** No markdown tables! Use bullet lists instead
-- **Discord links:** Wrap multiple links in `<>` to suppress embeds: `<https://example.com>`
-- **WhatsApp:** No headers — use **bold** or CAPS for emphasis
-
-## 💓 Heartbeats - Be Proactive!
-
-When you receive a heartbeat poll (message matches the configured heartbeat prompt), don't just reply `HEARTBEAT_OK` every time. Use heartbeats productively!
-
-Default heartbeat prompt:
-`Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK.`
-
-You are free to edit `HEARTBEAT.md` with a short checklist or reminders. Keep it small to limit token burn.
-
-### Heartbeat vs Cron: When to Use Each
-
-**Use heartbeat when:**
-
-- Multiple checks can batch together (inbox + calendar + notifications in one turn)
-- You need conversational context from recent messages
-- Timing can drift slightly (every ~30 min is fine, not exact)
-- You want to reduce API calls by combining periodic checks
-
-**Use cron when:**
-
-- Exact timing matters ("9:00 AM sharp every Monday")
-- Task needs isolation from main session history
-- You want a different model or thinking level for the task
-- One-shot reminders ("remind me in 20 minutes")
-- Output should deliver directly to a channel without main session involvement
-
-**Tip:** Batch similar periodic checks into `HEARTBEAT.md` instead of creating multiple cron jobs. Use cron for precise schedules and standalone tasks.
-
-**Things to check (rotate through these, 2-4 times per day):**
-
-- **Emails** - Any urgent unread messages?
-- **Calendar** - Upcoming events in next 24-48h?
-- **Mentions** - Twitter/social notifications?
-- **Weather** - Relevant if your human might go out?
-
-**Track your checks** in `memory/heartbeat-state.json`:
-
-```json
-{
-  "lastChecks": {
-    "email": 1703275200,
-    "calendar": 1703260800,
-    "weather": null
-  }
-}
+# Logging
+heiwa.log.info
+heiwa.log.error
+heiwa.log.thought
 ```
 
-**When to reach out:**
+### Package Structure
 
-- Important email arrived
-- Calendar event coming up (&lt;2h)
-- Something interesting you found
-- It's been >8h since you said anything
+```
+heiwa/
+├── apps/heiwa_hub/           # Main application
+│   ├── main.py               # Hub boot sequence
+│   ├── agents/               # All agent implementations
+│   ├── cognition/            # Intent, risk, planning, LLM
+│   ├── actions/              # Smoke tests, scripts
+│   └── tests/                # Test sets and runners
+├── packages/
+│   ├── heiwa_sdk/            # Config, vault, DB, cognition engine
+│   ├── heiwa_protocol/       # NATS subjects, payload keys (shared contract)
+│   ├── heiwa_identity/       # Node UUID, identity management
+│   └── heiwa_ui/             # Terminal UI components
+├── config/
+│   ├── swarm/                # Build blueprint, topology docs
+│   └── identities/           # Agent identity profiles
+├── .env                      # Base environment variables
+├── .env.worker.local         # Worker-specific overrides (higher priority than .env)
+└── requirements.txt          # Python dependencies
+```
 
-**When to stay quiet (HEARTBEAT_OK):**
+### Config Loading Priority
 
-- Late night (23:00-08:00) unless urgent
-- Human is clearly busy
-- Nothing new since last check
-- You just checked &lt;30 minutes ago
+`heiwa_sdk.config.load_swarm_env()` loads in this order (each overrides the previous):
 
-**Proactive work you can do without asking:**
+1. `.env` (base)
+2. `.env.worker.local` (worker overrides)
+3. `vault.env` (secrets — highest priority)
 
-- Read and organize memory files
-- Check on projects (git status, etc.)
-- Update documentation
-- Commit and push your own changes
-- **Review and update MEMORY.md** (see below)
+**If a variable is set in both `.env` and `.env.worker.local`, the worker value wins.** This has bitten agents before — always check both files when debugging config issues.
 
-### 🔄 Memory Maintenance (During Heartbeats)
+---
 
-Periodically (every few days), use a heartbeat to:
+## 3. Intent Taxonomy (13 Classes)
 
-1. Read through recent `memory/YYYY-MM-DD.md` files
-2. Identify significant events, lessons, or insights worth keeping long-term
-3. Update `MEMORY.md` with distilled learnings
-4. Remove outdated info from MEMORY.md that's no longer relevant
+| Intent | Risk Default | Approval | Target Runtime | Use Case |
+|:---|:---|:---|:---|:---|
+| `build` | medium | No | macbook/codex | Create, implement, code, script |
+| `deploy` | high | Yes | railway/heiwa_ops | Ship to staging/production |
+| `operate` | high | Yes | railway/heiwa_ops | Fix, debug, incident response |
+| `files` | high | Yes | macbook/codex | File system mutations |
+| `mesh_ops` | medium | Yes | macbook/codex | Node sync, mesh topology |
+| `self_buff` | high | Yes | macbook/codex | Self-improvement, optimization |
+| `chat` | low | No | railway/ollama | Casual conversation |
+| `automate` | medium | Yes | railway/n8n | Workflows, cron, triggers |
+| `strategy` | medium | No | both/openclaw | Design, architecture, roadmap |
+| `research` | low | No | both/openclaw | Analyze, compare, investigate |
+| `audit` | low | No | both/heiwa_ops | Verify, scan, validate, test |
+| `media` | low | No | both/ollama | Image, video, audio, visual |
+| `status_check` | low | No | railway/ollama | System health, uptime |
 
-Think of it like a human reviewing their journal and updating their mental model. Daily files are raw notes; MEMORY.md is curated wisdom.
+Fallback intent: `general` (low risk, no approval, ollama).
 
-The goal: Be helpful without being annoying. Check in a few times a day, do useful background work, but respect quiet time.
+---
 
-## Make It Yours
+## 4. Hard Constraints (Violating These Is a Bug)
 
-This is a starting point. Add your own conventions, style, and rules as you figure out what works.
+1. **No 30B+ models on M4 Pro.** Local inference uses ≤14B quantized models only.
+2. **No cloud GPU rental inside Heiwa.** Use SiliconFlow, Cerebras, or other inference APIs.
+3. **Cloud spend < $40/month total.** Budget is sovereign — no runaway costs.
+4. **NATS is ephemeral.** Do not use NATS as persistent state or durable storage.
+5. **Spine is the single state owner.** No other agent writes to the database in Phase B.
+6. **Broker is stateless.** No caching, no session memory, no local files.
+7. **Every Spine change must preserve fallback.** Inline processing is the safety net.
+8. **Secrets stay in vault.** Never hardcode tokens. Never log tokens. Use `vault.env` or env vars.
+9. **Privacy-sovereign data stays local.** Route to compute class 1 or 2, never to cloud.
+
+---
+
+## 5. Development Workflow
+
+### Running the Hub
+
+```bash
+cd /Users/dmcgregsauce/heiwa
+source .venv/bin/activate
+export PYTHONPATH=$(pwd)/packages/heiwa_sdk:$(pwd)/packages/heiwa_protocol:$(pwd)/packages/heiwa_identity:$(pwd)/packages/heiwa_ui:$(pwd)/apps
+
+# Start NATS
+nats-server -js &
+
+# Start the hub
+python -m apps.heiwa_hub.main
+```
+
+### Running Tests
+
+```bash
+# Intent classifier (50 cases, ≥95% threshold)
+python apps/heiwa_hub/tests/test_intent_classifier.py
+
+# Risk scorer (21 cases)
+python apps/heiwa_hub/tests/test_risk_scorer.py
+
+# Discord smoke test (requires hub + NATS running)
+python apps/heiwa_hub/actions/smoke_test_discord.py
+```
+
+### Commit Convention
+
+```
+Phase [X] Step [N]: [Short description]
+
+[Longer description if needed]
+```
+
+Example: `Phase B Step 1: BrokerAgent with NATS request-reply enrichment`
+
+### Environment Variables That Matter
+
+| Variable | What It Does | Where Set |
+|:---|:---|:---|
+| `HEIWA_AUTH_TOKEN` | Digital Barrier — authenticates all inbound tasks | `.env` + `.env.worker.local` |
+| `HEIWA_ENABLE_MESSENGER` | Enables Discord gateway agent | `.env` |
+| `HEIWA_ENABLE_BROKER` | Enables broker enrichment agent (Phase B) | `.env` |
+| `NATS_URL` | NATS server connection string | `.env` |
+| `DISCORD_BOT_TOKEN` | Discord bot credentials | `.env` |
+| `HEIWA_DISCORD_SMOKE_CHANNEL_ID` | Channel for smoke test verification | `.env` |
+| `HEIWA_BROKER_STATE_MODE` | `nats_only` (Phase B) or `stdb_direct` (Phase D) | `.env` |
+
+---
+
+## 6. Phase Map
+
+| Phase | Name | Status | Scope |
+|:---|:---|:---|:---|
+| **A** | Smoke & Barrier | ✅ CLOSED | Bus test, Discord test, auth validation |
+| **B** | Broker Extraction | 🔨 ACTIVE | Extract intent/risk/routing from Spine into broker |
+| **C** | Policy & Budget | Planned | Objective function, cost guards, provider rotation |
+| **D** | SpacetimeDB | Planned | Replace SQLite/Postgres with SpacetimeDB |
+| **E** | Multi-Node | Planned | Scale across Node A + Node B |
+| **F** | Surface Expansion | Planned | Voice, Slack, web dashboard ingress |
+
+---
+
+## 7. Safety & Trust
+
+- **Read-only first.** Inspect before you mutate. `git status` before `git commit`.
+- **Secrets are redacted.** Never log, echo, or commit tokens, passwords, or API keys.
+- **Write-gated autonomy.** Propose evidence before high-impact mutations. Commit messages explain what and why.
+- **`trash` > `rm`.** Recoverable beats gone forever.
+- **Ask when uncertain.** If you're unsure about a design decision, stop and ask.
+
+---
+
+## 8. Current Handoff Documents
+
+| Document | Agent | Scope |
+|:---|:---|:---|
+| `CODEX_HANDOFF_PHASE_B.md` | Codex | Broker extraction implementation |
+
+When you receive a new handoff, it will appear in the repo root. Read it before starting work.
+
+---
+
+_This file is maintained by the operator and build agents. If you update it, commit the change with a clear message explaining what was modified._
