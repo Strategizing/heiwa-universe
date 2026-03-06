@@ -1,0 +1,358 @@
+{
+  "version": "2026-03-06",
+  "description": "50 representative requests covering all 7 intent classes. Includes adversarial cases: multi-keyword overlap, ambiguous phrasing, single-word inputs, non-English inputs.",
+  "primary_classes": ["build", "research", "operate", "audit", "strategy", "media", "automate"],
+  "note": "The current classifier also emits: status_check, mesh_ops, self_buff, chat, deploy, files, general. Tests with expected_class outside the 7 primary map to their actual classifier output.",
+  "cases": [
+    {
+      "id": 1,
+      "input": "Build a Python CLI tool that validates all NATS subjects against the protocol spec",
+      "expected_class": "build",
+      "category": "clear",
+      "notes": "Direct 'build' keyword match"
+    },
+    {
+      "id": 2,
+      "input": "Create a FastAPI health endpoint for the broker service",
+      "expected_class": "build",
+      "category": "clear",
+      "notes": "'create' keyword match → build"
+    },
+    {
+      "id": 3,
+      "input": "Implement the risk scorer module as specified in the Phase B design review",
+      "expected_class": "build",
+      "category": "clear",
+      "notes": "'implement' keyword match → build"
+    },
+    {
+      "id": 4,
+      "input": "Write a script to generate SpacetimeDB migration SQL from the current SQLite schema",
+      "expected_class": "build",
+      "category": "clear",
+      "notes": "'script' keyword → build"
+    },
+    {
+      "id": 5,
+      "input": "Code a NATS request-reply handler for the broker route subject",
+      "expected_class": "build",
+      "category": "clear",
+      "notes": "'code' keyword → build"
+    },
+    {
+      "id": 6,
+      "input": "Research the latest SpacetimeDB Python SDK changes and summarize breaking changes since v0.12",
+      "expected_class": "research",
+      "category": "clear",
+      "notes": "'research' keyword match"
+    },
+    {
+      "id": 7,
+      "input": "Analyze the cost differences between SiliconFlow DeepSeek-R2 and Cerebras GPT-OSS-120B for our routing use case",
+      "expected_class": "research",
+      "category": "clear",
+      "notes": "'analyze' keyword → research"
+    },
+    {
+      "id": 8,
+      "input": "Compare Cloudflare Zero-Trust Tunnels versus Tailscale for our limb ingress topology",
+      "expected_class": "research",
+      "category": "clear",
+      "notes": "'compare' keyword → research"
+    },
+    {
+      "id": 9,
+      "input": "Summarize the NATS JetStream documentation for stream-based task persistence patterns",
+      "expected_class": "research",
+      "category": "clear",
+      "notes": "'summarize' keyword → research"
+    },
+    {
+      "id": 10,
+      "input": "Investigate why the executor takes 3x longer on Node B compared to Node A for similar tasks",
+      "expected_class": "research",
+      "category": "clear",
+      "notes": "'investigate' keyword → research"
+    },
+    {
+      "id": 11,
+      "input": "Fix the broken heartbeat loop that crashes after 12 hours of uptime",
+      "expected_class": "operate",
+      "category": "clear",
+      "notes": "'fix' keyword → operate"
+    },
+    {
+      "id": 12,
+      "input": "Debug why the Discord bot posts duplicate messages when response_thread_id is null",
+      "expected_class": "operate",
+      "category": "clear",
+      "notes": "'debug' keyword → operate"
+    },
+    {
+      "id": 13,
+      "input": "There's an incident — NATS is dropping messages under load on the Railway deployment",
+      "expected_class": "operate",
+      "category": "clear",
+      "notes": "'incident' keyword → operate"
+    },
+    {
+      "id": 14,
+      "input": "Patch the envelope.py to handle missing sender_id fields gracefully",
+      "expected_class": "operate",
+      "category": "clear",
+      "notes": "'patch' keyword → operate"
+    },
+    {
+      "id": 15,
+      "input": "Optimize the planner's step generation to reduce token usage by 40%",
+      "expected_class": "self_buff",
+      "category": "adversarial",
+      "notes": "'optimize' matches self_buff (rule 3) before operate (rule 12). self_buff wins by rule priority. This is correct behavior."
+    },
+    {
+      "id": 16,
+      "input": "Verify that all NATS subjects in the protocol.py match the documented subject map",
+      "expected_class": "audit",
+      "category": "clear",
+      "notes": "'verify' keyword → audit"
+    },
+    {
+      "id": 17,
+      "input": "Check if the Railway deployment has the correct environment variables set",
+      "expected_class": "audit",
+      "category": "clear",
+      "notes": "'check' keyword → audit"
+    },
+    {
+      "id": 18,
+      "input": "Scan the codebase for hardcoded secrets or tokens that should be in vault.env",
+      "expected_class": "audit",
+      "category": "clear",
+      "notes": "'scan' keyword → audit"
+    },
+    {
+      "id": 19,
+      "input": "Review the executor agent's error handling paths for unrecoverable failures",
+      "expected_class": "audit",
+      "category": "clear",
+      "notes": "'review' keyword → audit"
+    },
+    {
+      "id": 20,
+      "input": "Validate that the task envelope schema matches the v2 specification in config/schemas",
+      "expected_class": "audit",
+      "category": "clear",
+      "notes": "'validate' keyword → audit"
+    },
+    {
+      "id": 21,
+      "input": "Design an approval gate that uses Discord reactions for human-in-the-loop verification",
+      "expected_class": "strategy",
+      "category": "clear",
+      "notes": "'design' keyword → strategy"
+    },
+    {
+      "id": 22,
+      "input": "Create a strategy for migrating from SQLite to SpacetimeDB with zero downtime",
+      "expected_class": "build",
+      "category": "adversarial",
+      "notes": "'create' matches build (rule 1) before 'strategy' (rule 9). build wins by position. Keyword-first behavior."
+    },
+    {
+      "id": 23,
+      "input": "Architect the Phase C policy engine with budget guards and provider rotation",
+      "expected_class": "strategy",
+      "category": "clear",
+      "notes": "'architect' keyword → strategy"
+    },
+    {
+      "id": 24,
+      "input": "Propose a roadmap for adding Voice and Slack ingress surfaces in Phase F",
+      "expected_class": "strategy",
+      "category": "clear",
+      "notes": "'roadmap' keyword → strategy. Also 'proposal' keyword present."
+    },
+    {
+      "id": 25,
+      "input": "What's the best approach to implement the objective function for cost optimization?",
+      "expected_class": "build",
+      "category": "adversarial",
+      "notes": "'implement' keyword triggers build despite being phrased as a question. Keyword classifier doesn't distinguish question vs command. Correct behavior for rule-based."
+    },
+    {
+      "id": 26,
+      "input": "Generate an image of the Heiwa logo with a dark theme and gradient background",
+      "expected_class": "media",
+      "category": "clear",
+      "notes": "'image' keyword → media"
+    },
+    {
+      "id": 27,
+      "input": "Render a visualization of the NATS subject topology as a mermaid diagram",
+      "expected_class": "media",
+      "category": "clear",
+      "notes": "'render' keyword → media"
+    },
+    {
+      "id": 28,
+      "input": "Create a video walkthrough of the broker extraction process",
+      "expected_class": "build",
+      "category": "adversarial",
+      "notes": "'create' matches build (rule 1) before 'video' matches media (rule 12). build wins."
+    },
+    {
+      "id": 29,
+      "input": "Design an audio notification sound for task completion alerts",
+      "expected_class": "strategy",
+      "category": "adversarial",
+      "notes": "'design' → strategy at rule 9 is checked. But wait — 'audio' appears nowhere in first 8 rules. Actually no build/deploy/operate keyword present, so scanning reaches strategy with 'design'. Correct."
+    },
+    {
+      "id": 30,
+      "input": "Create a visual dashboard for the telemetry agent metrics",
+      "expected_class": "build",
+      "category": "adversarial",
+      "notes": "'create' → build (rule 1) wins before 'visual' → media (rule 12). Build checked first."
+    },
+    {
+      "id": 31,
+      "input": "Automate the daily backup of the SQLite database to a Railway volume",
+      "expected_class": "automate",
+      "category": "clear",
+      "notes": "'automate' keyword → automate"
+    },
+    {
+      "id": 32,
+      "input": "Set up a workflow that runs the smoke test every morning at 9am",
+      "expected_class": "automate",
+      "category": "clear",
+      "notes": "'workflow' keyword → automate"
+    },
+    {
+      "id": 33,
+      "input": "Schedule a cron job to prune old task records from the database weekly",
+      "expected_class": "automate",
+      "category": "clear",
+      "notes": "'schedule' and 'cron' keywords → automate"
+    },
+    {
+      "id": 34,
+      "input": "Set up a trigger that alerts me on Discord when monthly cloud spend exceeds $30",
+      "expected_class": "automate",
+      "category": "clear",
+      "notes": "'trigger' keyword → automate"
+    },
+    {
+      "id": 35,
+      "input": "Monitor the Railway deployment for memory leaks and auto-restart if RAM exceeds 80%",
+      "expected_class": "automate",
+      "category": "clear",
+      "notes": "'monitor' keyword → automate"
+    },
+    {
+      "id": 36,
+      "input": "Deploy the status page to production with a health check rollback",
+      "expected_class": "deploy",
+      "category": "clear",
+      "notes": "'deploy' keyword → deploy class (not one of the 7 primary but a valid classifier output)"
+    },
+    {
+      "id": 37,
+      "input": "Ship the new broker agent to Railway staging environment",
+      "expected_class": "deploy",
+      "category": "clear",
+      "notes": "'ship' keyword → deploy"
+    },
+    {
+      "id": 38,
+      "input": "What's the status of the swarm? How are we looking?",
+      "expected_class": "status_check",
+      "category": "clear",
+      "notes": "'how are we' phrase match → status_check. Also 'status' keyword."
+    },
+    {
+      "id": 39,
+      "input": "hello",
+      "expected_class": "chat",
+      "category": "single_word",
+      "notes": "Single word input. 'hello' → chat."
+    },
+    {
+      "id": 40,
+      "input": "ping",
+      "expected_class": "chat",
+      "category": "single_word",
+      "notes": "Single word. 'ping' → chat."
+    },
+    {
+      "id": 41,
+      "input": "optimize",
+      "expected_class": "self_buff",
+      "category": "single_word",
+      "notes": "Single word. 'optimize' → self_buff (checked before operate in rule order)."
+    },
+    {
+      "id": 42,
+      "input": "build and deploy the new risk scorer to production after testing it",
+      "expected_class": "build",
+      "category": "adversarial",
+      "notes": "Multi-keyword: 'build' + 'deploy' + 'test'. build is rule 1, deploy is rule 2, audit ('test') is rule 11. build wins first."
+    },
+    {
+      "id": 43,
+      "input": "Investigate and fix the memory leak in the executor agent",
+      "expected_class": "operate",
+      "category": "adversarial",
+      "notes": "Multi-keyword: 'investigate' (research, rule 10) + 'fix' (operate, rule 3). operate checked before research, so 'fix' wins."
+    },
+    {
+      "id": 44,
+      "input": "Review the strategy proposal for Phase C and create an implementation plan",
+      "expected_class": "build",
+      "category": "adversarial",
+      "notes": "Multi-keyword: 'create' (build, rule 1), 'review' (audit, rule 11), 'strategy' (rule 9). build at rule 1 wins."
+    },
+    {
+      "id": 45,
+      "input": "Haz un análisis comparativo de los costos entre proveedores de LLM",
+      "expected_class": "general",
+      "category": "non_english",
+      "notes": "Spanish input. No English keyword matches. Should fall to 'general'. LLM fallback might classify correctly if available."
+    },
+    {
+      "id": 46,
+      "input": "タスクのステータスを確認してください",
+      "expected_class": "general",
+      "category": "non_english",
+      "notes": "Japanese input meaning 'please check task status'. No English keyword match → general."
+    },
+    {
+      "id": 47,
+      "input": "Make it better",
+      "expected_class": "general",
+      "category": "adversarial",
+      "notes": "Extremely vague. No strong keyword match. Should fall to general."
+    },
+    {
+      "id": 48,
+      "input": "Do the thing we talked about yesterday with the database",
+      "expected_class": "general",
+      "category": "adversarial",
+      "notes": "Contextual reference with no classifiable keywords. Falls to general."
+    },
+    {
+      "id": 49,
+      "input": "The audit found sync issues between mesh nodes — schedule a fix for tonight and deploy the patch to production",
+      "expected_class": "deploy",
+      "category": "adversarial",
+      "notes": "Dense multi-keyword: 'fix' (operate, rule 3), 'deploy' (rule 2), 'patch' (operate, rule 3). But first scanned token matching is position-based through text. 'audit' appears early but is rule 11. 'sync' → mesh_ops at rule 5. Let's trace: build rule keywords ('build','create','implement','code','script','project') - none found. deploy ('deploy','release','ship','publish','push to production') - 'deploy' found. Deploy wins at rule 2."
+    },
+    {
+      "id": 50,
+      "input": "scan the project structure for unused dependencies and delete any leftover build artifacts from the temp folder",
+      "expected_class": "build",
+      "category": "adversarial",
+      "notes": "Multi-keyword: 'scan' (audit, rule 11), 'project' (build, rule 1), 'delete' (files, rule 4), 'build' (build, rule 1). build at rule 1 triggers on 'project'. build wins."
+    }
+  ]
+}

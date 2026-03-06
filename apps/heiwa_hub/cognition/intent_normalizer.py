@@ -50,19 +50,22 @@ TIER_ENUM = {
 }
 
 _INTENT_RULES = (
-    ("status_check", ("how are we", "looking", "status", "health", "uptime", "pulse", "ready"), "low", False),
-    ("mesh_ops", ("audit", "mesh", "nodes", "sync", "connection", "throughput", "latency"), "medium", True),
+    # --- High-specificity action intents first ---
+    ("build", ("build", "create", "implement", "code", "script", "project"), "medium", False),
+    ("deploy", ("deploy", "release", "ship", "publish", "push to production"), "high", True),
+    ("operate", ("fix", "debug", "incident", "patch"), "high", True),
+    ("files", ("file", "move", "rename", "delete", "folder"), "high", True),
+    # --- Domain-specific intents ---
+    ("mesh_ops", ("mesh", "nodes", "sync", "connection", "throughput", "latency"), "medium", True),
     ("self_buff", ("improve", "optimize", "refactor yourself", "buff", "sota", "upgrade"), "high", True),
     ("chat", ("hi", "hello", "hey", "wsg", "sup", "ping"), "low", False),
     ("automate", ("automate", "workflow", "schedule", "cron", "monitor", "trigger"), "medium", True),
     ("strategy", ("strategy", "architect", "roadmap", "proposal", "design"), "medium", False),
     ("research", ("research", "analyze", "compare", "summarize", "investigate"), "low", False),
-    ("audit", ("verify", "check", "scan", "review", "validate", "test"), "low", False),
+    ("audit", ("verify", "check", "scan", "review", "validate", "test", "audit"), "low", False),
     ("media", ("image", "render", "video", "audio", "visual", "design asset"), "low", False),
-    ("build", ("build", "create", "implement", "code", "script", "project"), "medium", False),
-    ("deploy", ("deploy", "release", "ship", "publish", "production"), "high", True),
-    ("operate", ("fix", "debug", "incident", "patch", "optimize"), "high", True),
-    ("files", ("file", "move", "rename", "delete", "folder"), "high", True),
+    # --- Broad observational intents last ---
+    ("status_check", ("how are we", "how are things", "what's the status", "status update", "health check", "system status", "uptime", "pulse"), "low", False),
 )
 
 _INTENT_DEFAULTS = {
