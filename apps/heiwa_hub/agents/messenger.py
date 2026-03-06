@@ -13,11 +13,12 @@ from discord.ext import commands
 from heiwa_hub.agents.base import BaseAgent
 from heiwa_hub.cognition.approval import ApprovalRegistry
 from heiwa_hub.cognition.planner import LocalTaskPlanner
-from heiwa_protocol.protocol import Subject
+from heiwa_protocol.protocol import Payload, Subject
 from heiwa_ui.manager import UIManager
 from heiwa_sdk.db import Database
 
 logger = logging.getLogger("Messenger")
+_MISSING = object()
 
 STRUCTURE = {
     "👑 STRATEGIC HQ": {
@@ -179,20 +180,42 @@ class MessengerAgent(BaseAgent):
         inner = data.get("data")
         return inner if isinstance(inner, dict) else data
 
+    @staticmethod
+    def _payload_value(payload: dict[str, Any], key: str):
+        if not isinstance(payload, dict):
+            return _MISSING
+        return payload[key] if key in payload else _MISSING
+
     def _resolve_target_channel(self, payload: dict[str, Any], task_id: str):
         target_meta = self.task_targets.get(task_id, {})
-        thread_id = payload.get("response_thread_id") or target_meta.get("thread_id")
-        channel_id = payload.get("response_channel_id") or target_meta.get("channel_id")
+
+        thread_value = self._payload_value(payload, "response_thread_id")
+        if thread_value is _MISSING:
+            thread_id = target_meta.get("thread_id")
+        else:
+            # Explicit null means "post top-level in the channel", not "reuse cached thread".
+            thread_id = thread_value
+
+        channel_value = self._payload_value(payload, "response_channel_id")
+        if channel_value is _MISSING or channel_value in {"", 0}:
+            channel_id = target_meta.get("channel_id")
+        else:
+            channel_id = channel_value
+
         if not channel_id:
             intent = payload.get("intent_class", "chat")
             channel_id = self._get_channel_id(intent) or self.channel_id
         target = None
-        if thread_id:
-            try: target = self.bot.get_channel(int(thread_id))
-            except: pass
+        if thread_id not in {None, "", 0}:
+            try:
+                target = self.bot.get_channel(int(thread_id))
+            except Exception:
+                pass
         if not target and channel_id:
-            try: target = self.bot.get_channel(int(channel_id))
-            except: pass
+            try:
+                target = self.bot.get_channel(int(channel_id))
+            except Exception:
+                pass
         return target
 
     async def on_ready(self):

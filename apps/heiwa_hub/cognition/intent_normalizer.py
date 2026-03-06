@@ -7,10 +7,14 @@ from typing import Any
 from heiwa_hub.cognition.llm_local import LocalLLMEngine
 
 INTENT_ENUM = {
+    "audit",
     "build",
     "research",
     "deploy",
     "operate",
+    "strategy",
+    "media",
+    "automate",
     "mesh_ops",
     "self_buff",
     "status_check",
@@ -19,9 +23,22 @@ INTENT_ENUM = {
     "chat",
     "general",
 }
-RISK_ENUM = {"low", "medium", "high"}
+RISK_ENUM = {"low", "medium", "high", "critical"}
 RUNTIME_ENUM = {"railway", "macbook", "both"}
-TOOL_ENUM = {"codex", "openclaw", "picoclaw", "n8n", "ollama"}
+TOOL_ENUM = {
+    "codex",
+    "gemini_cli",
+    "antigravity",
+    "openclaw",
+    "picoclaw",
+    "n8n",
+    "ollama",
+    "heiwa_ops",
+    "heiwa_code",
+    "heiwa_claw",
+    "heiwa_reflex",
+    "e2b",
+}
 TIER_ENUM = {
     "tier1_local",
     "tier2_fast_context",
@@ -37,8 +54,11 @@ _INTENT_RULES = (
     ("mesh_ops", ("audit", "mesh", "nodes", "sync", "connection", "throughput", "latency"), "medium", True),
     ("self_buff", ("improve", "optimize", "refactor yourself", "buff", "sota", "upgrade"), "high", True),
     ("chat", ("hi", "hello", "hey", "wsg", "sup", "ping"), "low", False),
-    ("automation", ("automate", "workflow", "schedule", "cron", "n8n"), "high", True),
+    ("automate", ("automate", "workflow", "schedule", "cron", "monitor", "trigger"), "medium", True),
+    ("strategy", ("strategy", "architect", "roadmap", "proposal", "design"), "medium", False),
     ("research", ("research", "analyze", "compare", "summarize", "investigate"), "low", False),
+    ("audit", ("verify", "check", "scan", "review", "validate", "test"), "low", False),
+    ("media", ("image", "render", "video", "audio", "visual", "design asset"), "low", False),
     ("build", ("build", "create", "implement", "code", "script", "project"), "medium", False),
     ("deploy", ("deploy", "release", "ship", "publish", "production"), "high", True),
     ("operate", ("fix", "debug", "incident", "patch", "optimize"), "high", True),
@@ -49,11 +69,15 @@ _INTENT_DEFAULTS = {
     "status_check": ("railway", "ollama", "tier1_local"),
     "mesh_ops": ("macbook", "codex", "tier3_orchestrator"),
     "self_buff": ("macbook", "codex", "tier5_heavy_code"),
+    "audit": ("both", "heiwa_ops", "tier1_local"),
     "build": ("macbook", "codex", "tier5_heavy_code"),
-    "research": ("both", "openclaw", "tier2_fast_context"),
-    "deploy": ("macbook", "codex", "tier5_heavy_code"),
-    "operate": ("macbook", "codex", "tier5_heavy_code"),
-    "automation": ("macbook", "n8n", "tier3_orchestrator"),
+    "research": ("both", "openclaw", "tier6_premium_context"),
+    "strategy": ("both", "openclaw", "tier7_supreme_court"),
+    "media": ("both", "ollama", "tier2_fast_context"),
+    "deploy": ("railway", "heiwa_ops", "tier3_orchestrator"),
+    "operate": ("railway", "heiwa_ops", "tier3_orchestrator"),
+    "automate": ("railway", "n8n", "tier3_orchestrator"),
+    "automation": ("railway", "n8n", "tier3_orchestrator"),
     "files": ("macbook", "codex", "tier5_heavy_code"),
     "chat": ("railway", "ollama", "tier1_local"),
     "general": ("railway", "ollama", "tier1_local"),
@@ -194,9 +218,9 @@ class IntentNormalizer:
             "intent_class, risk_level, requires_approval, preferred_runtime, preferred_tool, confidence.\n"
             "Enums:\n"
             f"- intent_class: {','.join(INTENT_ENUM)}\n"
-            "- risk_level: low,medium,high\n"
+            "- risk_level: low,medium,high,critical\n"
             "- preferred_runtime: railway,macbook,both\n"
-            "- preferred_tool: codex,openclaw,picoclaw,n8n,ollama\n"
+            "- preferred_tool: codex,gemini_cli,antigravity,openclaw,picoclaw,n8n,ollama,heiwa_ops,heiwa_code,heiwa_claw,heiwa_reflex,e2b\n"
             "- confidence: 0..1\n"
             "Request:\n"
             f"{text}"
@@ -256,11 +280,20 @@ class IntentNormalizer:
         elif intent == "operate":
             if not any(k in lowered for k in ("service", "api", "worker", "database", "nats", "queue", "agent")):
                 out.append("affected system/component")
-        elif intent == "automation":
+        elif intent in {"automation", "automate"}:
             if not any(k in lowered for k in ("hourly", "daily", "weekly", "schedule", "trigger", "event")):
                 out.append("trigger cadence or event source")
             if not any(k in lowered for k in ("discord", "notion", "email", "slack", "webhook", "output")):
                 out.append("destination for automation outputs")
+        elif intent == "audit":
+            if not any(k in lowered for k in ("repo", "service", "system", "scope", "component")):
+                out.append("target system or scope")
+        elif intent == "strategy":
+            if not any(k in lowered for k in ("tradeoff", "goal", "constraint", "timeline", "outcome")):
+                out.append("decision criteria or desired outcome")
+        elif intent == "media":
+            if not any(k in lowered for k in ("image", "video", "audio", "visual", "format")):
+                out.append("target media format or output")
 
         return out
 

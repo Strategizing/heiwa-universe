@@ -20,6 +20,8 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
+SMOKE_PREFIX = "HEIWA_SMOKE_PROBE:"
+
 
 def find_monorepo_root(start_path: Path) -> Path:
     current = start_path.resolve()
@@ -64,7 +66,23 @@ def http_health(url: str, timeout: int = 5) -> tuple[bool, str]:
         return (False, str(exc))
 
 
+def maybe_run_smoke_probe(argv: list[str]) -> bool:
+    instruction = " ".join(argv).strip()
+    if not instruction.upper().startswith(SMOKE_PREFIX):
+        return False
+
+    probe_id = instruction.split(":", 1)[1].strip() or "unknown"
+    print("--- HEIWA 360 SMOKE PROBE ---")
+    say("OK", "smoke", f"bounded class-1 probe executed for {probe_id}")
+    print(f"HEIWA_SMOKE_PROBE_OK:{probe_id}")
+    print("Result: READY")
+    return True
+
+
 def main() -> int:
+    if maybe_run_smoke_probe(sys.argv[1:]):
+        return 0
+
     print("--- HEIWA 360 CHECK ---")
     fails = 0
     warns = 0

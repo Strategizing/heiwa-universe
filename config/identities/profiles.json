@@ -1,34 +1,30 @@
 {
-  "version": 12,
+  "version": 13,
   "default_identity": "operator-general",
   "identities": [
     {
       "id": "operator-general",
-      "description": "General Swarm Instance. Standard agility and workspace interaction.",
-      "trigger_keywords": ["heiwa", "ops", "fix", "status"],
+      "description": "Default Heiwa operator identity. Local-first orchestration with cheap acceptable routing before premium escalation.",
+      "trigger_keywords": ["heiwa", "ops", "fix", "status", "route", "task"],
       "targets": {
-        "tool": "openclaw", 
-        "runtime": "macbook@heiwa-agile",
-        "required_capabilities": ["standard_compute", "workspace_interaction"]
+        "tool": "openclaw",
+        "runtime": "macbook@heiwa-node-a",
+        "required_capabilities": ["orchestration_reasoning", "workspace_interaction"]
       },
       "cells": [
-        {"role": "scout", "model": "google/gemini-2.0-flash", "difficulty": "low"},
-        {"role": "builder", "model": "ollama/qwen2.5-coder:7b", "difficulty": "medium"},
-        {"role": "architect", "model": "cerebras/gpt-oss-120b", "difficulty": "high"}
+        {"role": "scout", "model": "ollama/llama-4-scout:q4_k_m", "difficulty": "low"},
+        {"role": "builder", "model": "ollama/glm-4.7-flash:q4_k_m", "difficulty": "medium"},
+        {"role": "overflow", "model": "siliconflow/deepseek-r2", "difficulty": "high"}
       ],
       "models": {
         "openclaw": [
-          "ollama/qwen2.5-coder:7b",
-          "google/gemini-2.5-flash",
-          "google/gemini-2.0-flash",
-          "google/gemini-1.5-pro",
-          "groq/llama-3.1-8b-instant",
-          "groq/llama-3.3-70b-versatile",
+          "ollama/llama-4-scout:q4_k_m",
+          "ollama/glm-4.7-flash:q4_k_m",
+          "ollama/qwen2.5-coder:7b:q4",
+          "siliconflow/deepseek-r2",
           "cerebras/gpt-oss-120b",
-          "openrouter/qwen/qwen3-coder:free",
-          "openrouter/google/gemini-2.0-flash:free",
-          "opencode/glm-4.7-free",
-          "opencode/kimi-k2.5-free"
+          "google/gemini-2.5-pro",
+          "openai-codex/gpt-5.3-codex"
         ]
       },
       "actions": {
@@ -37,56 +33,28 @@
       }
     },
     {
-      "id": "architect-strategist",
-      "description": "Strategic Evolution Instance. High-level planning and roadmap development.",
-      "trigger_keywords": ["brainstorm", "plan", "strategy", "improve"],
+      "id": "codex-builder",
+      "description": "Premium build specialist for large implementation, repo mutation, and PR preparation.",
+      "trigger_keywords": ["build", "implement", "code", "refactor", "patch", "pr"],
       "targets": {
-        "tool": "openclaw", 
-        "runtime": "any",
-        "required_capabilities": ["brainstorming", "multi_model_inference"]
+        "tool": "codex",
+        "runtime": "cloud@class-3-build",
+        "required_capabilities": ["agile_coding", "repo_mutation"]
       },
       "cells": [
-        {"role": "analyst", "model": "google/gemini-1.5-pro", "difficulty": "medium"},
-        {"role": "visionary", "model": "google-antigravity/claude-opus-4-5-thinking", "difficulty": "high"}
+        {"role": "local_preflight", "model": "ollama/qwen2.5-coder:7b:q4", "difficulty": "medium"},
+        {"role": "builder", "model": "openai-codex/gpt-5.3-codex", "difficulty": "high"},
+        {"role": "reviewer", "model": "anthropic/claude-opus-4.6", "difficulty": "high"}
       ],
       "models": {
         "openclaw": [
-          "groq/llama-3.3-70b-versatile",
-          "google/gemini-1.5-pro",
-          "google-antigravity/claude-opus-4-5-thinking",
-          "google-antigravity/gemini-3-pro-high",
-          "openrouter/openai/gpt-oss-120b:free",
-          "openai-codex/gpt-5.2-codex"
-        ]
-      },
-      "actions": {
-        "discord_channel": "roadmap",
-        "report_channel": "executive-briefing"
-      }
-    },
-    {
-      "id": "heavy-reasoner",
-      "description": "Deep Logic Instance. Utilizes high-end VRAM for massive reasoning chains.",
-      "trigger_keywords": ["deepthink", "logic", "audit", "reasoning"],
-      "targets": {
-        "tool": "openclaw", 
-        "runtime": "wsl@heiwa-thinker",
-        "required_capabilities": ["heavy_compute", "gpu_native"]
-      },
-      "cells": [
-        {"role": "critic", "model": "groq/deepseek-r1-distill-llama-70b", "difficulty": "low"},
-        {"role": "generator", "model": "ollama/deepseek-r1:14b", "difficulty": "medium"},
-        {"role": "verifier", "model": "openrouter/qwen/qwen3-vl-30b-a3b-thinking", "difficulty": "high"}
-      ],
-      "models": {
-        "openclaw": [
-          "ollama/deepseek-r1:14b",
-          "groq/deepseek-r1-distill-llama-70b",
-          "openrouter/qwen/qwen3-vl-30b-a3b-thinking",
-          "openrouter/nousresearch/hermes-3-llama-3.1-405b:free",
-          "openrouter/qwen/qwen2.5-72b-instruct:free",
-          "groq/qwen-qwq-32b",
-          "cerebras/gpt-oss-120b"
+          "ollama/qwen2.5-coder:7b:q4",
+          "ollama/glm-4.7-flash:q4_k_m",
+          "openai-codex/gpt-5.3-codex",
+          "anthropic/claude-opus-4.6"
+        ],
+        "codex": [
+          "openai-codex/gpt-5.3-codex"
         ]
       },
       "actions": {
@@ -96,32 +64,89 @@
     },
     {
       "id": "research-scout",
-      "description": "Global Discovery Instance. Specialized in web search and synthesis.",
-      "trigger_keywords": ["research", "analyze", "find", "intel"],
+      "description": "Gemini CLI aligned research and long-context synthesis specialist.",
+      "trigger_keywords": ["research", "analyze", "investigate", "compare", "summarize", "long context"],
       "targets": {
-        "tool": "openclaw", 
-        "runtime": "any",
-        "required_capabilities": ["research", "web_access"]
+        "tool": "gemini_cli",
+        "runtime": "cloud@class-3-research",
+        "required_capabilities": ["research", "long_context", "web_access"]
       },
       "cells": [
-        {"role": "browser", "model": "google/gemini-2.0-flash", "difficulty": "low"},
-        {"role": "synthesizer", "model": "openrouter/mistralai/mistral-small-3.1-24b-instruct:free", "difficulty": "medium"}
+        {"role": "browser", "model": "siliconflow/deepseek-r2", "difficulty": "low"},
+        {"role": "synthesizer", "model": "google/gemini-2.5-pro", "difficulty": "high"}
       ],
       "models": {
         "openclaw": [
-          "google/gemini-2.5-flash",
-          "openrouter/meta-llama/llama-3.3-70b-instruct:free",
-          "openrouter/google/gemini-2.0-flash:free",
-          "openrouter/mistralai/mistral-small-3.1-24b-instruct:free",
-          "openrouter/stepfun/step-3.5-flash:free",
-          "openrouter/upstage/solar-pro-3:free",
-          "openrouter/z-ai/glm-4.5-air:free",
-          "opencode/minimax-m2.1-free",
-          "opencode/trinity-large-preview-free"
+          "ollama/llama-4-scout:q4_k_m",
+          "siliconflow/deepseek-r2",
+          "cerebras/gpt-oss-120b",
+          "google/gemini-2.5-pro"
+        ],
+        "gemini_cli": [
+          "google/gemini-2.5-pro",
+          "siliconflow/deepseek-r2",
+          "cerebras/gpt-oss-120b"
         ]
       },
       "actions": {
         "discord_channel": "technical-research",
+        "report_channel": "executive-briefing"
+      }
+    },
+    {
+      "id": "architect-strategist",
+      "description": "Antigravity-aligned strategic proposal and adversarial review specialist.",
+      "trigger_keywords": ["strategy", "architect", "roadmap", "proposal", "critic", "adversarial"],
+      "targets": {
+        "tool": "antigravity",
+        "runtime": "cloud@class-3-strategy",
+        "required_capabilities": ["strategy", "adversarial_review", "multi_model_inference"]
+      },
+      "cells": [
+        {"role": "analyst", "model": "google/gemini-2.5-pro", "difficulty": "medium"},
+        {"role": "critic", "model": "anthropic/claude-opus-4.6", "difficulty": "high"}
+      ],
+      "models": {
+        "openclaw": [
+          "siliconflow/deepseek-r2",
+          "cerebras/gpt-oss-120b",
+          "google/gemini-2.5-pro",
+          "anthropic/claude-opus-4.6"
+        ],
+        "antigravity": [
+          "anthropic/claude-opus-4.6",
+          "google/gemini-2.5-pro"
+        ]
+      },
+      "actions": {
+        "discord_channel": "roadmap",
+        "report_channel": "executive-briefing"
+      }
+    },
+    {
+      "id": "heavy-reasoner",
+      "description": "Overflow premium-remote identity for long-context or difficult reasoning when local routes are insufficient.",
+      "trigger_keywords": ["deepthink", "logic", "audit", "reasoning", "hard", "complex"],
+      "targets": {
+        "tool": "openclaw",
+        "runtime": "cloud@class-3-overflow",
+        "required_capabilities": ["long_context", "adversarial_review"]
+      },
+      "cells": [
+        {"role": "critic", "model": "siliconflow/deepseek-r2", "difficulty": "medium"},
+        {"role": "verifier", "model": "cerebras/gpt-oss-120b", "difficulty": "medium"},
+        {"role": "escalator", "model": "anthropic/claude-opus-4.6", "difficulty": "high"}
+      ],
+      "models": {
+        "openclaw": [
+          "siliconflow/deepseek-r2",
+          "cerebras/gpt-oss-120b",
+          "anthropic/claude-opus-4.6",
+          "google/gemini-2.5-pro"
+        ]
+      },
+      "actions": {
+        "discord_channel": "dev-labs",
         "report_channel": "executive-briefing"
       }
     }

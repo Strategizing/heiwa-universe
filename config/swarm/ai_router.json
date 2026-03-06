@@ -1,59 +1,160 @@
 {
-    "models": {
-        "primary": "google/gemini-2.0-pro-exp",
-        "fallbacks": [
-            "google/gemini-1.5-pro",
-            "google/gemini-1.5-flash",
-            "ollama/qwen2.5-coder:7b"
-        ],
-        "registry": {
-            "tier_1_local": { "id": "ollama/qwen2.5-coder:7b", "provider": "ollama" },
-            "tier_2_fast": { "id": "google/gemini-2.0-flash", "provider": "google" },
-            "tier_3_baseline": { "id": "google/gemini-1.5-pro", "provider": "google" },
-            "tier_4_overflow": { "id": "google/gemini-2.0-pro-exp", "provider": "google" },
-            "tier_5_codex": { "id": "codex/gpt-5.3-codex", "provider": "codex" },
-            "tier_6_premium": { "id": "antigravity/gemini-3.1-pro", "provider": "antigravity" },
-            "tier_7_supreme": { "id": "antigravity/claude-opus-4-6-thinking", "provider": "antigravity" },
-            "google/gemini-2.5-flash": { "alias": "gemini" },
-            "google/gemini-2.0-pro-exp-02-05": { "alias": "gemini-pro" },
-            "anthropic/claude-3-5-sonnet-latest": { "alias": "claude" },
-            "ollama/deepseek-r1:14b": { "tier": 3, "description": "Architect / Reasoning" },
-            "ollama/qwen2.5-coder:7b": { "tier": 1, "description": "Engineer / Coding" },
-            "ollama/phi3:mini": { "tier": 1, "description": "Scout / Reflexes" },
-            "ollama/llama3:8b": { "tier": 2, "description": "Diplomat / Chat" },
-            "ollama/codellama": { "tier": 1, "description": "Legacy Engineering" },
-            "ollama/mistral": { "tier": 2, "description": "Generalist" },
-            "ollama/llava": { "tier": 2, "description": "Vision" },
-            "ollama/gemma2:9b": { "tier": 2, "description": "Lightweight Reasoning" },
-            "ollama/starcoder2": { "tier": 1, "description": "Specialized Coding" },
-            "ollama/nomic-embed-text": { "tier": 1, "description": "Embeddings" }
-        }
+  "version": "2026-03-06",
+  "source_report": "/Users/dmcgregsauce/Downloads/heiwa_build_report.docx",
+  "blueprint": "/Users/dmcgregsauce/heiwa/config/swarm/BUILD_BLUEPRINT_2026-03-06.md",
+  "foundation": {
+    "state_layer": "spacetimedb",
+    "cloud_host": "railway",
+    "messaging_bus": "nats_ephemeral",
+    "cloud_gpu_rental": "banned"
+  },
+  "models": {
+    "primary": "ollama/llama-4-scout:q4_k_m",
+    "fallbacks": [
+      "ollama/glm-4.7-flash:q4_k_m",
+      "ollama/qwen2.5-coder:7b:q4",
+      "siliconflow/deepseek-r2",
+      "cerebras/gpt-oss-120b",
+      "google/gemini-2.5-pro",
+      "anthropic/claude-opus-4.6",
+      "openai-codex/gpt-5.3-codex"
+    ],
+    "registry": {
+      "node_a_orchestrator": {
+        "id": "ollama/llama-4-scout:q4_k_m",
+        "provider": "ollama",
+        "host_node": "macbook@heiwa-node-a",
+        "compute_class": 2,
+        "role": "orchestration_reasoning"
+      },
+      "node_a_codegen": {
+        "id": "ollama/glm-4.7-flash:q4_k_m",
+        "provider": "ollama",
+        "host_node": "macbook@heiwa-node-a",
+        "compute_class": 2,
+        "role": "local_codegen"
+      },
+      "node_b_gpu_builder": {
+        "id": "ollama/qwen2.5-coder:7b:q4",
+        "provider": "ollama",
+        "host_node": "pc@heiwa-node-b",
+        "compute_class": 2,
+        "role": "local_gpu_inference"
+      },
+      "node_b_embeddings": {
+        "id": "local/all-MiniLM-L6-v2",
+        "provider": "local",
+        "host_node": "pc@heiwa-node-b",
+        "compute_class": 2,
+        "role": "embedding_generation"
+      },
+      "node_b_media": {
+        "id": "local/sdxl-turbo",
+        "provider": "local",
+        "host_node": "pc@heiwa-node-b",
+        "compute_class": 2,
+        "role": "image_generation"
+      },
+      "class_3_low_cost_remote": {
+        "id": "siliconflow/deepseek-r2",
+        "provider": "siliconflow",
+        "host_node": "cloud@premium-remote",
+        "compute_class": 3,
+        "role": "overflow_reasoning"
+      },
+      "class_3_fast_remote": {
+        "id": "cerebras/gpt-oss-120b",
+        "provider": "cerebras",
+        "host_node": "cloud@premium-remote",
+        "compute_class": 3,
+        "role": "fast_reasoning"
+      },
+      "class_3_research": {
+        "id": "google/gemini-2.5-pro",
+        "provider": "google",
+        "host_node": "cloud@premium-remote",
+        "compute_class": 3,
+        "role": "research_long_context"
+      },
+      "class_3_strategy": {
+        "id": "anthropic/claude-opus-4.6",
+        "provider": "anthropic",
+        "host_node": "cloud@premium-remote",
+        "compute_class": 3,
+        "role": "strategy_adversarial_review"
+      },
+      "class_3_build": {
+        "id": "openai-codex/gpt-5.3-codex",
+        "provider": "codex",
+        "host_node": "cloud@premium-remote",
+        "compute_class": 3,
+        "role": "build_codegen"
+      }
+    }
+  },
+  "routing_policy": {
+    "provider_rotation": {
+      "premium_remote": [
+        "siliconflow/deepseek-r2",
+        "cerebras/gpt-oss-120b",
+        "google/gemini-2.5-pro",
+        "anthropic/claude-opus-4.6",
+        "openai-codex/gpt-5.3-codex"
+      ]
     },
-    "mcp_servers": {
-        "docker": {
-            "command": "docker",
-            "args": [
-                "mcp",
-                "gateway",
-                "run"
-            ]
-        },
-        "playwright": {
-            "command": "npx",
-            "args": [
-                "@playwright/mcp@latest"
-            ]
-        },
-        "figma": {
-            "url": "https://mcp.figma.com/mcp"
-        },
-        "notion": {
-            "url": "https://mcp.notion.com/mcp"
-        }
+    "compute_classes": {
+      "1": "cpu_first",
+      "2": "gpu_justified_local",
+      "3": "premium_remote",
+      "4": "cloud_persistence"
     },
-    "trust_boundaries": [
-        "/Users/dmcgregsauce/heiwa-limited",
-        "/Users/dmcgregsauce/heiwa",
-        "/Users/dmcgregsauce"
+    "hard_rules": [
+      "privacy_level=sovereign forces class_1_or_2_only",
+      "cheapest_acceptable_route_first",
+      "no_cloud_gpu_rental",
+      "no_rest_only_multi_turn_agentic_sessions",
+      "nats_is_ephemeral_not_durable_state"
     ]
+  },
+  "agents": {
+    "codex": {
+      "compute_class": 3,
+      "specialty": "build"
+    },
+    "gemini_cli": {
+      "compute_class": 3,
+      "specialty": "research_long_context"
+    },
+    "antigravity": {
+      "compute_class": 3,
+      "specialty": "strategy_adversarial_review"
+    }
+  },
+  "mcp_servers": {
+    "docker": {
+      "command": "docker",
+      "args": [
+        "mcp",
+        "gateway",
+        "run"
+      ]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest"
+      ]
+    },
+    "figma": {
+      "url": "https://mcp.figma.com/mcp"
+    },
+    "notion": {
+      "url": "https://mcp.notion.com/mcp"
+    }
+  },
+  "trust_boundaries": [
+    "/Users/dmcgregsauce/heiwa",
+    "/Users/dmcgregsauce/heiwa-limited",
+    "/Users/dmcgregsauce"
+  ]
 }

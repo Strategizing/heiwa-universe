@@ -22,6 +22,14 @@
     "steps"
   ],
   "properties": {
+    "request_id": { "type": "string", "minLength": 1 },
+    "timestamp": { "type": "string", "minLength": 1 },
+    "source_surface": {
+      "type": "string",
+      "enum": ["cli", "discord", "api", "web", "voice", "slack", "desktop", "mcp"]
+    },
+    "sender_identity": { "type": "string" },
+    "auth_token": { "type": "string" },
     "task_id": { "type": "string", "minLength": 1 },
     "parent_task_id": { "type": "string" },
     "plan_id": { "type": "string", "minLength": 1 },
@@ -29,19 +37,104 @@
     "raw_text": { "type": "string", "minLength": 1 },
     "intent_class": {
       "type": "string",
-      "enum": ["build", "research", "deploy", "operate", "automation", "files", "notion", "discord", "chat", "general"]
+      "enum": [
+        "audit",
+        "build",
+        "research",
+        "deploy",
+        "operate",
+        "strategy",
+        "media",
+        "automate",
+        "automation",
+        "mesh_ops",
+        "self_buff",
+        "status_check",
+        "files",
+        "chat",
+        "general",
+        "ping"
+      ]
     },
-    "risk_level": { "type": "string", "enum": ["low", "medium", "high"] },
+    "urgency": { "type": "integer", "minimum": 1, "maximum": 5 },
+    "privacy_level": {
+      "type": "string",
+      "enum": ["public", "internal", "sovereign"]
+    },
+    "budget_cap": {
+      "type": "object",
+      "properties": {
+        "max_tokens": { "type": "integer", "minimum": 0 },
+        "max_cost_usd": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "compute_pref": {
+      "type": "string",
+      "enum": ["local_first", "remote_ok", "any"]
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string" },
+          "uri": { "type": "string" },
+          "size_bytes": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": true
+      }
+    },
+    "response_target": {
+      "type": "object",
+      "properties": {
+        "channel_id": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
+        "thread_id": { "oneOf": [{ "type": "integer" }, { "type": "string" }, { "type": "null" }] },
+        "surface": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "tenant_context": {
+      "type": "object",
+      "properties": {
+        "org_id": { "type": "string" },
+        "project_id": { "type": "string" },
+        "scope": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "risk_level": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
     "requires_approval": { "type": "boolean" },
     "requested_by": { "type": "string", "minLength": 1 },
     "source_channel_id": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
     "source_message_id": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
     "response_channel_id": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
     "response_thread_id": { "oneOf": [{ "type": "integer" }, { "type": "string" }, { "type": "null" }] },
-    "target_runtime": { "type": "string", "enum": ["railway", "macbook", "both"] },
-    "target_tool": { "type": "string", "enum": ["codex", "openclaw", "picoclaw", "n8n", "ollama"] },
+    "target_runtime": {
+      "type": "string",
+      "enum": ["railway", "macbook", "pc", "cloud", "both", "any"]
+    },
+    "target_tool": {
+      "type": "string",
+      "enum": [
+        "codex",
+        "gemini_cli",
+        "antigravity",
+        "openclaw",
+        "picoclaw",
+        "n8n",
+        "ollama",
+        "heiwa_ops",
+        "heiwa_code",
+        "heiwa_claw",
+        "heiwa_reflex",
+        "e2b"
+      ]
+    },
     "target_tier": { "type": "string" },
+    "compute_class": { "type": "integer", "enum": [1, 2, 3, 4] },
     "normalization": { "type": "object" },
+    "cost_usd": { "type": "number", "minimum": 0 },
     "steps": {
       "type": "array",
       "minItems": 1,
@@ -53,8 +146,27 @@
           "title": { "type": "string", "minLength": 1 },
           "instruction": { "type": "string", "minLength": 1 },
           "subject": { "type": "string", "minLength": 1 },
-          "target_runtime": { "type": "string", "enum": ["railway", "macbook", "both"] },
-          "target_tool": { "type": "string", "enum": ["codex", "openclaw", "picoclaw", "n8n", "ollama"] },
+          "target_runtime": {
+            "type": "string",
+            "enum": ["railway", "macbook", "pc", "cloud", "both", "any"]
+          },
+          "target_tool": {
+            "type": "string",
+            "enum": [
+              "codex",
+              "gemini_cli",
+              "antigravity",
+              "openclaw",
+              "picoclaw",
+              "n8n",
+              "ollama",
+              "heiwa_ops",
+              "heiwa_code",
+              "heiwa_claw",
+              "heiwa_reflex",
+              "e2b"
+            ]
+          },
           "target_tier": { "type": "string" },
           "required_capability": { "type": "string" }
         },

@@ -1,6 +1,6 @@
 name: discord
 version: 1.0.0
-description: Mock Discord
+description: Discord delivery surface for Heiwa Hub
 tools:
   send:
     description: Send a message

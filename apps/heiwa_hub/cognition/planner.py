@@ -206,6 +206,21 @@ class LocalTaskPlanner:
             )
             return steps
 
+        if intent == "audit":
+            steps.append(
+                StepPlan(
+                    step_id=next_step_id(),
+                    title="Audit and validation pass",
+                    instruction=instruction,
+                    subject=Subject.TASK_EXEC.value,
+                    target_runtime="both",
+                    target_tool="heiwa_ops",
+                    target_tier="tier1_local",
+                    required_capability="mcp.validation",
+                )
+            )
+            return steps
+
         # --- Tasks that need shell/file access: dispatch to nodes ---
         if intent == "build":
             steps.append(
@@ -222,6 +237,21 @@ class LocalTaskPlanner:
             )
             return steps
 
+        if intent in {"operate", "deploy"}:
+            steps.append(
+                StepPlan(
+                    step_id=next_step_id(),
+                    title="Operational change execution",
+                    instruction=instruction,
+                    subject=Subject.TASK_EXEC.value,
+                    target_runtime="railway",
+                    target_tool="heiwa_ops",
+                    target_tier=profile.preferred_tier,
+                    required_capability="ops.execution",
+                )
+            )
+            return steps
+
         if intent == "research":
             steps.append(
                 StepPlan(
@@ -233,6 +263,51 @@ class LocalTaskPlanner:
                     target_tool="heiwa_claw",
                     target_tier=profile.preferred_tier,
                     required_capability="mcp.research",
+                )
+            )
+            return steps
+
+        if intent == "strategy":
+            steps.append(
+                StepPlan(
+                    step_id=next_step_id(),
+                    title="Strategic analysis and proposal",
+                    instruction=instruction,
+                    subject=Subject.TASK_EXEC.value,
+                    target_runtime="railway",
+                    target_tool="heiwa_claw",
+                    target_tier=profile.preferred_tier,
+                    required_capability="mcp.strategy",
+                )
+            )
+            return steps
+
+        if intent == "media":
+            steps.append(
+                StepPlan(
+                    step_id=next_step_id(),
+                    title="Media generation or transformation",
+                    instruction=instruction,
+                    subject=Subject.TASK_EXEC.value,
+                    target_runtime="both",
+                    target_tool="ollama",
+                    target_tier=profile.preferred_tier,
+                    required_capability="mcp.media",
+                )
+            )
+            return steps
+
+        if intent in {"automate", "automation"}:
+            steps.append(
+                StepPlan(
+                    step_id=next_step_id(),
+                    title="Automation and scheduler work",
+                    instruction=instruction,
+                    subject=Subject.TASK_EXEC.value,
+                    target_runtime="railway",
+                    target_tool="n8n",
+                    target_tier=profile.preferred_tier,
+                    required_capability="scheduler.automation",
                 )
             )
             return steps

@@ -1,9 +1,9 @@
 {
   "profile_id": "heiwa-one-system",
   "brand": "Heiwa",
-  "project_slug": "heiwa-runtime",
-  "repo_root": "/Users/dmcgregsauce/heiwa-runtime",
-  "github_repo": "Strategizing/heiwa-limited",
+  "project_slug": "heiwa-universe",
+  "repo_root": "/Users/dmcgregsauce/heiwa",
+  "github_repo": "Strategizing/heiwa-universe",
   "default_branch": "main",
   "railway_project_name": "heiwa-hub",
   "railway_project_id": "1b7b39a8-ec37-4616-848e-c54ac9fd1549",
@@ -390,7 +390,7 @@
     "profile_skill": "heiwa-project-profile",
     "observability_skill": "heiwa-observability-local",
     "figma_sync_skill": "heiwa-figma-sync",
-    "repo_compat_seed_skill": "/Users/dmcgregsauce/heiwa-runtime/skills/cli-platform-expert"
+    "repo_compat_seed_skill": "/Users/dmcgregsauce/heiwa/config/swarm/BUILD_BLUEPRINT_2026-03-06.md"
   },
   "policy_defaults": {
     "write_gated_autonomy": true,
