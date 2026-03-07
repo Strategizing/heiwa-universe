@@ -1,0 +1,10 @@
+/Users/dmcgregsauce/heiwa/apps/heiwa_hub/spacetimedb/target/wasm32-unknown-unknown/release/deps/castaway-9cad5dfd0f0e295a.d: /Users/dmcgregsauce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/castaway-0.2.4/src/lib.rs /Users/dmcgregsauce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/castaway-0.2.4/src/internal.rs /Users/dmcgregsauce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/castaway-0.2.4/src/lifetime_free.rs /Users/dmcgregsauce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/castaway-0.2.4/src/utils.rs
+
+/Users/dmcgregsauce/heiwa/apps/heiwa_hub/spacetimedb/target/wasm32-unknown-unknown/release/deps/libcastaway-9cad5dfd0f0e295a.rlib: /Users/dmcgregsauce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/castaway-0.2.4/src/lib.rs /Users/dmcgregsauce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/castaway-0.2.4/src/internal.rs /Users/dmcgregsauce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/castaway-0.2.4/src/lifetime_free.rs /Users/dmcgregsauce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/castaway-0.2.4/src/utils.rs
+
+/Users/dmcgregsauce/heiwa/apps/heiwa_hub/spacetimedb/target/wasm32-unknown-unknown/release/deps/libcastaway-9cad5dfd0f0e295a.rmeta: /Users/dmcgregsauce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/castaway-0.2.4/src/lib.rs /Users/dmcgregsauce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/castaway-0.2.4/src/internal.rs /Users/dmcgregsauce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/castaway-0.2.4/src/lifetime_free.rs /Users/dmcgregsauce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/castaway-0.2.4/src/utils.rs
+
+/Users/dmcgregsauce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/castaway-0.2.4/src/lib.rs:
+/Users/dmcgregsauce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/castaway-0.2.4/src/internal.rs:
+/Users/dmcgregsauce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/castaway-0.2.4/src/lifetime_free.rs:
+/Users/dmcgregsauce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/castaway-0.2.4/src/utils.rs:
