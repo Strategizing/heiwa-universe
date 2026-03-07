@@ -79,7 +79,7 @@ class ApprovalView(discord.ui.View):
 
     async def on_timeout(self) -> None:
         for child in self.children:
-            if isinstance(child, discord.ui.Button):
+            if hasattr(child, "disabled"):
                 child.disabled = True
         if self.prompt_message:
             try:
@@ -325,10 +325,13 @@ class MessengerAgent(BaseAgent):
                 if not category: category = await interaction.guild.create_category(cat_name, overwrites=overwrites)
                 else: await category.edit(overwrites=overwrites)
                 for chan_name in details["text"]:
-                    channel = discord.utils.get(category.text_channels, name=chan_name)
-                    if not channel: channel = await interaction.guild.create_text_channel(chan_name, category=category)
-                    else: await channel.edit(sync_permissions=True)
-                    self.db.upsert_discord_channel(chan_name, channel.id, category_name=cat_name)
+                    if isinstance(category, discord.CategoryChannel):
+                        channel = discord.utils.get(category.text_channels, name=chan_name)
+                        if not channel: 
+                            channel = await category.create_text_channel(chan_name)
+                        else: 
+                            await channel.edit(sync_permissions=True)
+                        self.db.upsert_discord_channel(chan_name, channel.id, category_name=cat_name)
             
             embed.title = "✅ Swarm Structure Synchronized"
             embed.description = "Canonical enterprise structure applied and indexed."
@@ -387,7 +390,10 @@ class MessengerAgent(BaseAgent):
 
         plan = self.planner.plan(task_id=task_id, raw_text=instruction, requested_by=str(author), source_channel_id=channel.id, source_message_id=0, response_channel_id=response_channel_id, response_thread_id=response_thread_id, intent_profile=intent_profile)
         plan_payload = plan.to_dict()
-        self.task_targets[task_id] = {"channel_id": int(response_channel_id), "thread_id": int(response_thread_id) if response_thread_id else None}
+        self.task_targets[task_id] = {
+            "channel_id": int(response_channel_id) if response_channel_id else None, 
+            "thread_id": int(response_thread_id) if response_thread_id else None
+        }
         await self._publish_raw(Subject.TASK_PLAN_RESULT.value, plan_payload)
 
         plan_embed = UIManager.create_task_embed(task_id, instruction, status="thinking")

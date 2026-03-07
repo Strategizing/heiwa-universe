@@ -5,6 +5,7 @@ import sys
 import uuid
 import os
 from pathlib import Path
+from typing import Optional, List, Any, Dict, Union
 from .config import settings
 from .spacetimedb import SpacetimeDB
 
@@ -19,7 +20,6 @@ except ImportError:
 
 class Database:
     def __init__(self):
-        self.use_postgres = False # Fixed default, overridden by init_db logic usually
         self.stdb = SpacetimeDB(db_identity=os.getenv("STDB_IDENTITY", "c20036703b164bad843aaf1714245ba8089a954065eb5cc913e8b5fee613e157"))
         self.use_postgres = settings.use_postgres
         self.db_path = settings.DATABASE_PATH
@@ -814,11 +814,11 @@ class Database:
             results = []
             for row in rows:
                 r = self._row_to_dict(row, cursor)
-                # Parse details if needed
+                # Parse JSON fields if present
                 if r.get("details_json"):
                     try:
                         r["details"] = json.loads(r["details_json"])
-                    except:
+                    except Exception:
                         r["details"] = {}
                 results.append(r)
             return results
@@ -1609,9 +1609,9 @@ class Database:
                 hb_age = None
                 if hb_raw:
                     try:
-                        hb_dt = ensure_aware(datetime.datetime.fromisoformat(hb_raw))
+                        hb_dt = ensure_aware(datetime.datetime.fromisoformat(str(hb_raw)))
                         hb_age = int((now - hb_dt).total_seconds())
-                    except:
+                    except Exception:
                         pass
                 p_data["heartbeat_age_seconds"] = hb_age
 
@@ -1627,10 +1627,10 @@ class Database:
 
     # --- Job Queue Core (Hub-and-Spoke) ---
 
-    def create_job(self, job_type, payload):
+    def create_job(self, job_type: str, payload: Dict[str, Any]) -> Optional[str]:
         """Create a new job in PENDING state."""
-        conn = self.get_connection()
-        cursor = conn.cursor()
+        conn: sqlite3.Connection = self.get_connection()
+        cursor: sqlite3.Cursor = conn.cursor()
         job_id = f"job-{uuid.uuid4()}"
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         try:
@@ -2682,13 +2682,13 @@ class Thought:
         intent: str,
         thought_type: str,
         confidence: float,
-        reasoning: str = None,
-        artifact: dict = None,
-        parent_id: str = None,
-        tags: list = None,
-        metadata: dict = None,
-        stream_id: str = None,
-        created_at: str = None,
+        reasoning: Optional[str] = None,
+        artifact: Optional[Dict[Any, Any]] = None,
+        parent_id: Optional[str] = None,
+        tags: Optional[List[Any]] = None,
+        metadata: Optional[Dict[Any, Any]] = None,
+        stream_id: Optional[str] = None,
+        created_at: Optional[str] = None,
     ):
         self.stream_id = stream_id or generate_stream_id()
         self.created_at = created_at or datetime.datetime.now(
