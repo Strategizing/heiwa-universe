@@ -19,10 +19,7 @@ class SpacetimeDB:
         # Convert args to STDB-compatible format (JSON strings if necessary)
         cmd_args = ["spacetime", "call", "--server", self.server, self.db_identity, reducer_name]
         for arg in args:
-            if isinstance(arg, (dict, list)):
-                cmd_args.append(json.dumps(arg))
-            else:
-                cmd_args.append(str(arg))
+            cmd_args.append(json.dumps(arg))
 
         try:
             result = subprocess.run(cmd_args, capture_output=True, text=True, timeout=10)
