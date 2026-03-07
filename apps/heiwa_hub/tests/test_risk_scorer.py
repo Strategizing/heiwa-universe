@@ -91,6 +91,11 @@ def main() -> int:
             "intent": "automate", "text": "automate the database migration nightly", "surface": "cli",
             "expect_risk": "high", "expect_approval": True,
         },
+        {
+            "name": "automation alias defaults to medium, approval required",
+            "intent": "automation", "text": "set up an automation to rotate reports", "surface": "cli",
+            "expect_risk": "medium", "expect_approval": True,
+        },
         # --- Surface modifiers ---
         {
             "name": "research + API surface → medium floor",

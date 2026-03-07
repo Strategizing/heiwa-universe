@@ -1,13 +1,19 @@
 import asyncio
 import json
 import logging
+import os
 import time
+import uuid
 from typing import Dict
+
+from nats.errors import TimeoutError
+
 from heiwa_hub.agents.base import BaseAgent
 from heiwa_protocol.protocol import Subject, Payload
 from heiwa_hub.cognition.planner import LocalTaskPlanner
 
 logger = logging.getLogger("Spine")
+BROKER_ENVELOPE_VERSION = "2026-03-06"
 
 class SpineAgent(BaseAgent):
     def __init__(self):
@@ -15,6 +21,7 @@ class SpineAgent(BaseAgent):
         # Registry: { "node_uuid": last_seen_timestamp }
         self.fleet_registry: Dict[str, float] = {}
         self.planner = LocalTaskPlanner()
+        self.broker_enabled = os.getenv("HEIWA_ENABLE_BROKER", "true").strip().lower() == "true"
 
     async def run(self):
         try:
@@ -90,22 +97,39 @@ class SpineAgent(BaseAgent):
         task_id = payload.get("task_id", f"task-{int(time.time())}")
         
         dispatch_status_code = "DISPATCHED_PLAN"
+        broker_failed = False
         
         # --- AUTO-PLANNING FOR RAW REQUESTS ---
+        if not payload.get("steps") and payload.get("raw_text"):
+            if self.broker_enabled and self.nc:
+                try:
+                    payload = await self._route_via_broker(
+                        payload=payload,
+                        task_id=task_id,
+                        sender_id=sender_id,
+                    )
+                    logger.info("🛰️ Broker enriched task %s.", task_id)
+                except TimeoutError:
+                    broker_failed = True
+                    logger.warning("⚠️ Broker timeout for %s. Falling back to inline planning.", task_id)
+                except Exception as e:
+                    broker_failed = True
+                    logger.warning("⚠️ Broker enrichment failed for %s: %s. Falling back inline.", task_id, e)
+
         if not payload.get("steps") and payload.get("raw_text"):
             logger.info(f"🔮 Planning raw request for task {task_id}...")
             try:
                 task_plan = self.planner.plan(
                     task_id=task_id,
                     raw_text=payload.get("raw_text"),
-                    requested_by=data.get("sender_id", "unknown"),
+                    requested_by=sender_id,
                     source_channel_id=payload.get("source", "cli"),
                     source_message_id=task_id,
                     response_channel_id=payload.get("response_channel_id", "cli"),
-                    response_thread_id=None
+                    response_thread_id=payload.get("response_thread_id"),
                 )
                 payload = task_plan.to_dict()
-                dispatch_status_code = "DISPATCHED_PLAN"
+                dispatch_status_code = "DISPATCHED_FALLBACK" if broker_failed else "DISPATCHED_PLAN"
             except Exception as e:
                 logger.error(f"❌ Planning failed: {e}. Falling back to direct execution.")
                 # Fallback: Create a single direct step
@@ -200,10 +224,14 @@ class SpineAgent(BaseAgent):
                 "requested_by": payload.get("requested_by"),
                 "target_runtime": step.get("target_runtime", payload.get("target_runtime", "railway")),
                 "target_tool": step.get("target_tool", payload.get("target_tool", "ollama")),
+                "compute_class": payload.get("compute_class"),
+                "assigned_worker": payload.get("assigned_worker"),
+                "requires_approval": payload.get("requires_approval"),
                 "response_channel_id": payload.get("response_channel_id"),
                 "response_thread_id": payload.get("response_thread_id"),
                 "raw_text": payload.get("raw_text"),
                 "normalization": payload.get("normalization"),
+                "envelope_version": payload.get("envelope_version"),
             }
 
             wrapped = {
@@ -242,6 +270,40 @@ class SpineAgent(BaseAgent):
         for nid in dead_nodes:
             logger.warning(f"💀 Node Lost: {nid}")
             del self.fleet_registry[nid]
+
+    async def _route_via_broker(self, *, payload: dict, task_id: str, sender_id: str) -> dict:
+        if not self.nc:
+            raise RuntimeError("NATS is unavailable.")
+
+        request_id = f"broker-{task_id}-{uuid.uuid4().hex[:8]}"
+        broker_request = {
+            "request_id": request_id,
+            "task_id": task_id,
+            "raw_text": payload.get("raw_text", ""),
+            "sender_id": sender_id,
+            "source_surface": payload.get("source", "cli"),
+            "response_channel_id": payload.get("response_channel_id", "cli"),
+            "response_thread_id": payload.get("response_thread_id"),
+            "auth_validated": True,
+            "timestamp": time.time(),
+            "envelope_version": BROKER_ENVELOPE_VERSION,
+        }
+
+        response = await self.nc.request(
+            Subject.BROKER_ROUTE.value,
+            json.dumps(broker_request).encode(),
+            timeout=5.0,
+        )
+        routed = json.loads(response.data.decode())
+
+        if routed.get("request_id") != request_id:
+            raise ValueError(
+                f"Broker request_id mismatch for {task_id}: expected {request_id}, got {routed.get('request_id')}"
+            )
+        if routed.get("error"):
+            raise RuntimeError(f"{routed.get('error')}: {routed.get('message', '')}".strip())
+
+        return routed
 
 if __name__ == "__main__":
     agent = SpineAgent()

@@ -17,6 +17,11 @@ This file is the repo-local operating digest for the March 6, 2026 Heiwa build r
 - No 30B+ models on the M4 Pro.
 - No architecture that requires NATS to own durable state.
 - Monthly fixed cloud floor target stays under `$40`.
+- WebSocket-first inference for all cloud-based multi-turn agentic sessions.
+- MCP Tool Shed: all agent-tool connectivity routes through MCP. No hard-coded API integrations in agent logic.
+- Mandatory finalizers: every autonomous service execution must include resource cleanup. No leaked DB connections, sandboxes, or temp files.
+- E2B sandboxes for untrusted code execution. LLM-generated code never runs on host infrastructure.
+- Hardware constraints documented in `config/swarm/HARDWARE_CONSTRAINTS.md`.
 
 ## Hardware Topology
 

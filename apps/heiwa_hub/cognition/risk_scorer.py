@@ -38,6 +38,7 @@ _INTENT_DEFAULTS: dict[str, tuple[str, bool]] = {
     "self_buff":    ("high",   True),
     "chat":         ("low",    False),
     "automate":     ("medium", True),
+    "automation":   ("medium", True),
     "strategy":     ("medium", False),
     "research":     ("low",    False),
     "audit":        ("low",    False),

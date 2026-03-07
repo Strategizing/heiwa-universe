@@ -19,6 +19,7 @@ from heiwa_sdk.config import load_swarm_env
 load_swarm_env()
 
 from heiwa_hub.agents.spine import SpineAgent
+from heiwa_hub.agents.broker import BrokerAgent
 from heiwa_hub.agents.messenger import MessengerAgent
 from heiwa_hub.agents.executor import ExecutorAgent
 from heiwa_hub.agents.telemetry import TelemetryAgent
@@ -71,6 +72,7 @@ async def main():
         spine = SpineAgent()
         executor = ExecutorAgent()
         telemetry = TelemetryAgent()
+        broker = BrokerAgent() if os.getenv("HEIWA_ENABLE_BROKER", "true").strip().lower() == "true" else None
     except Exception as e:
         logger.error("🛑 [BOOT_FATAL] Failed to instantiate core agents: %s", e)
         sys.exit(1)
@@ -86,6 +88,11 @@ async def main():
         asyncio.create_task(telemetry.run()),
         asyncio.create_task(_start_server(port=port))
     ]
+
+    if broker:
+        tasks.append(asyncio.create_task(broker.run()))
+    else:
+        print("[INFO] Broker disabled (set HEIWA_ENABLE_BROKER=true to enable enrichment).")
     
     logger.info("✅ [BOOT] All core services dispatched.")
 

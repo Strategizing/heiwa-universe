@@ -12,6 +12,7 @@ class Subject(str, Enum):
     TASK_INGRESS = "heiwa.tasks.ingress"       # Discord/Gateway -> Planner ingress
     TASK_PLAN_REQUEST = "heiwa.tasks.plan.request"
     TASK_PLAN_RESULT = "heiwa.tasks.plan.result"
+    BROKER_ROUTE = "heiwa.broker.route"        # Spine -> Broker (request-reply enrichment)
     TASK_EXEC = "heiwa.tasks.exec" # Unified SOTA Execution Channel
     TASK_EXEC_REQUEST_CODE = "heiwa.tasks.exec.request.code"
     TASK_EXEC_REQUEST_RESEARCH = "heiwa.tasks.exec.request.research"
