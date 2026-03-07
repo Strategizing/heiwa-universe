@@ -16,6 +16,7 @@ from heiwa_hub.cognition.planner import LocalTaskPlanner
 from heiwa_protocol.protocol import Payload, Subject
 from heiwa_ui.manager import UIManager
 from heiwa_sdk.db import Database
+from heiwa_sdk.spacetimedb import SpacetimeDB
 
 logger = logging.getLogger("Messenger")
 _MISSING = object()
@@ -109,6 +110,10 @@ class MessengerAgent(BaseAgent):
         self.task_targets: dict[str, dict[str, int | None]] = {}
         self.approvals = ApprovalRegistry(timeout_sec=self.approval_timeout_sec)
         self.planner = LocalTaskPlanner()
+
+        # SpacetimeDB Foundation
+        stdb_identity = os.getenv("STDB_IDENTITY") or "c20036703b164bad843aaf1714245ba8089a954065eb5cc913e8b5fee613e157"
+        self.stdb = SpacetimeDB(db_identity=stdb_identity)
 
         intents = discord.Intents.default()
         intents.message_content = True
@@ -236,8 +241,10 @@ class MessengerAgent(BaseAgent):
         try:
             synced = await self.bot.tree.sync()
             logger.info("Synced %d slash commands.", len(synced))
+            # Sync Discord Structure to STDB for Enterprise Observability
+            await self._sync_structure_to_stdb()
         except Exception as e:
-            logger.error("Failed to sync slash commands: %s", e)
+            logger.error("Failed to sync slash commands/structure: %s", e)
 
         target_id = self.channel_id
         if target_id:
@@ -253,6 +260,15 @@ class MessengerAgent(BaseAgent):
     async def on_message(self, message: discord.Message):
         if message.author == self.bot.user or message.author.bot:
             return
+
+        # STDB Identity Trace: Record interaction for trust and context tracking
+        user_id = message.author.id
+        username = str(message.author)
+        # Admins get immediate trust tier 1.0 (Enterprise logic)
+        trust = 1.0 if any(role.name.lower() in ["admin", "operator", "heiwa admin"] for role in getattr(message.author, 'roles', [])) else 0.5
+        
+        self.db.stdb.call("upsert_discord_user", user_id, username, trust)
+        self.db.stdb.call("record_interaction", user_id, message.channel.id, "chat")
 
         # Implicit Listener (Zero-Mention)
         if self.conversational_mode and self._should_consume_conversation(message):
@@ -550,6 +566,24 @@ class MessengerAgent(BaseAgent):
             content = payload.get("content", "...")
             # Use a simple message instead of a full embed for progress to avoid noise
             await target.send(f"⏳ **Task Progress** `{task_id}`: {content}")
+
+    async def _sync_structure_to_stdb(self):
+        """Map full Discord topology to SpacetimeDB for multi-node indexing."""
+        logger.info("🛰️ Synchronizing Discord Topology to SpacetimeDB...")
+        for guild in self.bot.guilds:
+            for channel in guild.text_channels:
+                purpose = "unknown"
+                for cat, config in STRUCTURE.items():
+                    if channel.name in config.get("text", []):
+                        purpose = channel.name
+                        break
+                
+                self.db.stdb.call("register_discord_channel", 
+                                  channel.id, 
+                                  channel.name, 
+                                  purpose, 
+                                  json.dumps({"category": channel.category.name if channel.category else "none"}))
+        logger.info("✅ Topology sync complete.")
 
     async def run(self):
         if not self.token: return

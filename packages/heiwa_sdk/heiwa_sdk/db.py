@@ -3,14 +3,15 @@ import json
 import datetime
 import sys
 import uuid
+import os
 from pathlib import Path
 from .config import settings
+from .spacetimedb import SpacetimeDB
 
 # Optional Postgres support
 try:
     import psycopg2
     import psycopg2.extras
-
     HAS_PSYCOPG2 = True
 except ImportError:
     HAS_PSYCOPG2 = False
@@ -18,6 +19,8 @@ except ImportError:
 
 class Database:
     def __init__(self):
+        self.use_postgres = False # Fixed default, overridden by init_db logic usually
+        self.stdb = SpacetimeDB(db_identity=os.getenv("STDB_IDENTITY", "c20036703b164bad843aaf1714245ba8089a954065eb5cc913e8b5fee613e157"))
         self.use_postgres = settings.use_postgres
         self.db_path = settings.DATABASE_PATH
         self.database_url = settings.DATABASE_URL
