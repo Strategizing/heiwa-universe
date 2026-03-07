@@ -1876,16 +1876,41 @@ class Database:
         finally:
             conn.close()
 
-    def get_discord_channel(self, purpose):
-        """Fetch channel ID by purpose."""
+    def get_discord_channel(self, purpose: str) -> Optional[int]:
+        """Fetch channel ID by purpose with SpacetimeDB fallback."""
+        # 1. Local Cache Check
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
             self._exec(cursor, "SELECT channel_id FROM discord_channels WHERE purpose = ?", (purpose,))
             row = cursor.fetchone()
-            return row[0] if row else None
+            if row:
+                return int(row[0])
+        except Exception as e:
+            print(f"[DB] Local channel lookup failed: {e}")
         finally:
             conn.close()
+
+        # 2. SpacetimeDB Source of Truth Check
+        try:
+            res = self.stdb.query(f"SELECT channel_id FROM discord_channels WHERE purpose = '{purpose}'")
+            if res and "channel_id" in res[0]:
+                return int(res[0]["channel_id"])
+        except Exception as e:
+            print(f"[DB] STDB channel lookup failed: {e}")
+
+        # 3. Environment Fallback
+        env_map = {
+            "operator-input": os.getenv("HEIWA_OPERATOR_INPUT_CHANNEL_ID"),
+            "operator-ingress": os.getenv("DISCORD_CHANNEL_ID"),
+            "central-comms": os.getenv("DISCORD_CHANNEL_ID"),
+        }
+        val = env_map.get(purpose)
+        if val:
+            try: return int(val)
+            except: pass
+
+        return None
 
     def upsert_discord_channel(self, purpose, channel_id, category_name=None, permissions=None):
         """Register or update a channel mapping."""

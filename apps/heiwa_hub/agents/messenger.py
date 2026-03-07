@@ -27,7 +27,7 @@ STRUCTURE = {
         "visibility": "admin_only"
     },
     "🎮 MISSION CONTROL": {
-        "text": ["operator-ingress", "central-comms", "swarm-telemetry"],
+        "text": ["operator-input", "operator-ingress", "central-comms", "swarm-telemetry"],
         "visibility": "admin_only"
     },
     "⚙️ ENGINEERING HUB": {
@@ -104,7 +104,7 @@ class MessengerAgent(BaseAgent):
         self.intent_channel_map = self._parse_intent_channel_map(os.getenv("HEIWA_INTENT_CHANNEL_MAP", ""))
         
         # Priority Channel Cache
-        self.channel_id = self._get_channel_id("operator-ingress") or self._get_channel_id("central-comms") or self._get_channel_id("central-command")
+        self.channel_id = self._get_channel_id("operator-input") or self._get_channel_id("operator-ingress") or self._get_channel_id("central-comms") or self._get_channel_id("central-command")
 
         self.approval_timeout_sec = int(os.getenv("HEIWA_APPROVAL_TIMEOUT_SEC", "600"))
         self.task_targets: dict[str, dict[str, int | None]] = {}
