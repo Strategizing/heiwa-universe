@@ -46,6 +46,9 @@ RUN curl -L https://github.com/nats-io/nats-server/releases/download/v${NATS_VER
     mv nats-server-v${NATS_VERSION}-linux-amd64/nats-server /usr/local/bin/ && \
     rm -rf nats-server-v${NATS_VERSION}-linux-amd64 nats.tar.gz
 
+# Install SpacetimeDB CLI
+RUN curl -fsSL https://spacetimedb.com/install.sh | bash
+
 # Copy Architecture
 COPY packages/ /app/packages/
 COPY config/ /app/config/
