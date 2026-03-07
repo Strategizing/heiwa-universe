@@ -12,10 +12,10 @@
     "primary": "ollama/llama-4-scout:q4_k_m",
     "fallbacks": [
       "ollama/glm-4.7-flash:q4_k_m",
-      "ollama/qwen2.5-coder:7b:q4",
+      "ollama/qwen3.5:4b",
       "siliconflow/deepseek-r2",
       "cerebras/gpt-oss-120b",
-      "google/gemini-2.5-pro",
+      "google-gemini-cli/gemini-2.5-pro",
       "anthropic/claude-opus-4.6",
       "openai-codex/gpt-5.3-codex"
     ],
@@ -35,7 +35,7 @@
         "role": "local_codegen"
       },
       "node_b_gpu_builder": {
-        "id": "ollama/qwen2.5-coder:7b:q4",
+        "id": "ollama/qwen3.5:4b",
         "provider": "ollama",
         "host_node": "pc@heiwa-node-b",
         "compute_class": 2,
@@ -55,6 +55,13 @@
         "compute_class": 2,
         "role": "image_generation"
       },
+      "node_a_embeddings": {
+        "id": "ollama/qwen3-embedding:0.6b",
+        "provider": "ollama",
+        "host_node": "macbook@heiwa-node-a",
+        "compute_class": 1,
+        "role": "embedding_generation"
+      },
       "class_3_low_cost_remote": {
         "id": "siliconflow/deepseek-r2",
         "provider": "siliconflow",
@@ -70,8 +77,8 @@
         "role": "fast_reasoning"
       },
       "class_3_research": {
-        "id": "google/gemini-2.5-pro",
-        "provider": "google",
+        "id": "google-gemini-cli/gemini-2.5-pro",
+        "provider": "google-gemini-cli",
         "host_node": "cloud@premium-remote",
         "compute_class": 3,
         "role": "research_long_context"
@@ -97,7 +104,7 @@
       "premium_remote": [
         "siliconflow/deepseek-r2",
         "cerebras/gpt-oss-120b",
-        "google/gemini-2.5-pro",
+        "google-gemini-cli/gemini-2.5-pro",
         "anthropic/claude-opus-4.6",
         "openai-codex/gpt-5.3-codex"
       ]

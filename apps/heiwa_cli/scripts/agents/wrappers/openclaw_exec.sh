@@ -49,9 +49,6 @@ gateway_is_healthy() {
 
 build_cmd() {
     local base_cmd=("$@")
-    if [[ -n "${OPENCLAW_MODEL:-}" ]]; then
-        base_cmd+=("--model" "$OPENCLAW_MODEL")
-    fi
     "${base_cmd[@]}"
 }
 

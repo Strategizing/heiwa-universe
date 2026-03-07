@@ -40,7 +40,26 @@ class ToolMesh:
             
         logger.info(f"🌐 [HEIWA TOOLMESH] Invoking Localization: {tool} (Model: {model or 'Auto'})")
         
-        # Use different execution methods based on extension
+        # Bypass intensive OpenClaw gateway wrapper if tool is openclaw/heiwa_claw
+        if tool.lower() in {"openclaw", "heiwa_claw"}:
+            if model and "google-gemini-cli" in model:
+                logger.info("🦾 [HEIWA CLAW] Remote Gemini CLI OAuth flow detected. Re-routing securely via OpenClaw CLI local wrapper.")
+                wrapper = self.wrappers_dir / "openclaw_exec.sh"
+                env["OPENCLAW_EXEC_MODE"] = "local"
+            else:
+                logger.info(f"🦾 [HEIWACLAW NATIVE ROUTING] Executing LLMEngine internally to bypass heavy gateway overhead.")
+                try:
+                    # Late import to prevent circular dependencies
+                    from heiwa_hub.cognition.llm_local import LocalLLMEngine
+                    engine = LocalLLMEngine()
+                    result = engine.generate(instruction, complexity="high")
+                    # Format an expected JSON wrapper if caller parses it
+                    return 0, json.dumps({"message": result})
+                except Exception as e:
+                    logger.error(f"HeiwaClaw Native Routing error: {e}")
+                    return 1, f"Native HeiwaClaw execution error: {e}"
+
+        # Use different execution methods based on extension for legacy generic CLI wrappers
         if wrapper.suffix == ".sh":
             cmd = ["bash", str(wrapper), instruction]
         elif wrapper.suffix == ".py":

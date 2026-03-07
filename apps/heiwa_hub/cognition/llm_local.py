@@ -65,7 +65,7 @@ class LocalLLMEngine:
         self.ollama_url = os.getenv(
             "HEIWA_OLLAMA_URL", "http://127.0.0.1:11434"
         ).rstrip("/")
-        self.ollama_model = os.getenv("HEIWA_OLLAMA_MODEL", "qwen2.5-coder:7b")
+        self.ollama_model = os.getenv("HEIWA_OLLAMA_MODEL", "qwen3.5:4b")
         self.ollama_timeout = float(os.getenv("HEIWA_OLLAMA_TIMEOUT_SEC", "60"))
         self.ollama_enabled_env = os.getenv("HEIWA_ENABLE_OLLAMA", "true").strip().lower() == "true"
         self.ollama_allowed_by_runtime = self._runtime_allows_ollama(self.host_runtime)

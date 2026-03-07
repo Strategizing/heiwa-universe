@@ -41,6 +41,10 @@ STRUCTURE = {
         "text": ["node-heartbeats", "audit-log", "error-trace", "thought-stream"],
         "visibility": "admin_only"
     },
+    "💡 IDEA INCUBATOR": {
+        "text": ["casual-brainstorm"],
+        "visibility": "admin_only"
+    },
     "📢 COMMUNITY SURFACE": {
         "text": ["welcome", "announcements", "open-forum"],
         "visibility": "public"
@@ -137,7 +141,7 @@ class MessengerAgent(BaseAgent):
         if db_id:
             try: return int(db_id)
             except: pass
-        if purpose in {"central-command", "central-comms"}:
+        if purpose in {"central-command", "central-comms", "casual-brainstorm"}:
             val = os.getenv("DISCORD_CHANNEL_ID")
             if val:
                 try: return int(val)
@@ -264,9 +268,11 @@ class MessengerAgent(BaseAgent):
         return "\n".join(parts).strip()
 
     def _should_consume_conversation(self, message: discord.Message) -> bool:
+        # High value endpoint: DMs
         if message.guild is None: return True
         if self.bot.user and self.bot.user in message.mentions: return True
-        command_purposes = {"operator-ingress", "central-comms", "operator-input", "central-command"}
+        # Routing endpoints (Casual chat & ingress)
+        command_purposes = {"operator-ingress", "central-comms", "operator-input", "central-command", "casual-brainstorm"}
         command_ids = {self._get_channel_id(p) for p in command_purposes}
         command_ids.discard(0)
         return message.channel.id in command_ids

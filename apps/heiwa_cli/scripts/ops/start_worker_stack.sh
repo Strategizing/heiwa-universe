@@ -201,7 +201,6 @@ start_mini_thinker() {
 echo "--- HEIWA WORKER STACK START ---"
 start_ollama
 start_nats
-start_openclaw_gateway
 start_worker_manager
 echo "--- HEIWA WORKER STACK CHECK ---"
 "$(choose_python)" "$ROOT/apps/heiwa_cli/scripts/ops/heiwa_360_check.py" || true
