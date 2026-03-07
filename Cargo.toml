@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "apps/heiwa_hub/spacetimedb",
+]
+resolver = "2"

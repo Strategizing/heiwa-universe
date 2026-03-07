@@ -53,11 +53,13 @@ STRUCTURE = {
 }
 
 class ApprovalView(discord.ui.View):
+    prompt_message: Optional[discord.Message]
+
     def __init__(self, messenger: "MessengerAgent", task_id: str):
         super().__init__(timeout=messenger.approval_timeout_sec)
         self.messenger = messenger
         self.task_id = task_id
-        self.prompt_message: discord.Message | None = None
+        self.prompt_message = None
 
     @discord.ui.button(label="Approve", style=discord.ButtonStyle.success)
     async def approve(self, interaction: discord.Interaction, _: discord.ui.Button):
@@ -80,7 +82,10 @@ class ApprovalView(discord.ui.View):
     async def on_timeout(self) -> None:
         for child in self.children:
             if hasattr(child, "disabled"):
-                child.disabled = True
+                try:
+                    child.disabled = True
+                except Exception:
+                    pass
         if self.prompt_message:
             try:
                 await self.prompt_message.edit(view=self)
@@ -352,8 +357,9 @@ class MessengerAgent(BaseAgent):
         }
         await self.nc.publish(subject, json.dumps(payload).encode())
 
-    async def _ingest_interaction(self, instruction: str, source: discord.Message | discord.Interaction, explicit: bool) -> None:
-        task_id = f"task-{uuid.uuid4().hex[:10]}"
+    async def _ingest_interaction(self, instruction: str, source: Union[discord.Message, discord.Interaction], explicit: bool) -> None:
+        raw_hex = str(uuid.uuid4().hex)
+        task_id = f"task-{raw_hex[0:10]}"
         intent_profile = self.planner.normalize_intent(instruction)
         preview_intent = intent_profile.intent_class
         
@@ -544,7 +550,9 @@ class MessengerAgent(BaseAgent):
         task_id = str(payload.get("task_id", "n/a"))
         target = self._resolve_target_channel(payload, task_id)
         if target:
-            embed = UIManager.create_task_embed(task_id, str(payload.get("summary", ""))[:100] + "...", status=("completed" if payload.get("status") == "PASS" else "error"), result=payload.get("summary"), usage=payload.get("usage"), snapshot={"railway": "Online", "node_id": payload.get("runtime", "unknown"), "provider": payload.get("target_tool", "OpenClaw")})
+            summary = str(payload.get("summary", ""))
+            truncated_summary = summary[0:100] + "..." if len(summary) > 100 else summary
+            embed = UIManager.create_task_embed(task_id, truncated_summary, status=("completed" if payload.get("status") == "PASS" else "error"), result=payload.get("summary"), usage=payload.get("usage"), snapshot={"railway": "Online", "node_id": payload.get("runtime", "unknown"), "provider": payload.get("target_tool", "OpenClaw")})
             await target.send(embed=embed)
             rid = self._get_channel_id(payload.get("report_channel") or "executive-briefing")
             if rid and rid != target.id:

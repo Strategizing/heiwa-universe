@@ -4,8 +4,11 @@ import datetime
 import sys
 import uuid
 import os
+import logging
+import subprocess
+import time
 from pathlib import Path
-from typing import Optional, List, Any, Dict, Union
+from typing import Optional, List, Any, Dict, Union, Callable, TYPE_CHECKING
 from .config import settings
 from .spacetimedb import SpacetimeDB
 
@@ -19,6 +22,12 @@ except ImportError:
 
 
 class Database:
+    # Type stubs for monkey-patched methods
+    insert_thought: Callable[[Any], bool]
+    get_stream_context: Callable[[int, int], List[Dict[str, Any]]]
+    query_stream: Callable[..., List[Dict[str, Any]]]
+    get_debate_chain: Callable[[str], List[Dict[str, Any]]]
+
     def __init__(self):
         self.stdb = SpacetimeDB(db_identity=os.getenv("STDB_IDENTITY", "c20036703b164bad843aaf1714245ba8089a954065eb5cc913e8b5fee613e157"))
         self.use_postgres = settings.use_postgres
@@ -2802,6 +2811,7 @@ def _insert_thought(self, thought: Thought) -> bool:
         return False
     finally:
         conn.close()
+    return False
 
 
 def _get_stream_context(self, limit: int = 20, hours: int = 24) -> list:
@@ -2846,13 +2856,13 @@ def _get_stream_context(self, limit: int = 20, hours: int = 24) -> list:
 
 def _query_stream(
     self,
-    origin: str = None,
-    intent_contains: str = None,
-    thought_type: str = None,
-    parent_id: str = None,
-    min_confidence: float = None,
+    origin: Optional[str] = None,
+    intent_contains: Optional[str] = None,
+    thought_type: Optional[str] = None,
+    parent_id: Optional[str] = None,
+    min_confidence: Optional[float] = None,
     limit: int = 50,
-) -> list:
+) -> List[Dict[str, Any]]:
     """
     Query the stream with filters.
     Used for debate chains, context lookup, and synthesis.

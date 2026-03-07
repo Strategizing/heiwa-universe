@@ -45,6 +45,10 @@ def load_swarm_env():
         load_dotenv(vault_path, override=True)
 
 class Settings:
+    # --- VERSIONING ---
+    @property
+    def HEIWA_VERSION(self): return "v1.67"
+
     # --- IDENTITY & SOVEREIGNTY ---
     @property
     def MONOREPO_ROOT(self): return MONOREPO_ROOT
