@@ -118,6 +118,15 @@ class MessengerAgent(BaseAgent):
         # Register App Commands
         self._register_slash_commands()
 
+        # Wire bot event handlers to this agent's methods
+        @self.bot.event
+        async def on_ready():
+            await self.on_ready()
+
+        @self.bot.event
+        async def on_message(message):
+            await self.on_message(message)
+
     def _register_slash_commands(self):
         @self.bot.tree.command(name="sync", description="Architect or repair the Heiwa enterprise structure")
         @app_commands.checks.has_permissions(administrator=True)
