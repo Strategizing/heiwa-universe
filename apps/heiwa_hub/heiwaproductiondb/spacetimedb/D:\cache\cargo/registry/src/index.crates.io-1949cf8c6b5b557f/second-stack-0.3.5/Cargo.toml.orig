@@ -1,0 +1,23 @@
+[package]
+name = "second-stack"
+version = "0.3.5"
+authors = ["Zac <that3percent@gmail.com>"]
+edition = "2021"
+description = "A fast allocator for short-lived slices and large values."
+homepage = "https://github.com/That3Percent/second-stack"
+docs = "https://docs.rs/second-stack"
+repository = "https://github.com/That3Percent/second-stack"
+readme = "README.md"
+keywords = ["slice", "stack", "memory-management"]
+categories = ["memory-management"]
+license = "MIT"
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+
+[features]
+
+[dev-dependencies]
+rand = "0.8.5"
+testdrop = "0.1.2"

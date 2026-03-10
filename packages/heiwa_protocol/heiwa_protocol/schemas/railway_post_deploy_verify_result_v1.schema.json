@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "railway_post_deploy_verify_result_v1",
+  "title": "Railway Post Deploy Verify Result V1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "ok",
+    "environment",
+    "services",
+    "health_check",
+    "deploy_ids",
+    "cloud_hq_log_checks",
+    "nats_log_checks",
+    "warnings",
+    "errors",
+    "artifact_paths"
+  ],
+  "properties": {
+    "schema_version": {"type": "string", "const": "railway_post_deploy_verify_result_v1"},
+    "generated_at": {"type": "string"},
+    "ok": {"type": "boolean"},
+    "environment": {"type": "string"},
+    "services": {
+      "type": "object",
+      "required": ["cloud_hq", "nats"],
+      "properties": {
+        "cloud_hq": {"type": "string"},
+        "nats": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "health_check": {"type": "object"},
+    "deploy_ids": {"type": "object"},
+    "cloud_hq_log_checks": {"type": "array", "items": {"type": "object"}},
+    "nats_log_checks": {"type": "array", "items": {"type": "object"}},
+    "warnings": {"type": "array", "items": {"type": "string"}},
+    "errors": {"type": "array", "items": {"type": "string"}},
+    "artifact_paths": {
+      "type": "object",
+      "required": ["artifact_dir", "report_json", "health_snapshot", "cloud_logs_sample", "nats_logs_sample", "summary_md"],
+      "properties": {
+        "artifact_dir": {"type": "string"},
+        "report_json": {"type": "string"},
+        "health_snapshot": {"type": "string"},
+        "cloud_logs_sample": {"type": "string"},
+        "nats_logs_sample": {"type": "string"},
+        "summary_md": {"type": "string"}
+      },
+      "additionalProperties": true
+    }
+  }
+}

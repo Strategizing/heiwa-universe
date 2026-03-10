@@ -1,0 +1,6 @@
+{
+  "git": {
+    "sha1": "5836c268a7307f864b33636357b0869ecc40bc0a"
+  },
+  "path_in_vcs": "crates/bindings-macro"
+}

@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Operator Dispatch Result v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "request_id",
+    "result_id",
+    "completed_at",
+    "status",
+    "executed_mode",
+    "adapter",
+    "summary",
+    "evidence_refs",
+    "redaction_applied"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "heiwa_dispatch_result_v1"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "result_id": {
+      "type": "string"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "success",
+        "error",
+        "denied",
+        "approval_required",
+        "skipped"
+      ]
+    },
+    "executed_mode": {
+      "type": "string"
+    },
+    "adapter": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "redaction_applied": {
+      "type": "boolean"
+    }
+  }
+}

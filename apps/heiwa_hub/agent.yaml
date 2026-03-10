@@ -1,0 +1,12 @@
+name: "Heiwa Architect"
+description: "Strategic Commander on Railway. Delegates local tasks to Field Op."
+system_prompt_path: "libs/heiwa_sdk/prompts/architect.md"
+version: "0.2.0"
+permissions:
+  - "github:read"
+  - "railway:read"
+skills:
+  - name: "github"
+    path: "skills/github"
+  - name: "railway"
+    path: "skills/railway"

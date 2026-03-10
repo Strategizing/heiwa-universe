@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "artifact_index.schema.json",
+  "title": "Artifact Index",
+  "description": "Schema for artifact index entries uploaded from Nodes to Hub",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["path", "purpose", "content_type", "bytes", "sha256"],
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "Relative path from run directory root (e.g., outputs/CHAIN_RESULT.json)"
+      },
+      "purpose": {
+        "type": "string",
+        "enum": ["LOG", "REPORT", "PATCH", "SCREENSHOT", "DATA"],
+        "description": "Classification tag for artifact purpose"
+      },
+      "content_type": {
+        "type": "string",
+        "description": "MIME type of the artifact (e.g., application/json, text/plain)"
+      },
+      "bytes": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "File size in bytes"
+      },
+      "sha256": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$",
+        "description": "SHA-256 hash of file contents for integrity verification"
+      }
+    },
+    "additionalProperties": false
+  },
+  "examples": [
+    [
+      {
+        "path": "outputs/CHAIN_RESULT.json",
+        "purpose": "DATA",
+        "content_type": "application/json",
+        "bytes": 329,
+        "sha256": "50c689815d0036f27cfff066dc0d9b5d519149dc59af2f3a3b6327fa1b2b3ba9"
+      },
+      {
+        "path": "logs/node_sentinel.log",
+        "purpose": "LOG",
+        "content_type": "text/plain",
+        "bytes": 1024,
+        "sha256": "1cd7ecde259545543251607c8e20fbd7c1848e63f7690ab2178d25cf7194e635"
+      },
+      {
+        "path": "artifacts/execution_plan.md",
+        "purpose": "REPORT",
+        "content_type": "text/markdown",
+        "bytes": 232,
+        "sha256": "65d43a8a84e820a58e178130cadc71297056c2d6017cc6a78041ea732a600f2d"
+      }
+    ]
+  ]
+}

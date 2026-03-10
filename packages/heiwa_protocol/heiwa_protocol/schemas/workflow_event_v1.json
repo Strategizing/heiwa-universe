@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Heiwa Workflow Event v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "event_id",
+    "timestamp",
+    "brand",
+    "profile_id",
+    "workspace",
+    "workflow_name",
+    "step_name",
+    "tool_family",
+    "command",
+    "mode",
+    "status",
+    "duration_ms",
+    "target_refs",
+    "risk_level",
+    "approval_required",
+    "approval_ref",
+    "redaction_applied",
+    "summary",
+    "artifacts"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "brand": {
+      "type": "string"
+    },
+    "profile_id": {
+      "type": "string"
+    },
+    "workspace": {
+      "type": "string"
+    },
+    "workflow_name": {
+      "type": "string"
+    },
+    "step_name": {
+      "type": "string"
+    },
+    "tool_family": {
+      "type": "string"
+    },
+    "command": {
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "read",
+        "write",
+        "deploy",
+        "audit",
+        "sync"
+      ]
+    },
+    "status": {
+      "enum": [
+        "started",
+        "ok",
+        "error",
+        "skipped"
+      ]
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "target_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "risk_level": {
+      "type": "string"
+    },
+    "approval_required": {
+      "type": "boolean"
+    },
+    "approval_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "redaction_applied": {
+      "type": "boolean"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

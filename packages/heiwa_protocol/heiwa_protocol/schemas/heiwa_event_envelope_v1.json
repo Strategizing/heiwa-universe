@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Operator Event Envelope v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "event_id",
+    "ts",
+    "event_type",
+    "severity",
+    "source",
+    "subject",
+    "redaction_applied"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "heiwa_event_envelope_v1"
+    },
+    "event_id": {
+      "type": "string"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "event_type": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "payload_ref": {
+      "type": "string"
+    },
+    "payload_inline": {},
+    "redaction_applied": {
+      "type": "boolean"
+    }
+  },
+  "oneOf": [
+    {
+      "required": [
+        "payload_ref"
+      ]
+    },
+    {
+      "required": [
+        "payload_inline"
+      ]
+    }
+  ]
+}

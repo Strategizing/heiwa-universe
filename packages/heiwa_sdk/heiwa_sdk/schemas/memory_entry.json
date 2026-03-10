@@ -1,0 +1,41 @@
+
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Heiwa Memory Entry",
+  "type": "object",
+  "properties": {
+    "question": {
+      "type": "string",
+      "description": " The original prompt or question."
+    },
+    "answer": {
+      "type": "string",
+      "description": "The selected 'winning' answer."
+    },
+    "evidence": {
+      "type": "string",
+      "description": "Citations, proofs, or reasoning trace (if concise)."
+    },
+    "tests_passed": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "List of validation tests that passed."
+    },
+    "confidence": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Confidence score derived from competition or verification."
+    },
+    "source_hashes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Hashes of source documents used."
+    },
+    "audit_trail": {
+        "type": "object",
+        "description": "Metadata about the verification process (e.g. competitor stats)."
+    }
+  },
+  "required": ["question", "answer", "confidence"]
+}

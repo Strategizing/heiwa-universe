@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MacBook Boundary Map v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "host",
+    "heiwa_owned_roots",
+    "app_owned_roots",
+    "repo_roots"
+  ],
+  "properties": {
+    "schema_version": { "const": "macbook_boundary_map_v1" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "host": { "type": "object", "additionalProperties": true },
+    "profile_id": { "type": "string" },
+    "heiwa_owned_roots": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "app_owned_roots": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "repo_roots": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  }
+}

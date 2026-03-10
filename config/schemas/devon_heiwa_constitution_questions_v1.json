@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Devon Heiwa Constitution Questions v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["version", "name", "purpose", "domains", "questions"],
+  "properties": {
+    "version": { "type": ["integer", "string"] },
+    "name": { "type": "string" },
+    "purpose": { "type": "string" },
+    "domains": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "domain", "prompt"],
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string" },
+          "domain": { "type": "string" },
+          "prompt": { "type": "string" }
+        }
+      }
+    }
+  }
+}

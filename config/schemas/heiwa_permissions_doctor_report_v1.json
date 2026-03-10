@@ -1,0 +1,135 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Operator Permissions Doctor Report v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "heiwa_root",
+    "host_user",
+    "mode",
+    "overall_status",
+    "summary",
+    "domains",
+    "capability_readiness"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "heiwa_permissions_doctor_report_v1"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "heiwa_root": {
+      "type": "string"
+    },
+    "host_user": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["read-only", "active-probes"]
+    },
+    "profile": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "path": { "type": "string" },
+        "loaded": { "type": "boolean" }
+      },
+      "required": ["id", "path", "loaded"]
+    },
+    "overall_status": {
+      "type": "string",
+      "enum": ["ok", "warn", "degraded", "error"]
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "checks_total": { "type": "integer" },
+        "pass": { "type": "integer" },
+        "warn": { "type": "integer" },
+        "fail": { "type": "integer" },
+        "unknown": { "type": "integer" },
+        "skipped": { "type": "integer" }
+      },
+      "required": ["checks_total", "pass", "warn", "fail", "unknown", "skipped"]
+    },
+    "domains": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "domain": { "type": "string" },
+          "status": { "type": "string", "enum": ["ok", "warn", "fail", "unknown", "skipped"] }
+        },
+        "required": ["domain", "status"]
+      }
+    },
+    "capability_readiness": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "capability": { "type": "string" },
+          "status": { "type": "string", "enum": ["ready", "approval_ready", "blocked", "unknown", "skipped"] },
+          "blocking_checks": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["capability", "status", "blocking_checks"]
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "check_id": { "type": "string" },
+          "domain": { "type": "string" },
+          "subject": { "type": "string" },
+          "status": { "type": "string", "enum": ["pass", "warn", "fail", "unknown", "skipped"] },
+          "severity": { "type": "string", "enum": ["info", "warn", "degraded", "error"] },
+          "probe_mode": { "type": "string", "enum": ["metadata", "active"] },
+          "required_for": { "type": "array", "items": { "type": "string" } },
+          "observed": { "type": "object" },
+          "expected": { "type": "object" },
+          "remediation": {
+            "type": "object",
+            "properties": {
+              "summary": { "type": "string" },
+              "manual_steps": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "evidence_ref": { "type": "string" },
+          "redaction_applied": { "type": "boolean" }
+        },
+        "required": ["check_id", "domain", "subject", "status", "severity", "probe_mode", "required_for", "observed", "expected"]
+      }
+    },
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "rec_id": { "type": "string" },
+          "priority": { "type": "string", "enum": ["high", "medium", "low"] },
+          "applies_to": { "type": "string" },
+          "summary": { "type": "string" },
+          "action_type": { "type": "string", "enum": ["manual_system_settings", "configure_adapter", "auth_login", "policy_update"] },
+          "safe_command": { "type": "string" },
+          "approval_required": { "type": "boolean" }
+        },
+        "required": ["rec_id", "priority", "applies_to", "summary", "action_type", "approval_required"]
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "redaction_applied": {
+      "type": "boolean",
+      "const": true
+    }
+  }
+}

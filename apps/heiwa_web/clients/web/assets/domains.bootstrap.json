@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "generated_from": "HEIWA_DOMAIN_PLAN.md",
+  "root_domain": "heiwa.ltd",
+  "platform": {
+    "dns": "cloudflare",
+    "public_web": "railway_static_via_cloudflare",
+    "control_plane": "railway",
+    "edge_security": "cloudflare_waf"
+  },
+  "domains": [
+    {
+      "host": "status.heiwa.ltd",
+      "purpose": "Public status surface",
+      "target": "Railway heiwa-cloud-hq static route",
+      "state": "active",
+      "health_path": "/status.html"
+    },
+    {
+      "host": "auth.heiwa.ltd",
+      "purpose": "Identity and auth gateway",
+      "target": "Railway heiwa-cloud-hq (auth edge route)",
+      "state": "planned",
+      "health_path": "/health"
+    },
+    {
+      "host": "api.heiwa.ltd",
+      "purpose": "Swarm API ingress",
+      "target": "Railway service domain + Cloudflare WAF",
+      "state": "active",
+      "health_path": "/health"
+    },
+    {
+      "host": "docs.heiwa.ltd",
+      "purpose": "Heiwa canon docs",
+      "target": "Railway heiwa-cloud-hq static route",
+      "state": "active",
+      "health_path": "/"
+    }
+  ],
+  "dns_records": [
+    {
+      "type": "CNAME",
+      "name": "status",
+      "value": "heiwa-cloud-hq-brain.up.railway.app",
+      "proxy": true,
+      "ttl": "auto"
+    },
+    {
+      "type": "CNAME",
+      "name": "auth",
+      "value": "heiwa-cloud-hq-brain.up.railway.app",
+      "proxy": true,
+      "ttl": "auto"
+    },
+    {
+      "type": "CNAME",
+      "name": "api",
+      "value": "heiwa-cloud-hq-brain.up.railway.app",
+      "proxy": true,
+      "ttl": "auto"
+    },
+    {
+      "type": "CNAME",
+      "name": "docs",
+      "value": "heiwa-cloud-hq-brain.up.railway.app",
+      "proxy": true,
+      "ttl": "auto"
+    }
+  ],
+  "bootstrap_steps": [
+    "Point heiwa.ltd/status/docs to Railway service heiwa-cloud-hq and serve static site routes from the service.",
+    "Attach auth.heiwa.ltd and api.heiwa.ltd to Railway service heiwa-cloud-hq and enforce Cloudflare proxy/WAF.",
+    "Enable strict TLS and baseline WAF rules for api.heiwa.ltd.",
+    "Run post-cutover checks for /health and public page endpoints."
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Heiwa Net Decision v2",
+  "description": "Schema for net policy proxy decisions. Returned by the policy engine after evaluating a heiwa_net_request_v2 envelope.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "decision_id",
+    "request_id",
+    "decided_at",
+    "decision",
+    "reason"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "heiwa_net_decision_v2"
+    },
+    "decision_id": {
+      "type": "string",
+      "description": "Unique decision identifier (UUID)"
+    },
+    "request_id": {
+      "type": "string",
+      "description": "The request_id from the originating heiwa_net_request_v2"
+    },
+    "decided_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of the decision"
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["allow", "deny", "approval_required", "rate_limited", "redirect"],
+      "description": "The policy decision"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Human-readable reason for the decision"
+    },
+    "matched_rule": {
+      "type": ["string", "null"],
+      "description": "ID of the policy rule that triggered this decision"
+    },
+    "matched_allowlist_entry": {
+      "type": ["string", "null"],
+      "description": "ID of the allowlist entry that matched (if allowed)"
+    },
+    "audit_ref": {
+      "type": ["string", "null"],
+      "description": "Reference to the audit trail entry for this decision"
+    },
+    "expires_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When this decision expires (for cached/blanket approvals)"
+    }
+  }
+}

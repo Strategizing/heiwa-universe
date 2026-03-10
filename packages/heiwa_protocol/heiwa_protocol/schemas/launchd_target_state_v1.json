@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Launchd Target State v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "generated_at", "host_role", "policy", "services"],
+  "properties": {
+    "schema_version": { "const": "launchd_target_state_v1" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "host_role": { "type": "string" },
+    "policy": { "type": "object", "additionalProperties": true },
+    "services": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["label", "target_mode", "keep_enabled"],
+        "properties": {
+          "label": { "type": "string" },
+          "target_mode": { "type": "string" },
+          "keep_enabled": { "type": "boolean" },
+          "notes": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "migration_rules": { "type": "array", "items": { "type": "string" } }
+  }
+}

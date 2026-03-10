@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Launchd Service Contract Snapshot v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "generated_at", "launch_agent_dir", "services"],
+  "properties": {
+    "schema_version": { "const": "launchd_service_contract_v1" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "profile_id": { "type": "string" },
+    "launch_agent_dir": { "type": "string" },
+    "services": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["label_expected", "path"],
+        "properties": {
+          "label_expected": { "type": "string" },
+          "path": { "type": "string" },
+          "exists": { "type": "boolean" },
+          "label": { "type": "string" },
+          "working_directory": { "type": "string" },
+          "stdout_path": { "type": "string" },
+          "stderr_path": { "type": "string" },
+          "program_arguments": { "type": "array", "items": { "type": "string" } },
+          "environment_variables": { "type": "object", "additionalProperties": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

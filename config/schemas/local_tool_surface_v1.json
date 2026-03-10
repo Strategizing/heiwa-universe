@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Local Tool Surface Inventory v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "generated_at", "items"],
+  "properties": {
+    "schema_version": { "const": "local_tool_surface_v1" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "profile_id": { "type": "string" },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "tool_id",
+          "ownership",
+          "kind",
+          "executables",
+          "state_paths",
+          "auth_context_source",
+          "allowed_heiwa_interaction_modes",
+          "evidence_rules",
+          "persistence_mode"
+        ],
+        "properties": {
+          "tool_id": { "type": "string" },
+          "ownership": { "type": "string", "enum": ["app-owned", "heiwa-owned"] },
+          "kind": { "type": "string" },
+          "executables": {
+            "type": "array",
+            "items": { "type": ["string", "null"] }
+          },
+          "state_paths": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                { "type": "string" },
+                {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "path": { "type": "string" },
+                    "exists": { "type": "boolean" },
+                    "owned_by_heiwa": { "type": "boolean" }
+                  }
+                }
+              ]
+            }
+          },
+          "auth_context_source": { "type": "string" },
+          "allowed_heiwa_interaction_modes": { "type": "array", "items": { "type": "string" } },
+          "evidence_rules": { "type": "object", "additionalProperties": true },
+          "persistence_mode": { "type": "string" }
+        }
+      }
+    }
+  }
+}

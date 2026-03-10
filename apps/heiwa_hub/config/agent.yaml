@@ -1,0 +1,10 @@
+name: "Heiwa Hub"
+description: "Canonical Heiwa cloud brain and ingress surface for the sovereign mesh."
+version: "2026.03.06"
+permissions:
+  - "discord:send"
+  - "nats:publish"
+  - "nats:subscribe"
+skills:
+  - name: "discord"
+    path: "skills/discord"

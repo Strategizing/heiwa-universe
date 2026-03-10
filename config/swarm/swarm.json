@@ -1,0 +1,101 @@
+{
+  "version": 3,
+  "instances": [
+    {
+      "model_id": "ollama/llama-4-scout:q4_k_m",
+      "host_node": "macbook@heiwa-node-a",
+      "role": "orchestration-reasoner",
+      "capability": "orchestration_reasoning",
+      "cost_tier": "free_local",
+      "compute_class": 2
+    },
+    {
+      "model_id": "ollama/glm-4.7-flash:q4_k_m",
+      "host_node": "macbook@heiwa-node-a",
+      "role": "local-code-translator",
+      "capability": "local_codegen",
+      "cost_tier": "free_local",
+      "compute_class": 2
+    },
+    {
+      "model_id": "ollama/qwen2.5-coder:7b:q4",
+      "host_node": "pc@heiwa-node-b",
+      "role": "gpu-builder",
+      "capability": "local_gpu_inference",
+      "cost_tier": "free_local",
+      "compute_class": 2
+    },
+    {
+      "model_id": "local/all-MiniLM-L6-v2",
+      "host_node": "pc@heiwa-node-b",
+      "role": "embedding-worker",
+      "capability": "embedding_generation",
+      "cost_tier": "free_local",
+      "compute_class": 2
+    },
+    {
+      "model_id": "local/sdxl-turbo",
+      "host_node": "pc@heiwa-node-b",
+      "role": "media-worker",
+      "capability": "image_generation",
+      "cost_tier": "free_local",
+      "compute_class": 2
+    },
+    {
+      "model_id": "siliconflow/deepseek-r2",
+      "host_node": "cloud@premium-remote",
+      "role": "overflow-reasoner",
+      "capability": "long_context",
+      "cost_tier": "free_api",
+      "compute_class": 3
+    },
+    {
+      "model_id": "cerebras/gpt-oss-120b",
+      "host_node": "cloud@premium-remote",
+      "role": "fast-reasoner",
+      "capability": "standard_compute",
+      "cost_tier": "free_api",
+      "compute_class": 3
+    },
+    {
+      "model_id": "google/gemini-2.5-pro",
+      "host_node": "cloud@premium-remote",
+      "role": "research-specialist",
+      "capability": "research",
+      "cost_tier": "premium",
+      "compute_class": 3
+    },
+    {
+      "model_id": "anthropic/claude-opus-4.6",
+      "host_node": "cloud@premium-remote",
+      "role": "strategist",
+      "capability": "adversarial_review",
+      "cost_tier": "premium",
+      "compute_class": 3
+    },
+    {
+      "model_id": "openai-codex/gpt-5.3-codex",
+      "host_node": "cloud@premium-remote",
+      "role": "builder",
+      "capability": "agile_coding",
+      "cost_tier": "premium",
+      "compute_class": 3
+    },
+    {
+      "model_id": "service/railway-heiwa-hub",
+      "host_node": "railway@heiwa-cloud",
+      "role": "cloud-persistence",
+      "capability": "public_ingress",
+      "cost_tier": "fixed_infra",
+      "compute_class": 4
+    },
+    {
+      "model_id": "service/spacetimedb",
+      "host_node": "railway@heiwa-cloud",
+      "role": "state-layer",
+      "capability": "real_time_state",
+      "cost_tier": "fixed_infra",
+      "compute_class": 4
+    }
+  ]
+}

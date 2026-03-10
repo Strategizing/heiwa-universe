@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "heiwa_mcp_call_request_v1",
+  "title": "Heiwa MCP Call Request V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["server", "tool", "reason"],
+  "properties": {
+    "server": {
+      "type": "string",
+      "enum": ["MCP_DOCKER", "playwright"]
+    },
+    "tool": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "arguments": {
+      "type": "object",
+      "default": {}
+    },
+    "timeout_sec": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 180
+    },
+    "profile": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 500
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["audit", "operate"],
+      "default": "audit"
+    }
+  }
+}

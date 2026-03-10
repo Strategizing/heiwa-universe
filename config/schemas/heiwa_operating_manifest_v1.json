@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Heiwa Operating Manifest v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "brand",
+    "profile_id",
+    "purpose",
+    "truth_hierarchy",
+    "roles",
+    "boundaries",
+    "network",
+    "mirrors"
+  ],
+  "properties": {
+    "schema_version": { "const": "heiwa_operating_manifest_v1" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "brand": { "type": "string" },
+    "profile_id": { "type": "string" },
+    "purpose": {
+      "type": "object",
+      "required": ["north_star", "audience"],
+      "additionalProperties": true,
+      "properties": {
+        "north_star": { "type": "string" },
+        "audience": { "type": "string" }
+      }
+    },
+    "truth_hierarchy": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" }
+    },
+    "roles": { "type": "object", "additionalProperties": true },
+    "boundaries": { "type": "object", "additionalProperties": true },
+    "network": { "type": "object", "additionalProperties": true },
+    "mirrors": { "type": "object", "additionalProperties": true }
+  }
+}

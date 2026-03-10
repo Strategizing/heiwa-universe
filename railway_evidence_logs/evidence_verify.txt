@@ -1,0 +1,13 @@
+=== Multi-Node Verification ===
+[1] Starting Nodes A and B...
+[2] Submitting Proposals...
+Submitted PRO_A_1
+Submitted PRO_B_1
+Submitted PRO_C_1
+Waiting for processing (max 30s)...
+Success detected at tick 5: A=1, B=2
+[3] Verifying Outputs...
+PASS: Runtime ownership confirmed.
+Node A processed: 1
+Node B processed: 2
+PASS: Run Success. Work distributed, ownership verified, no duplication.

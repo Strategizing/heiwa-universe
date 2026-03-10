@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "heiwa_mcp_call_result_v1",
+  "title": "Heiwa MCP Call Result V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "server", "tool", "mode", "tool_meta", "audit_ref", "error"],
+  "properties": {
+    "ok": {"type": "boolean"},
+    "server": {"type": ["string", "null"]},
+    "tool": {"type": ["string", "null"]},
+    "mode": {"type": "string", "enum": ["audit", "operate"]},
+    "duration_ms": {"type": ["integer", "null"], "minimum": 0},
+    "result": {},
+    "tool_meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowed", "read_only"],
+      "properties": {
+        "allowed": {"type": "boolean"},
+        "read_only": {"type": ["boolean", "null"]}
+      }
+    },
+    "audit_ref": {"type": "string", "minLength": 1},
+    "error": {
+      "type": ["object", "null"],
+      "properties": {
+        "code": {"type": "string"},
+        "message": {"type": "string"},
+        "detail": {}
+      },
+      "required": ["code", "message"],
+      "additionalProperties": true
+    }
+  }
+}

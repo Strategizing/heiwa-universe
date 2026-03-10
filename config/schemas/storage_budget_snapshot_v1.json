@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Storage Budget Snapshot v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "generated_at", "items"],
+  "properties": {
+    "schema_version": { "const": "storage_budget_snapshot_v1" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "profile_id": { "type": "string" },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["path", "kilobytes", "exists"],
+        "properties": {
+          "path": { "type": "string" },
+          "kilobytes": { "type": ["integer", "null"] },
+          "exists": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}
