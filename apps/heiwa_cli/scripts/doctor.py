@@ -67,7 +67,12 @@ def _auth_token(file_env: dict[str, str]) -> str:
 
 
 def _fetch_json(url: str, headers: dict[str, str] | None = None, timeout: float = 5.0) -> tuple[dict | None, str | None]:
-    req = urllib_request.Request(url, headers=headers or {}, method="GET")
+    req_headers = {
+        "Accept": "application/json",
+        "User-Agent": "HeiwaCLI/2.1",
+    }
+    req_headers.update(headers or {})
+    req = urllib_request.Request(url, headers=req_headers, method="GET")
     try:
         with urllib_request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode()), None
@@ -163,6 +168,8 @@ def check_route_probe(file_env: dict[str, str]) -> int:
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+        "User-Agent": "HeiwaCLI/2.1",
     }
     body = json.dumps(
         {

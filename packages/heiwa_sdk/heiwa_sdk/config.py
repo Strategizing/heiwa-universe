@@ -67,7 +67,7 @@ def hub_url_candidates() -> list[str]:
     ]
     profile_urls = _profile_hub_fallbacks()
     defaults = ["https://api.heiwa.ltd", "https://heiwa-cloud-hq-brain.up.railway.app"]
-    return _unique_strings(direct_env + profile_urls + defaults)
+    return _unique_strings(direct_env + defaults + profile_urls)
 
 
 def _bool_env(key: str) -> bool:

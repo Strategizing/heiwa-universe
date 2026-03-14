@@ -1,0 +1,41 @@
+{
+  "schema_version": "heiwa_net_policy_v2",
+  "policy_id": "cloud_hq_default_v1",
+  "description": "Cloud HQ egress policy for Railway-hosted Heiwa control plane fallback inference.",
+  "default_decision": "deny",
+  "rules": [
+    {
+      "rule_id": "allow-google-generative-language-model-inference",
+      "description": "Allow Gemini API calls for Railway-safe runtime inference fallback.",
+      "decision": "allow",
+      "match": {
+        "purpose_class": ["model_inference", "health_check"],
+        "method": ["GET", "POST"],
+        "protocol": ["https"],
+        "destination_host_pattern": ["generativelanguage.googleapis.com"]
+      }
+    },
+    {
+      "rule_id": "allow-anthropic-model-inference",
+      "description": "Allow Anthropic API calls when Claude fallback credentials are present.",
+      "decision": "allow",
+      "match": {
+        "purpose_class": ["model_inference", "health_check"],
+        "method": ["GET", "POST"],
+        "protocol": ["https"],
+        "destination_host_pattern": ["api.anthropic.com"]
+      }
+    },
+    {
+      "rule_id": "allow-openai-model-inference",
+      "description": "Allow OpenAI API calls when OpenAI fallback credentials are present.",
+      "decision": "allow",
+      "match": {
+        "purpose_class": ["model_inference", "health_check"],
+        "method": ["GET", "POST"],
+        "protocol": ["https"],
+        "destination_host_pattern": ["api.openai.com"]
+      }
+    }
+  ]
+}

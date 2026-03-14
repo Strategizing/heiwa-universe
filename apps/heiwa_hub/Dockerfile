@@ -49,6 +49,7 @@ RUN curl -L "https://github.com/clockworklabs/SpacetimeDB/releases/download/v2.0
 # Copy Architecture
 COPY packages/ /app/packages/
 COPY config/ /app/config/
+COPY policies/ /app/policies/
 COPY apps/heiwa_hub/ /app/apps/heiwa_hub/
 COPY apps/heiwa_web/clients/web/ /app/apps/heiwa_web/clients/web/
 COPY requirements.txt /app/requirements.txt

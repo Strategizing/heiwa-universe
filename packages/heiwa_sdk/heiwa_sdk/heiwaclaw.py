@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +9,17 @@ from heiwa_protocol.routing import BrokerRouteResult
 
 from .provider_registry import ProviderRegistry
 from .tool_mesh import ToolMesh
+
+
+logger = logging.getLogger("SDK.HeiwaClaw")
+
+_RUNTIME_ENGINE_INTENTS = {"chat", "general", "research", "strategy"}
+_RUNTIME_ENGINE_UNAVAILABLE_MARKERS = (
+    "is unavailable",
+    "command not found",
+    "no such file",
+    "not installed",
+)
 
 
 @dataclass(slots=True)
@@ -82,8 +94,72 @@ class HeiwaClawGateway:
             adapter_env=provider_config.env,
         )
 
+    @staticmethod
+    def _runtime_engine_allowed(route: BrokerRouteResult, dispatch: HeiwaClawDispatch) -> bool:
+        runtime = str(dispatch.target_runtime or route.target_runtime or "").strip().lower()
+        intent = str(route.intent_class or "").strip().lower()
+        return runtime in {"railway", "cloud"} and intent in _RUNTIME_ENGINE_INTENTS
+
+    @staticmethod
+    def _runtime_engine_complexity(route: BrokerRouteResult) -> str:
+        tier = str(route.target_tier or "").strip().lower()
+        if tier in {"tier6_premium_context", "tier7_supreme_court"}:
+            return "high"
+        if tier in {"tier2_fast_context", "tier3_orchestrator", "tier4_pooled_orchestrator", "tier5_heavy_code"}:
+            return "medium"
+        return "low"
+
+    def _execute_via_runtime_engine(
+        self,
+        route: BrokerRouteResult,
+        dispatch: HeiwaClawDispatch,
+        instruction: str,
+    ) -> str:
+        try:
+            from heiwa_hub.cognition.llm_local import LocalLLMEngine
+        except Exception as exc:
+            logger.info("Runtime engine unavailable for %s: %s", dispatch.session_id, exc)
+            return ""
+
+        engine = LocalLLMEngine()
+        result = engine.generate(
+            prompt=instruction,
+            complexity=self._runtime_engine_complexity(route),
+            runtime=dispatch.target_runtime or route.target_runtime or "railway",
+        )
+        if result:
+            logger.info(
+                "Runtime engine satisfied %s via %s/%s fallback.",
+                dispatch.session_id,
+                route.intent_class,
+                dispatch.provider,
+            )
+        return result.strip()
+
+    def _should_prefer_runtime_engine(
+        self,
+        route: BrokerRouteResult,
+        dispatch: HeiwaClawDispatch,
+    ) -> bool:
+        if not self._runtime_engine_allowed(route, dispatch):
+            return False
+        return dispatch.adapter_tool == "heiwa_reflex"
+
+    def _should_retry_with_runtime_engine(
+        self,
+        route: BrokerRouteResult,
+        dispatch: HeiwaClawDispatch,
+        exit_code: int,
+        output: str,
+    ) -> bool:
+        if exit_code == 0 or not self._runtime_engine_allowed(route, dispatch):
+            return False
+        lowered = str(output or "").lower()
+        return any(marker in lowered for marker in _RUNTIME_ENGINE_UNAVAILABLE_MARKERS)
+
     async def execute(self, payload: BrokerRouteResult | dict[str, Any], instruction: str) -> tuple[int, str]:
-        dispatch = self.resolve(payload)
+        route = payload if isinstance(payload, BrokerRouteResult) else BrokerRouteResult.from_payload(payload)
+        dispatch = self.resolve(route)
         env = {
             "HEIWA_GATEWAY_TRANSPORT": dispatch.transport,
             "HEIWA_PROVIDER": dispatch.provider,
@@ -93,9 +169,19 @@ class HeiwaClawGateway:
             "OPENCLAW_SESSION_ID": dispatch.session_id,
         }
         env.update(dispatch.adapter_env)
-        return await self.tool_mesh.execute(
+        if self._should_prefer_runtime_engine(route, dispatch):
+            runtime_result = self._execute_via_runtime_engine(route, dispatch, instruction)
+            if runtime_result:
+                return 0, runtime_result
+
+        exit_code, output = await self.tool_mesh.execute(
             dispatch.adapter_tool,
             instruction,
             model=dispatch.target_model or None,
             extra_env=env,
         )
+        if self._should_retry_with_runtime_engine(route, dispatch, exit_code, output):
+            runtime_result = self._execute_via_runtime_engine(route, dispatch, instruction)
+            if runtime_result:
+                return 0, runtime_result
+        return exit_code, output

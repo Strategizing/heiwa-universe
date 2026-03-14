@@ -24,8 +24,8 @@ from heiwa_sdk import (
 )
 from heiwa_protocol.routing import BrokerRouteRequest
 
-from apps.heiwa_hub.cognition.enrichment import BrokerEnrichmentService
-from apps.heiwa_hub.transport import get_bus, get_worker_manager
+from heiwa_hub.cognition.enrichment import BrokerEnrichmentService
+from heiwa_hub.transport import get_bus, get_worker_manager
 from heiwa_protocol.protocol import Subject
 
 # Initialized Environment
@@ -37,6 +37,7 @@ db = Database()
 state = HubStateService(db)
 mcp_bridge = MCPBridge()
 enrichment = BrokerEnrichmentService()
+TASK_SNAPSHOTS: dict[str, dict[str, Any]] = {}
 
 ROOT = Path(__file__).resolve().parents[2]
 bench = HeiwaBench(ROOT)
@@ -57,6 +58,72 @@ class MCPTool(BaseModel):
     name: str
     description: str
     input_schema: Dict[str, Any]
+
+
+def _snapshot_task(task_id: str, **patch: Any) -> dict[str, Any]:
+    record = dict(TASK_SNAPSHOTS.get(task_id, {}))
+    record["task_id"] = task_id
+    record["updated_at"] = time.time()
+    for key, value in patch.items():
+        if value is not None:
+            record[key] = value
+    TASK_SNAPSHOTS[task_id] = record
+    return record
+
+
+async def _record_status_event(envelope: Dict[str, Any]):
+    payload = envelope.get("data", envelope)
+    task_id = payload.get("task_id")
+    if not task_id:
+        return
+    patch = {
+        "delivery_status": payload.get("status"),
+        "message": payload.get("message"),
+        "runtime": payload.get("runtime"),
+        "step_id": payload.get("step_id"),
+    }
+    current = TASK_SNAPSHOTS.get(task_id, {})
+    if not current.get("run_status"):
+        patch["status"] = payload.get("status")
+    _snapshot_task(task_id, **patch)
+
+
+async def _record_result_event(envelope: Dict[str, Any]):
+    payload = envelope.get("data", envelope)
+    task_id = payload.get("task_id")
+    if not task_id:
+        return
+    _snapshot_task(
+        task_id,
+        status=payload.get("status"),
+        run_status=payload.get("status"),
+        summary=payload.get("summary"),
+        runtime=payload.get("runtime"),
+        provider=payload.get("provider"),
+        target_tool=payload.get("target_tool"),
+        target_model=payload.get("target_model"),
+        intent_class=payload.get("intent_class"),
+        elapsed_sec=payload.get("elapsed_sec"),
+    )
+
+
+async def _record_progress_event(envelope: Dict[str, Any]):
+    payload = envelope.get("data", envelope)
+    task_id = payload.get("task_id")
+    if not task_id:
+        return
+    _snapshot_task(task_id, progress=payload.get("content") or payload.get("message"))
+
+
+@app.on_event("startup")
+async def _register_task_snapshot_listeners():
+    if getattr(app.state, "_task_snapshot_listeners", False):
+        return
+    bus = get_bus()
+    await bus.subscribe(Subject.TASK_STATUS, _record_status_event)
+    await bus.subscribe(Subject.TASK_EXEC_RESULT, _record_result_event)
+    await bus.subscribe(Subject.TASK_PROGRESS, _record_progress_event)
+    app.state._task_snapshot_listeners = True
 
 
 @app.get("/health")
@@ -309,6 +376,15 @@ async def create_task(req: TaskRequest, authorization: str | None = Header(None)
         "_pre_enriched": True,
     }, sender_id=req.sender_id)
 
+    _snapshot_task(
+        task_id,
+        status="ACCEPTED",
+        route=route.to_dict(),
+        sender_id=req.sender_id,
+        source_surface=req.source_surface,
+        raw_text=req.raw_text,
+    )
+
     return {
         "task_id": task_id,
         "status": "ACCEPTED",
@@ -320,6 +396,8 @@ async def create_task(req: TaskRequest, authorization: str | None = Header(None)
 async def get_task(task_id: str, authorization: str | None = Header(None)):
     """Retrieve task status/results from state backend."""
     _validate_auth_token(authorization)
+    if task_id in TASK_SNAPSHOTS:
+        return TASK_SNAPSHOTS[task_id]
     runs = state.get_recent_runs(limit=50)
     for run in runs:
         if run.get("proposal_id") == task_id or run.get("run_id", "").endswith(task_id):
@@ -354,6 +432,12 @@ async def task_events(ws: WebSocket, task_id: str, token: str | None = None):
 
     terminal_statuses = {"DELIVERED", "PASS", "FAIL", "BLOCKED_AUTH", "BLOCKED_NO_CONTENT"}
     try:
+        existing = TASK_SNAPSHOTS.get(task_id)
+        if existing:
+            await ws.send_json(existing)
+            existing_status = str(existing.get("run_status") or existing.get("status") or "")
+            if existing_status in terminal_statuses:
+                return
         while True:
             try:
                 event = await asyncio.wait_for(event_queue.get(), timeout=30.0)

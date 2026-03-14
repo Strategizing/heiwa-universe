@@ -121,7 +121,7 @@ async def _stream_task_result(hub_url: str, task_id: str, token: str = "", timeo
         import websockets
     except ImportError:
         print("[HEIWA] websockets not installed — cannot stream results from hub.")
-        return 0
+        return await _poll_task_result(hub_url, task_id, token=token, timeout=timeout)
 
     try:
         async with websockets.connect(ws_url, open_timeout=10) as ws:

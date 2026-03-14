@@ -145,7 +145,12 @@ def _node_name(default: str = "macbook@heiwa-agile") -> str:
 
 
 def _fetch_json(url: str, headers: dict[str, str] | None = None, timeout: float = 5.0) -> tuple[dict | None, str | None]:
-    req = urllib_request.Request(url, headers=headers or {}, method="GET")
+    req_headers = {
+        "Accept": "application/json",
+        "User-Agent": "HeiwaCLI/2.1",
+    }
+    req_headers.update(headers or {})
+    req = urllib_request.Request(url, headers=req_headers, method="GET")
     try:
         with urllib_request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode()), None
@@ -239,7 +244,7 @@ def cmd_status(args):
 
     usage_summary = list((public_status or {}).get("usage_summary") or [])
     if usage_summary:
-        usage_table = Table(title="Active Model Usage", box=box.ROUNDED, header_style="bold brand")
+        usage_table = Table(title="Active Model Usage", box=box.ROUNDED, header_style="brand")
         usage_table.add_column("Model", style="cyan")
         usage_table.add_column("Requests", justify="right")
         usage_table.add_column("Tokens", justify="right")
@@ -308,7 +313,7 @@ def cmd_cost(args):
         console.print("[dim]   No usage data found for the last 24h.[/dim]")
         return
     
-    table = Table(title="Swarm-Wide Token Ledger", box=box.ROUNDED, header_style="bold brand")
+    table = Table(title="Swarm-Wide Token Ledger", box=box.ROUNDED, header_style="brand")
     table.add_column("Model", style="cyan")
     table.add_column("Requests", justify="right")
     table.add_column("Total Tokens", justify="right")
@@ -328,7 +333,7 @@ def cmd_bench(args):
         return
     print_banner()
     if not args.json:
-        table = Table(title="HeiwaBench", box=box.ROUNDED, header_style="bold brand")
+        table = Table(title="HeiwaBench", box=box.ROUNDED, header_style="brand")
         table.add_column("Suite", style="cyan")
         table.add_column("Cases", justify="right")
         table.add_column("Passed", justify="right")
@@ -382,7 +387,7 @@ def cmd_cells(args):
         return
 
     print_banner()
-    table = Table(title="HeiwaCells Catalog", box=box.ROUNDED, header_style="bold brand")
+    table = Table(title="HeiwaCells Catalog", box=box.ROUNDED, header_style="brand")
     table.add_column("Cell", style="cyan")
     table.add_column("Tool")
     table.add_column("Runtime")
