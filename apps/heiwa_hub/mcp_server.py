@@ -175,7 +175,17 @@ async def status_page():
 
 @app.get("/status")
 async def get_public_status():
-    return state.get_public_status(minutes=60)
+    return _public_status_payload()
+
+
+def _public_status_payload() -> dict[str, Any]:
+    from heiwa_sdk.rate_ledger import get_rate_ledger
+    status = state.get_public_status(minutes=60)
+    try:
+        status["rate_groups"] = get_rate_ledger().status()
+    except Exception:
+        pass
+    return status
 
 
 @app.websocket("/ws/status")
@@ -185,7 +195,7 @@ async def status_stream(ws: WebSocket):
     await ws.accept()
     try:
         while True:
-            await ws.send_json(state.get_public_status(minutes=60))
+            await ws.send_json(_public_status_payload())
             await asyncio.sleep(2)
     except WebSocketDisconnect:
         logger.debug("Status websocket disconnected.")

@@ -214,16 +214,50 @@
       "websocket_preferred": false
     }
   },
+  "rate_limits": {
+    "claude_code": {"max_turns": 40, "window_sec": 18000, "cooldown_sec": 300},
+    "openai_codex": {"max_turns": 25, "window_sec": 3600, "cooldown_sec": 120},
+    "google_gemini_cli": {"max_turns": 50, "window_sec": 3600, "cooldown_sec": 60},
+    "google_antigravity": {"max_turns": 35, "window_sec": 3600, "cooldown_sec": 60},
+    "siliconflow": {"max_turns": 15, "window_sec": 3600, "cooldown_sec": 120},
+    "cerebras": {"max_turns": 20, "window_sec": 3600, "cooldown_sec": 90},
+    "openrouter": {"max_turns": 10, "window_sec": 3600, "cooldown_sec": 180},
+    "groq": {"max_turns": 20, "window_sec": 3600, "cooldown_sec": 90}
+  },
   "routing_policy": {
     "provider_rotation": {
       "premium_remote": [
         "siliconflow/deepseek-r2",
         "cerebras/gpt-oss-120b",
         "google-gemini-cli/gemini-3-pro-preview",
-        "google-antigravity/gemini-3-pro-high",
+        "google-antigravity/gemini-3-flash",
         "claude-code/claude-opus-4-6",
         "openai-codex/gpt-5.3-codex"
-      ]
+      ],
+      "by_intent": {
+        "research": [
+          "google-gemini-cli/gemini-3-pro-preview",
+          "google-antigravity/gemini-3-flash",
+          "claude-code/claude-opus-4-6",
+          "siliconflow/deepseek-r2",
+          "cerebras/gpt-oss-120b"
+        ],
+        "strategy": [
+          "google-antigravity/gemini-3-flash",
+          "claude-code/claude-opus-4-6",
+          "google-gemini-cli/gemini-3-pro-preview",
+          "siliconflow/deepseek-r2",
+          "cerebras/gpt-oss-120b"
+        ],
+        "build": [
+          "openai-codex/gpt-5.3-codex",
+          "claude-code/claude-opus-4-6",
+          "google-antigravity/gemini-3-flash",
+          "google-gemini-cli/gemini-3-pro-preview",
+          "siliconflow/deepseek-r2",
+          "cerebras/gpt-oss-120b"
+        ]
+      }
     },
     "compute_classes": {
       "1": "cpu_first",

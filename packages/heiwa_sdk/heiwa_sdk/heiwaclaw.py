@@ -184,4 +184,26 @@ class HeiwaClawGateway:
             runtime_result = self._execute_via_runtime_engine(route, dispatch, instruction)
             if runtime_result:
                 return 0, runtime_result
+
+        # Record usage in the rate ledger
+        self._record_rate_usage(dispatch, exit_code, output)
+
         return exit_code, output
+
+    @staticmethod
+    def _record_rate_usage(dispatch: HeiwaClawDispatch, exit_code: int, output: str) -> None:
+        """Record rate-group usage after execution. Detects throttle signals."""
+        if dispatch.rate_group in {"deterministic_ops", ""} or not dispatch.rate_group:
+            return
+        try:
+            from .rate_ledger import get_rate_ledger
+            ledger = get_rate_ledger()
+        except Exception:
+            return
+
+        lowered = str(output or "").lower()
+        throttle_markers = ("rate limit", "429", "too many requests", "quota exceeded", "throttled")
+        if exit_code != 0 and any(m in lowered for m in throttle_markers):
+            ledger.record_throttle(dispatch.rate_group)
+        else:
+            ledger.record(dispatch.rate_group)
