@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -10,13 +12,13 @@ from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-import nats
-from nats.errors import TimeoutError
+import httpx
+import websockets
 
 # Ensure project root is on sys.path for direct script execution
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
-from heiwa_protocol.protocol import Subject
+from heiwa_sdk.config import settings
 from heiwa_sdk.db import Database
 
 logging.basicConfig(level=logging.INFO)
@@ -32,24 +34,18 @@ def _resolve_auth_token() -> str:
     token = os.getenv("HEIWA_AUTH_TOKEN")
     if token:
         return token
-    try:
-        from heiwa_sdk.config import settings
+    return getattr(settings, "HEIWA_AUTH_TOKEN", "")
 
-        return getattr(settings, "HEIWA_AUTH_TOKEN", "")
-    except ImportError:
-        return ""
+
+def _resolve_hub_url() -> str:
+    return str(settings.HUB_BASE_URL or "https://api.heiwa.ltd").rstrip("/")
 
 
 def _resolve_discord_bot_token() -> str:
     token = os.getenv("DISCORD_BOT_TOKEN") or os.getenv("DISCORD_TOKEN")
     if token:
         return token
-    try:
-        from heiwa_sdk.config import settings
-
-        return getattr(settings, "DISCORD_BOT_TOKEN", "")
-    except ImportError:
-        return ""
+    return getattr(settings, "DISCORD_BOT_TOKEN", "")
 
 
 def _resolve_discord_channel_id() -> int | None:
@@ -122,52 +118,48 @@ def _flatten_message_text(message: dict) -> str:
     return "\n".join(parts)
 
 
-def _task_payload(task_id: str, probe_id: str, token: str, channel_id: int) -> dict:
-    return {
-        "sender_id": "discord-smoke-bridge",
-        "timestamp": time.time(),
-        "type": Subject.CORE_REQUEST.value,
-        "auth_token": token,
-        "data": {
-            "task_id": task_id,
-            "raw_text": (
-                "Verify the Heiwa runtime service scope with a safe smoke probe and report the result. "
-                f"{SMOKE_PREFIX}{probe_id}"
-            ),
-            "source": "discord",
-            "intent_class": "audit",
-            "response_channel_id": channel_id,
-            "response_thread_id": None,
-            "sender_id": "discord-smoke-bridge",
-        },
+async def _submit_task(*, hub_url: str, auth_token: str, task_id: str, probe_id: str, channel_id: int) -> dict:
+    headers = {
+        "Authorization": f"Bearer {auth_token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "heiwa-smoke-discord/1.0",
     }
+    payload = {
+        "task_id": task_id,
+        "raw_text": (
+            "Verify the Heiwa runtime service scope with a safe smoke probe and report the result. "
+            f"{SMOKE_PREFIX}{probe_id}"
+        ),
+        "sender_id": "discord-smoke-bridge",
+        "source_surface": "discord",
+    }
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(f"{hub_url}/tasks", json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
 
 
-async def _wait_for_status(sub, task_id: str, expected: str, deadline: float) -> dict:
-    while True:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise TimeoutError
-        msg = await sub.next_msg(timeout=remaining)
-        data = json.loads(msg.data.decode()).get("data", {})
-        if data.get("task_id") != task_id:
-            continue
-        status = data.get("status")
-        if status == expected:
-            return data
-        if status in {"BLOCKED_AUTH", "BLOCKED_NO_CONTENT", "FAIL"}:
-            raise RuntimeError(f"Discord smoke aborted with status {status}: {data.get('message')}")
+async def _wait_for_terminal_result(*, hub_url: str, auth_token: str, task_id: str) -> tuple[list[str], dict]:
+    ws_url = hub_url.replace("https://", "wss://").replace("http://", "ws://")
+    ws_url = f"{ws_url}/ws/tasks/{task_id}?token={auth_token}"
+    deadline = time.monotonic() + KPI_SECONDS
+    seen_statuses: list[str] = []
+    last_event: dict = {}
 
+    async with websockets.connect(ws_url, open_timeout=10) as ws:
+        while time.monotonic() < deadline:
+            remaining = max(1.0, deadline - time.monotonic())
+            raw = await asyncio.wait_for(ws.recv(), timeout=remaining)
+            event = json.loads(raw)
+            status = str(event.get("status") or event.get("run_status") or "").upper()
+            if status:
+                seen_statuses.append(status)
+                last_event = event
+                if status in {"DELIVERED", "PASS", "FAIL", "BLOCKED_AUTH", "BLOCKED_NO_CONTENT"}:
+                    return seen_statuses, event
 
-async def _wait_for_result(sub, task_id: str, deadline: float) -> dict:
-    while True:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise TimeoutError
-        msg = await sub.next_msg(timeout=remaining)
-        data = json.loads(msg.data.decode()).get("data", {})
-        if data.get("task_id") == task_id:
-            return data
+    raise TimeoutError(f"Discord smoke test did not complete within {KPI_SECONDS:.2f}s")
 
 
 async def _wait_for_discord_post(
@@ -219,6 +211,8 @@ async def main() -> int:
         logger.error("HEIWA_AUTH_TOKEN is required for the Discord smoke test.")
         return 1
 
+    hub_url = _resolve_hub_url()
+
     try:
         bot_user = _get_bot_user(bot_token)
         bot_user_id = str(bot_user["id"])
@@ -231,42 +225,32 @@ async def main() -> int:
 
     baseline_id = _baseline_message_id(_fetch_channel_messages(bot_token, channel_id, limit=10))
 
-    url = os.getenv("NATS_URL", "nats://127.0.0.1:4222")
-    logger.info("Connecting to NATS at %s...", url)
-    try:
-        nc = await nats.connect(url, connect_timeout=5)
-    except Exception as exc:
-        logger.error("Failed to connect to NATS: %s", exc)
-        return 1
-
     task_id = f"smoke-discord-{uuid.uuid4().hex[:8]}"
     probe_id = uuid.uuid4().hex[:10]
     probe_marker = f"HEIWA_SMOKE_PROBE_OK:{probe_id}"
     deadline = time.monotonic() + KPI_SECONDS
 
-    status_sub = await nc.subscribe(Subject.TASK_STATUS.value)
-    result_sub = await nc.subscribe(Subject.TASK_EXEC_RESULT.value)
-
-    payload = _task_payload(task_id=task_id, probe_id=probe_id, token=auth_token, channel_id=channel_id)
-    logger.info("Publishing Discord smoke envelope %s to %s", task_id, Subject.CORE_REQUEST.value)
-    await nc.publish(Subject.CORE_REQUEST.value, json.dumps(payload).encode())
-
     try:
-        await _wait_for_status(status_sub, task_id, "ACKNOWLEDGED", deadline)
-        logger.info("✅ ACKNOWLEDGED received.")
+        accepted = await _submit_task(
+            hub_url=hub_url,
+            auth_token=auth_token,
+            task_id=task_id,
+            probe_id=probe_id,
+            channel_id=channel_id,
+        )
+        route = accepted.get("route", {})
+        logger.info("Accepted %s via %s/%s", task_id, route.get("intent_class", "unknown"), route.get("target_tool", "unknown"))
 
-        await _wait_for_status(status_sub, task_id, "DISPATCHED_PLAN", deadline)
-        logger.info("✅ DISPATCHED_PLAN received.")
+        statuses, result = await _wait_for_terminal_result(hub_url=hub_url, auth_token=auth_token, task_id=task_id)
+        if not any(status in {"ACKNOWLEDGED", "DISPATCHED_PLAN", "DISPATCHED_FALLBACK"} for status in statuses):
+            raise RuntimeError(f"Discord smoke task never showed orchestrator progress: {statuses}")
 
-        result = await _wait_for_result(result_sub, task_id, deadline)
-        if result.get("status") != "PASS":
-            raise RuntimeError(f"Discord smoke result was not PASS: {result}")
-        if probe_marker not in str(result.get("summary", "")):
+        summary = str(result.get("summary", ""))
+        terminal = str(result.get("status") or result.get("run_status") or "").upper()
+        if terminal not in {"PASS", "DELIVERED"}:
+            raise RuntimeError(f"Discord smoke result was not successful: {result}")
+        if probe_marker not in summary:
             raise RuntimeError(f"Discord smoke result missing probe marker {probe_marker!r}")
-        logger.info("✅ PASS result received with probe marker.")
-
-        await _wait_for_status(status_sub, task_id, "DELIVERED", deadline)
-        logger.info("✅ DELIVERED received on the bus.")
 
         message = await _wait_for_discord_post(
             bot_token=bot_token,
@@ -285,8 +269,6 @@ async def main() -> int:
     except RuntimeError as exc:
         logger.error("❌ DISCORD SMOKE FAILURE: %s", exc)
         return 1
-    finally:
-        await nc.close()
 
 
 if __name__ == "__main__":

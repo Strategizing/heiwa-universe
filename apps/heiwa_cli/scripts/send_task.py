@@ -17,47 +17,33 @@ if str(ROOT / "packages/heiwa_identity") not in sys.path:
 if str(ROOT / "apps") not in sys.path:
     sys.path.insert(0, str(ROOT / "apps"))
 
-import nats
-from heiwa_protocol.protocol import Subject, Payload
+import httpx
 from heiwa_sdk.config import settings
 
 async def send_command(instruction: str, node_id: str):
-    nats_url = settings.NATS_URL
-    try:
-        nc = await nats.connect(nats_url)
-    except Exception as e:
-        print(f"❌ Connection failed: {e}")
-        return
-
     task_id = f"cli-task-{uuid.uuid4().hex[:8]}"
-    
-    # Wrap in Protocol
     token = os.getenv("HEIWA_AUTH_TOKEN")
     if not token:
         token = getattr(settings, "HEIWA_AUTH_TOKEN", "")
+    hub_url = str(settings.HUB_BASE_URL or "https://api.heiwa.ltd").rstrip("/")
+
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
 
     payload = {
-        Payload.SENDER_ID: node_id,
-        Payload.TIMESTAMP: time.time(),
-        Payload.TYPE: Subject.CORE_REQUEST.name,
-        "auth_token": token,
-        Payload.DATA: {
-            "task_id": task_id,
-            "raw_text": instruction,
-            "source": "cli-dispatch",
-            "intent_class": "general",
-            "target_runtime": "any",
-            "sender_id": node_id
-        }
+        "task_id": task_id,
+        "prompt": instruction,
+        "source": "cli-dispatch",
+        "requested_by": node_id,
     }
-    
-    # Send
-    await nc.publish(Subject.CORE_REQUEST.value, json.dumps(payload).encode())
-    print(f"🚀 [HEIWA] Sent Task: {task_id}")
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(f"{hub_url}/tasks", json=payload, headers=headers)
+        response.raise_for_status()
+        accepted = response.json()
+
+    print(f"🚀 [HEIWA] Sent Task: {accepted.get('task_id', task_id)}")
     print(f"📝 Instruction: {instruction}")
-    
-    await nc.drain()
-    await nc.close()
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

@@ -190,57 +190,24 @@ class LocalLLMEngine:
     def _call_ollama(
         self, prompt: str, system: Optional[str] = None
     ) -> LLMResult:
-        import asyncio
-        import threading
-        from nats.aio.client import Client as NATS
-        
-        nats_url = os.getenv("NATS_URL", "nats://localhost:4222")
-        result_container = {}
+        payload: dict[str, Any] = {
+            "model": self.ollama_model,
+            "prompt": prompt,
+            "stream": False,
+        }
+        if system:
+            payload["system"] = system
 
-        async def fetch_from_macbook():
-            nc = NATS()
-            try:
-                await nc.connect(nats_url, connect_timeout=3.0)
-                request_payload = {
-                    "prompt": prompt,
-                    "system": system,
-                    "complexity": "high" if "deepseek" in self.ollama_model else "low"
-                }
-                msg = await nc.request("heiwa.inference.request", json.dumps(request_payload).encode(), timeout=10.0)
-                data = json.loads(msg.data.decode())
-                await nc.close()
-                
-                if "error" in data:
-                    result_container["error"] = Exception(data["error"])
-                else:
-                    result_container["text"] = data.get("text", "")
-            except Exception as e:
-                if nc.is_connected:
-                    await nc.close()
-                result_container["error"] = e
-
-        def run_in_thread():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                loop.run_until_complete(fetch_from_macbook())
-            finally:
-                loop.close()
-
-        t = threading.Thread(target=run_in_thread)
-        t.start()
-        t.join(timeout=15.0)
-
-        if t.is_alive():
-            raise requests.exceptions.HTTPError("Macbook Node timeout (15s). NATS request stalled.")
-
-        if "error" in result_container:
-            logger.warning(f"Failed to reach Macbook GPU Node via NATS: {result_container['error']}. Falling back...")
-            raise requests.exceptions.HTTPError(f"Macbook Node Unavailable: {result_container['error']}")
-
-        text = result_container.get("text", "")
+        resp = requests.post(
+            f"{self.ollama_url}/api/generate",
+            json=payload,
+            timeout=self.ollama_timeout,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        text = str(data.get("response") or "").strip()
         return LLMResult(
-            text=text, provider="ollama-macbook-gpu", model=self.ollama_model, tier=1
+            text=text, provider="ollama-local-http", model=self.ollama_model, tier=1
         )
 
     @retry(
