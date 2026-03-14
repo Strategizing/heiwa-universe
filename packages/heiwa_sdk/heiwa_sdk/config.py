@@ -1,6 +1,6 @@
 import os
+import re
 import sys
-from urllib.parse import urlparse
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -16,15 +16,63 @@ def get_env(key, default=None, required=True):
     return val
 
 def _find_monorepo_root() -> Path:
-    """Recursively search for the monorepo root."""
+    """Recursively search for the monorepo root. Honors HEIWA_ROOT env var."""
+    explicit = os.getenv("HEIWA_ROOT")
+    if explicit:
+        p = Path(explicit).resolve()
+        if (p / "apps").exists() and (p / "packages").exists():
+            return p
     current = Path(__file__).resolve()
     for _ in range(5):
         if (current.parent / "apps").exists() and (current.parent / "packages").exists():
             return current.parent
         current = current.parent
-    return Path("/Users/dmcgregsauce/heiwa")
+    raise RuntimeError(
+        "Could not discover Heiwa monorepo root (looked for apps/ + packages/ "
+        "up to 5 levels from sdk). Set HEIWA_ROOT or run from inside the repo."
+    )
 
 MONOREPO_ROOT = _find_monorepo_root()
+
+
+def _unique_strings(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for raw in values:
+        value = str(raw or "").strip().rstrip("/")
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        ordered.append(value)
+    return ordered
+
+
+def _profile_hub_fallbacks() -> list[str]:
+    profile_path = MONOREPO_ROOT / "config" / "swarm" / "profiles" / "heiwa-one-system.yaml"
+    if not profile_path.exists():
+        return []
+    try:
+        text = profile_path.read_text(encoding="utf-8")
+    except Exception:
+        return []
+    matches = re.findall(r"https://[A-Za-z0-9._-]+", text)
+    return [url for url in matches if "up.railway.app" in url or url.endswith("api.heiwa.ltd")]
+
+
+def hub_url_candidates() -> list[str]:
+    direct_env = [
+        os.getenv("HEIWA_HUB_URL", ""),
+        os.getenv("HEIWA_HUB_BASE_URL", ""),
+        os.getenv("HEIWA_HUB_FALLBACK_URL", ""),
+    ]
+    profile_urls = _profile_hub_fallbacks()
+    defaults = ["https://api.heiwa.ltd", "https://heiwa-cloud-hq-brain.up.railway.app"]
+    return _unique_strings(direct_env + profile_urls + defaults)
+
+
+def _bool_env(key: str) -> bool:
+    return str(os.getenv(key, "")).strip().lower() in {"1", "true", "yes", "on"}
+
 
 def load_swarm_env():
     """Enterprise-grade environment loader. Priority: Vault > Local Worker > Standard Env."""
@@ -64,13 +112,16 @@ class Settings:
     
     # --- HUB & MESH ---
     @property
-    def NATS_URL(self): return get_env("NATS_URL", default="tls://heiwa-cloud-hq-brain.up.railway.app:443", required=False)
-    
-    @property
     def HEIWA_ENABLE_BRIDGE(self): return get_env("HEIWA_ENABLE_BRIDGE", default="false", required=False).lower() == "true"
     
     @property
-    def HUB_BASE_URL(self): return get_env("HEIWA_HUB_BASE_URL", required=False)
+    def HUB_BASE_URL(self):
+        return hub_url_candidates()[0]
+
+    @property
+    def HUB_FALLBACK_URLS(self):
+        candidates = hub_url_candidates()
+        return candidates[1:] if len(candidates) > 1 else []
     
     @property
     def PORT(self): return int(get_env("PORT", default=8000, required=False))
@@ -81,6 +132,19 @@ class Settings:
     
     @property
     def DATABASE_PATH(self): return get_env("DATABASE_PATH", default="./hub.db", required=False)
+
+    @property
+    def HEIWA_STATE_BACKEND(self):
+        default = "spacetimedb" if self.IS_PROD else "compatibility_sqlite"
+        return get_env("HEIWA_STATE_BACKEND", default=default, required=False)
+
+    @property
+    def STDB_IDENTITY(self):
+        return get_env("STDB_IDENTITY", required=False)
+
+    @property
+    def STDB_SERVER(self):
+        return get_env("STDB_SERVER", default="maincloud", required=False)
 
     # --- DISCORD ---
     @property
@@ -104,6 +168,18 @@ class Settings:
     
     @property
     def HEIWA_EXECUTOR_CONCURRENCY(self): return int(get_env("HEIWA_EXECUTOR_CONCURRENCY", default="4", required=False) or "4")
+
+    @property
+    def PHASE2_WRITE_ENABLED(self):
+        return get_env("PHASE2_WRITE_ENABLED", default="true", required=False).lower() == "true"
+
+    @property
+    def PHASE2_CLAIM_ENABLED(self):
+        return get_env("PHASE2_CLAIM_ENABLED", default="true", required=False).lower() == "true"
+
+    @property
+    def PHASE2_ROUTER_ENABLED(self):
+        return get_env("PHASE2_ROUTER_ENABLED", default="true", required=False).lower() == "true"
     
     # --- INFRA ---
     @property
@@ -125,6 +201,8 @@ class Settings:
     @property
     def use_postgres(self) -> bool:
         """Check if we should use Postgres."""
+        if self.HEIWA_STATE_BACKEND != "compatibility_postgres":
+            return False
         db_url = self.DATABASE_URL
         if not db_url or not db_url.startswith(("postgres://", "postgresql://")):
             return False

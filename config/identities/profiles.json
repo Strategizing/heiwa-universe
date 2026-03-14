@@ -45,7 +45,9 @@
           "ollama/qwen3.5:4b",
           "siliconflow/deepseek-r2",
           "cerebras/gpt-oss-120b",
-          "google-gemini-cli/gemini-2.5-pro",
+          "google-gemini-cli/gemini-3-pro-preview",
+          "google-antigravity/gemini-3-pro-high",
+          "claude-code/claude-opus-4-6",
           "openai-codex/gpt-5.3-codex"
         ]
       },
@@ -86,7 +88,7 @@
         },
         {
           "role": "reviewer",
-          "model": "anthropic/claude-opus-4.6",
+          "model": "claude-code/claude-opus-4-6",
           "difficulty": "high"
         }
       ],
@@ -95,7 +97,7 @@
           "ollama/qwen3.5:4b",
           "ollama/glm-4.7-flash:q4_k_m",
           "openai-codex/gpt-5.3-codex",
-          "anthropic/claude-opus-4.6"
+          "claude-code/claude-opus-4-6"
         ],
         "codex": [
           "openai-codex/gpt-5.3-codex"
@@ -134,7 +136,7 @@
         },
         {
           "role": "synthesizer",
-          "model": "google-gemini-cli/gemini-2.5-pro",
+          "model": "google-gemini-cli/gemini-3-pro-preview",
           "difficulty": "high"
         }
       ],
@@ -143,10 +145,11 @@
           "ollama/llama-4-scout:q4_k_m",
           "siliconflow/deepseek-r2",
           "cerebras/gpt-oss-120b",
-          "google-gemini-cli/gemini-2.5-pro"
+          "google-gemini-cli/gemini-3-pro-preview"
         ],
         "gemini_cli": [
-          "google-gemini-cli/gemini-2.5-pro",
+          "google-gemini-cli/gemini-3-pro-preview",
+          "google-gemini-cli/gemini-3-flash-preview",
           "siliconflow/deepseek-r2",
           "cerebras/gpt-oss-120b"
         ]
@@ -179,12 +182,12 @@
       "cells": [
         {
           "role": "analyst",
-          "model": "google-gemini-cli/gemini-2.5-pro",
+          "model": "google-antigravity/gemini-3-flash",
           "difficulty": "medium"
         },
         {
           "role": "critic",
-          "model": "anthropic/claude-opus-4.6",
+          "model": "claude-code/claude-opus-4-6",
           "difficulty": "high"
         }
       ],
@@ -192,12 +195,13 @@
         "openclaw": [
           "siliconflow/deepseek-r2",
           "cerebras/gpt-oss-120b",
-          "google-gemini-cli/gemini-2.5-pro",
-          "anthropic/claude-opus-4.6"
+          "google-antigravity/gemini-3-pro-high",
+          "google-antigravity/gemini-3-flash",
+          "claude-code/claude-opus-4-6"
         ],
         "antigravity": [
-          "anthropic/claude-opus-4.6",
-          "google-gemini-cli/gemini-2.5-pro"
+          "google-antigravity/gemini-3-pro-high",
+          "google-antigravity/gemini-3-flash"
         ]
       },
       "actions": {
@@ -237,7 +241,7 @@
         },
         {
           "role": "escalator",
-          "model": "anthropic/claude-opus-4.6",
+          "model": "claude-code/claude-opus-4-6",
           "difficulty": "high"
         }
       ],
@@ -245,8 +249,8 @@
         "openclaw": [
           "siliconflow/deepseek-r2",
           "cerebras/gpt-oss-120b",
-          "anthropic/claude-opus-4.6",
-          "google-gemini-cli/gemini-2.5-pro"
+          "claude-code/claude-opus-4-6",
+          "google-gemini-cli/gemini-3-pro-preview"
         ]
       },
       "actions": {

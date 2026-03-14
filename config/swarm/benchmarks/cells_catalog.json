@@ -1,0 +1,33 @@
+{
+  "suite": "cells_catalog",
+  "evaluator": "cells_catalog",
+  "description": "Golden cell selection expectations derived from the identity manifest.",
+  "cases": [
+    {
+      "name": "research prompt selects research scout",
+      "prompt": "research and compare the latest SpacetimeDB SDK changes",
+      "expect": {
+        "selection_reason": "keyword_match",
+        "cell.cell_id": "research-scout",
+        "cell.gateway_tool": "gemini_cli"
+      }
+    },
+    {
+      "name": "implementation prompt selects codex builder",
+      "prompt": "implement this refactor and prepare the PR",
+      "expect": {
+        "selection_reason": "keyword_match",
+        "cell.cell_id": "codex-builder",
+        "cell.gateway_tool": "codex"
+      }
+    },
+    {
+      "name": "generic prompt falls back to operator general",
+      "prompt": "heiwa status task",
+      "expect": {
+        "cell.cell_id": "operator-general",
+        "cell.gateway_tool": "openclaw"
+      }
+    }
+  ]
+}

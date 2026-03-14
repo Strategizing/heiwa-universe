@@ -63,11 +63,13 @@ fi
 # Force local worker bus by default.
 # Set HEIWA_USE_REMOTE_NATS=1 only when workers must connect to a reachable remote NATS.
 if [[ "${HEIWA_USE_REMOTE_NATS:-0}" == "1" ]]; then
+    export HEIWA_USE_LOCAL_MESH=0
     echo "[INFO] HEIWA_USE_REMOTE_NATS=1 -> using configured NATS_URL=${NATS_URL:-<unset>}"
 else
     if [[ -n "${NATS_URL:-}" ]]; then
         echo "[INFO] Overriding NATS_URL for local worker bus"
     fi
+    export HEIWA_USE_LOCAL_MESH=1
     export NATS_URL="${HEIWA_LOCAL_NATS_URL:-nats://127.0.0.1:4222}"
 fi
 

@@ -15,6 +15,7 @@ from heiwa_hub.cognition.approval import ApprovalRegistry
 from heiwa_hub.cognition.planner import LocalTaskPlanner
 from heiwa_protocol.protocol import Payload, Subject
 from heiwa_ui.manager import UIManager
+from heiwa_sdk.config import settings
 from heiwa_sdk.db import Database
 from heiwa_sdk.spacetimedb import SpacetimeDB
 
@@ -117,8 +118,7 @@ class MessengerAgent(BaseAgent):
         self.planner = LocalTaskPlanner()
 
         # SpacetimeDB Foundation
-        stdb_identity = os.getenv("STDB_IDENTITY") or "c20036703b164bad843aaf1714245ba8089a954065eb5cc913e8b5fee613e157"
-        self.stdb = SpacetimeDB(db_identity=stdb_identity)
+        self.stdb = SpacetimeDB(db_identity=settings.STDB_IDENTITY, server=settings.STDB_SERVER) if settings.STDB_IDENTITY else None
 
         intents = discord.Intents.default()
         intents.message_content = True
@@ -348,14 +348,17 @@ class MessengerAgent(BaseAgent):
             await interaction.followup.send(f"❌ Structural Sync Failed: {e}")
 
     async def _publish_raw(self, subject: str, data: dict[str, Any]) -> None:
-        if not self.nc: raise RuntimeError("NATS not connected")
-        payload = {
-            Payload.SENDER_ID: self.id,
-            Payload.TIMESTAMP: time.time(),
-            Payload.TYPE: subject,
-            Payload.DATA: data
-        }
-        await self.nc.publish(subject, json.dumps(payload).encode())
+        from heiwa_protocol.protocol import Subject as SubjectEnum
+        # Map string subject values back to Subject enum for the local bus
+        subj = None
+        for s in SubjectEnum:
+            if s.value == subject:
+                subj = s
+                break
+        if subj:
+            await self.speak(subj, data)
+        else:
+            await self.bus.publish(subject, data, sender_id=self.id)
 
     async def _ingest_interaction(self, instruction: str, source: Union[discord.Message, discord.Interaction], explicit: bool) -> None:
         raw_hex = str(uuid.uuid4().hex)
@@ -601,7 +604,7 @@ class MessengerAgent(BaseAgent):
 
     async def run(self):
         if not self.token: return
-        await self.connect()
+        await self.start()
         await self.listen(Subject.TASK_STATUS, self.handle_task_status)
         await self.listen(Subject.TASK_PROGRESS, self.handle_task_progress)
         await self.listen(Subject.TASK_EXEC_RESULT, self.handle_exec_result)

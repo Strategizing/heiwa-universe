@@ -24,7 +24,7 @@ class TelemetryAgent(BaseAgent):
         self.last_summary_ts = 0
 
     async def run(self):
-        await self.connect()
+        await self.start()
         
         # Listen for all execution results across the mesh
         await self.listen(Subject.TASK_EXEC_RESULT, self.handle_exec_result)

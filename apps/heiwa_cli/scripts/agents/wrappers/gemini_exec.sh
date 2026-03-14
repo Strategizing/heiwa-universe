@@ -1,54 +1,47 @@
 #!/usr/bin/env bash
-# cli/scripts/agents/wrappers/codex_exec.sh
-# Isolated wrapper for Codex CLI. Premium escalation only. Full logging.
+# Direct Gemini CLI wrapper for Heiwa OAuth-backed research routes.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="${HEIWA_WORKSPACE_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
-LOG_DIR="$ROOT/runtime/logs/codex"
+LOG_DIR="$ROOT/runtime/logs/gemini"
 mkdir -p "$LOG_DIR"
 
 RUN_ID="$(date +%Y%m%d_%H%M%S)_$$"
 LOG_FILE="$LOG_DIR/$RUN_ID.log"
 PAYLOAD_FILE="$LOG_DIR/$RUN_ID.payload.txt"
 
-# Read payload from stdin or first arg
 if [[ $# -gt 0 ]]; then
     PAYLOAD="$1"
 else
     PAYLOAD="$(cat)"
 fi
-
-# Log payload
 echo "$PAYLOAD" > "$PAYLOAD_FILE"
 
 {
-    echo "=== CODEX EXEC START ==="
+    echo "=== GEMINI EXEC START ==="
     echo "run_id: $RUN_ID"
     echo "timestamp: $(date -Iseconds)"
     echo "cwd: $ROOT"
     echo "payload_bytes: ${#PAYLOAD}"
-    echo "escalation: PREMIUM"
     echo "---"
 } >> "$LOG_FILE"
 
-# Check if codex is available
-if ! command -v codex &>/dev/null; then
-    echo "[ERR] codex not found in PATH" | tee -a "$LOG_FILE"
+if ! command -v gemini &>/dev/null; then
+    echo "[ERR] gemini not found in PATH" | tee -a "$LOG_FILE"
     exit 2
 fi
 
-TIMEOUT_SEC="${CODEX_TIMEOUT:-600}"
-MODEL="${HEIWA_ACTIVE_MODEL:-${CODEX_MODEL:-}}"
+MODEL="${HEIWA_ACTIVE_MODEL:-${GEMINI_MODEL:-}}"
 if [[ -n "$MODEL" && "$MODEL" == */* ]]; then
     MODEL="${MODEL#*/}"
 fi
+TIMEOUT_SEC="${GEMINI_TIMEOUT:-900}"
 
-CMD=(codex exec --sandbox workspace-write --cd "$ROOT")
+CMD=(gemini --prompt "$PAYLOAD" --output-format text --approval-mode plan)
 if [[ -n "$MODEL" ]]; then
     CMD+=(--model "$MODEL")
 fi
-CMD+=("$PAYLOAD")
 
 set +e
 if command -v timeout &>/dev/null; then
@@ -68,7 +61,7 @@ set -e
     echo "---"
     echo "model: ${MODEL:-default}"
     echo "exit_code: $EXIT_CODE"
-    echo "=== CODEX EXEC END ==="
+    echo "=== GEMINI EXEC END ==="
 } >> "$LOG_FILE"
 
 exit "$EXIT_CODE"

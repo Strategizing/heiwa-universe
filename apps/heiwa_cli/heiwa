@@ -7,19 +7,26 @@ import subprocess
 import shlex
 import re
 from pathlib import Path
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 # --- SOTA ROOT DISCOVERY ---
 def find_monorepo_root(start_path: Path) -> Path:
     """Recursively search for the monorepo root containing 'apps' and 'packages'."""
+    explicit = os.environ.get("HEIWA_ROOT")
+    if explicit:
+        p = Path(explicit).resolve()
+        if (p / "apps").exists() and (p / "packages").exists():
+            return p
     current = start_path.resolve()
-    for _ in range(5): # Limit depth
+    for _ in range(5):
         if (current / "apps").exists() and (current / "packages").exists():
             return current
         if current.parent == current:
             break
         current = current.parent
-    # Fallback to hardcoded path if discovery fails
-    return Path("/home/devon/heiwa")
+    print("[FATAL] Could not find Heiwa monorepo root. Set HEIWA_ROOT or run from inside the repo.", file=sys.stderr)
+    sys.exit(1)
 
 MONOREPO_ROOT = find_monorepo_root(Path(__file__).resolve().parent)
 APPS_ROOT = MONOREPO_ROOT / "apps"
@@ -64,7 +71,9 @@ except ImportError:
 from heiwa_sdk.tool_mesh import ToolMesh
 from heiwa_sdk.routing import ModelRouter
 from heiwa_sdk.db import Database
-from heiwa_sdk.config import load_swarm_env, settings
+from heiwa_sdk.bench import HeiwaBench
+from heiwa_sdk.cells import HeiwaCellCatalog
+from heiwa_sdk.config import hub_url_candidates, load_swarm_env, settings
 
 # Load environment early
 load_swarm_env()
@@ -120,6 +129,42 @@ def init_global_dir():
     (HEIWA_GLOBAL_DIR / "workspace").mkdir(exist_ok=True)
     (HEIWA_GLOBAL_DIR / "context").mkdir(exist_ok=True)
 
+
+def _load_identity() -> dict[str, str]:
+    if not IDENTITY_FILE.exists():
+        return {}
+    try:
+        return json.loads(IDENTITY_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _node_name(default: str = "macbook@heiwa-agile") -> str:
+    identity = _load_identity()
+    return str(identity.get("name") or default)
+
+
+def _fetch_json(url: str, headers: dict[str, str] | None = None, timeout: float = 5.0) -> tuple[dict | None, str | None]:
+    req = urllib_request.Request(url, headers=headers or {}, method="GET")
+    try:
+        with urllib_request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode()), None
+    except urllib_error.HTTPError as exc:
+        detail = exc.read().decode(errors="ignore").strip()
+        return None, f"HTTP {exc.code}{(': ' + detail[:120]) if detail else ''}"
+    except Exception as exc:
+        return None, str(exc)
+
+
+def _probe_hub_candidates() -> tuple[str, dict | None, str | None]:
+    last_error = "no hub candidates configured"
+    for candidate in hub_url_candidates():
+        payload, error = _fetch_json(f"{candidate}/health", timeout=5.0)
+        if payload:
+            return candidate, payload, None
+        last_error = error or last_error
+    return settings.HUB_BASE_URL or "https://api.heiwa.ltd", None, last_error
+
 # --- COMMANDS ---
 def cmd_login(args):
     """Authenticate and provision the local node identity."""
@@ -142,26 +187,24 @@ def cmd_login(args):
     console.print(f"[success]🚀 Identity initialized:[/success] {login_target} ({role})")
 
 def cmd_status(args):
-    """Check swarm connectivity and node health."""
+    """Check hub connectivity, ingress readiness, and recent operator state."""
     print_banner()
-    
-    import time
-    from rich.table import Table
-    from rich.panel import Panel
+    init_global_dir()
 
     table = Table(box=box.SIMPLE, show_header=False, border_style="dim")
-    
-    # Identity
-    if IDENTITY_FILE.exists():
-        with open(IDENTITY_FILE, "r") as f:
-            identity = json.load(f)
-        table.add_row("[brand]Identity[/brand]", f"{identity.get('name')} ([dim]{identity.get('role')}[/dim])")
-    
-    # NATS
-    nats_url = settings.NATS_URL or "nats://localhost:4222"
-    table.add_row("[brand]NATS Mesh[/brand]", _redact_url_credentials(nats_url))
-    
-    # Local HW
+
+    identity = _load_identity()
+    configured_hub_url = settings.HUB_BASE_URL or "https://api.heiwa.ltd"
+    auth_token = os.getenv("HEIWA_AUTH_TOKEN") or getattr(settings, "HEIWA_AUTH_TOKEN", "") or ""
+
+    table.add_row(
+        "[brand]Identity[/brand]",
+        f"{identity.get('name', 'uninitialized')} ([dim]{identity.get('role', 'unknown')}[/dim])",
+    )
+    table.add_row("[brand]Node[/brand]", _node_name())
+    table.add_row("[brand]Hub URL[/brand]", _redact_url_credentials(configured_hub_url))
+    table.add_row("[brand]Auth[/brand]", "[success]set[/success]" if auth_token else "[warning]missing[/warning]")
+
     try:
         import psutil
         cpu = psutil.cpu_percent()
@@ -171,45 +214,47 @@ def cmd_status(args):
     except ImportError:
         pass
 
+    active_hub_url, health, health_error = _probe_hub_candidates()
+    public_status = None
+    public_error = None
+    if health:
+        public_status, public_error = _fetch_json(f"{active_hub_url}/status", timeout=5.0)
+        if active_hub_url != configured_hub_url:
+            table.add_row("[brand]Active Hub[/brand]", _redact_url_credentials(active_hub_url))
+
+    if health:
+        table.add_row("[brand]Hub Health[/brand]", f"[success]{health.get('status', 'unknown')}[/success]")
+        table.add_row("[brand]Service[/brand]", str(health.get("service", "unknown")))
+        table.add_row("[brand]State Backend[/brand]", str(health.get("state_backend", "unknown")))
+        table.add_row("[brand]Transport[/brand]", str(health.get("gateway_transport", "unknown")))
+    else:
+        table.add_row("[brand]Hub Health[/brand]", f"[error]unreachable[/error] [dim]{health_error or ''}[/dim]")
+
+    if public_status:
+        table.add_row("[brand]Platform[/brand]", str(public_status.get("status", "unknown")))
+        table.add_row("[brand]Live Nodes[/brand]", str(public_status.get("live_nodes", 0)))
+        table.add_row("[brand]Active Models[/brand]", str(public_status.get("active_models", 0)))
+
     console.print(Panel(table, title="[bold white]Systems Overlay[/bold white]", border_style="brand"))
 
-    # Active Swarm Nodes
-    db = Database()
-    nodes = db.list_nodes(status="ONLINE")
-    if nodes:
-        node_table = Table(title=" Swarm Fleet Topology ", box=box.ROUNDED, header_style="bold cyan", border_style="brand")
-        node_table.add_column("Node ID", style="cyan")
-        node_table.add_column("Role")
-        node_table.add_column("CPU")
-        node_table.add_column("RAM")
-        node_table.add_column("Last Pulse")
-        
-        for node in nodes:
-            # Check if last_heartbeat_at is recently
-            last_hb_str = node.get('last_heartbeat_at')
-            if last_hb_str:
-                try:
-                    import datetime
-                    last_hb = datetime.datetime.fromisoformat(last_hb_str)
-                    now = datetime.datetime.now(datetime.timezone.utc)
-                    diff = (now - last_hb).total_seconds()
-                    pulse_str = f"{int(diff)}s ago" if diff < 3600 else ">1h ago"
-                except:
-                    pulse_str = "Unknown"
-            else:
-                pulse_str = "Never"
-
-            meta = json.loads(node.get('meta_json', '{}'))
-            node_table.add_row(
-                node['node_id'],
-                node.get('role', 'worker'),
-                f"{meta.get('cpu_pct', '0')}%",
-                f"{meta.get('ram_pct', '0')}%",
-                pulse_str
+    usage_summary = list((public_status or {}).get("usage_summary") or [])
+    if usage_summary:
+        usage_table = Table(title="Active Model Usage", box=box.ROUNDED, header_style="bold brand")
+        usage_table.add_column("Model", style="cyan")
+        usage_table.add_column("Requests", justify="right")
+        usage_table.add_column("Tokens", justify="right")
+        for row in usage_summary[:5]:
+            usage_table.add_row(
+                str(row.get("model_id", "unknown")),
+                str(row.get("request_count", 0)),
+                str(row.get("total_tokens", 0)),
             )
-        console.print(node_table)
-    else:
-        console.print("[dim]No other active nodes detected in swarm.[/dim]")
+        console.print(usage_table)
+    elif health:
+        console.print("[dim]Hub reachable, but no recent usage is recorded yet.[/dim]")
+
+    if health_error or public_error:
+        console.print("[dim]Tip: run[/dim] [bold]heiwa handshake[/bold] [dim]for a full authenticated ingress check.[/dim]")
 
 def cmd_dispatch(args):
     """One-shot task dispatch to the swarm."""
@@ -222,20 +267,12 @@ def cmd_dispatch(args):
     init_global_dir()
     python_bin = sys.executable
     dispatch_script = APPS_ROOT / "heiwa_cli/scripts/dispatch_once.py"
-    handshake_script = APPS_ROOT / "heiwa_cli/scripts/handshake.py"
     
     node_name = "macbook@heiwa-agile"
     if IDENTITY_FILE.exists():
         with open(IDENTITY_FILE, "r") as f:
             identity = json.load(f)
             node_name = identity.get("name", node_name)
-
-    # Block dispatch if handshake is red
-    hs_res = subprocess.run([str(python_bin), str(handshake_script), "--quiet"], capture_output=True)
-    if hs_res.returncode != 0:
-        console.print("[error]❌ [BLOCKED] Dispatch aborted because swarm handshake failed.[/error]")
-        console.print("💡 Run [brand]heiwa handshake[/brand] to diagnose connectivity or auth issues.")
-        sys.exit(1)
 
     cmd_args = [str(python_bin), str(dispatch_script), node_name, args.prompt]
     try:
@@ -246,18 +283,15 @@ def cmd_dispatch(args):
         sys.exit(e.returncode)
 
 def cmd_chat(args):
-    """Launch the high-end interactive Terminal Chat."""
+    """Launch the interactive Heiwa operator shell."""
     init_global_dir()
     chat_script = APPS_ROOT / "heiwa_cli/scripts/terminal_chat.py"
-    
-    node_name = "macbook@heiwa-agile"
-    if IDENTITY_FILE.exists():
-        with open(IDENTITY_FILE, "r") as f:
-            identity = json.load(f)
-            node_name = identity.get("name", node_name)
+
+    node_name = _node_name()
 
     cmd_args = [sys.executable, str(chat_script), node_name]
-    if args.prompt: cmd_args.append(args.prompt)
+    if args.prompt:
+        cmd_args.append(args.prompt)
         
     try:
         subprocess.run(cmd_args, check=True)
@@ -282,6 +316,84 @@ def cmd_cost(args):
     for row in summary:
         table.add_row(row['model_id'], str(row['request_count']), str(row['total_tokens']))
     
+    console.print(table)
+
+def cmd_bench(args):
+    """Run the unified HeiwaBench release-gate suites."""
+    summary = HeiwaBench(MONOREPO_ROOT).run(suite=args.suite)
+    if args.json:
+        print(json.dumps(summary, indent=2))
+        if not summary.get("ok"):
+            sys.exit(1)
+        return
+    print_banner()
+    if not args.json:
+        table = Table(title="HeiwaBench", box=box.ROUNDED, header_style="bold brand")
+        table.add_column("Suite", style="cyan")
+        table.add_column("Cases", justify="right")
+        table.add_column("Passed", justify="right")
+        table.add_column("Status")
+        for result in summary.get("results", []):
+            total = len(result.get("cases", []))
+            passed = sum(1 for case in result.get("cases", []) if case.get("ok"))
+            table.add_row(
+                result.get("suite", "unknown"),
+                str(total),
+                str(passed),
+                "[success]PASS[/success]" if result.get("ok") else "[error]FAIL[/error]",
+            )
+        console.print(table)
+        if summary.get("failures"):
+            for failure in summary["failures"]:
+                console.print(
+                    f"[error]{failure['suite']}/{failure['case']}[/error] "
+                    f"{failure['field']} expected={failure['expected']!r} actual={failure['actual']!r}"
+                )
+    if not summary.get("ok"):
+        sys.exit(1)
+
+def cmd_cells(args):
+    """List or match the current HeiwaCells catalog."""
+    catalog = HeiwaCellCatalog(MONOREPO_ROOT)
+    if args.match:
+        payload = catalog.recommend(args.match)
+        if args.json:
+            print(json.dumps(payload, indent=2))
+            return
+        print_banner()
+        cell = payload.get("cell") or {}
+        console.print(
+            Panel(
+                f"[brand]{cell.get('display_name', 'Unknown')}[/brand]\n"
+                f"{cell.get('description', '')}\n\n"
+                f"tool={cell.get('gateway_tool', '')}\n"
+                f"runtime={cell.get('target_runtime', '')}\n"
+                f"reason={payload.get('selection_reason', '')}\n"
+                f"keywords={', '.join(payload.get('matched_keywords', [])) or 'none'}",
+                title="Recommended HeiwaCell",
+                border_style="brand",
+            )
+        )
+        return
+
+    payload = catalog.to_public_dict()
+    if args.json:
+        print(json.dumps(payload, indent=2))
+        return
+
+    print_banner()
+    table = Table(title="HeiwaCells Catalog", box=box.ROUNDED, header_style="bold brand")
+    table.add_column("Cell", style="cyan")
+    table.add_column("Tool")
+    table.add_column("Runtime")
+    table.add_column("Capabilities")
+    for cell in payload.get("cells", []):
+        table.add_row(
+            cell.get("cell_id", ""),
+            cell.get("gateway_tool", ""),
+            cell.get("target_runtime", ""),
+            ", ".join(cell.get("required_capabilities", [])) or "none",
+        )
     console.print(table)
 
 def cmd_deploy(args):
@@ -310,28 +422,49 @@ async def cmd_buff(args):
     console.print("✅ [brand]Buff sequence completed.[/brand] (Optimizations staged/applied)")
 
 def cmd_handshake(args):
-    """Validate full vertical NATS path and Auth barrier."""
+    """Validate hub connectivity and auth barrier."""
     print_banner()
     handshake_script = APPS_ROOT / "heiwa_cli/scripts/handshake.py"
-    subprocess.run([sys.executable, str(handshake_script)])
+    result = subprocess.run([sys.executable, str(handshake_script)])
+    if result.returncode:
+        sys.exit(result.returncode)
+
+
+def cmd_doctor(args):
+    """Run local operator diagnostics for the HTTP/WebSocket ingress path."""
+    print_banner()
+    doctor_script = APPS_ROOT / "heiwa_cli/scripts/doctor.py"
+    result = subprocess.run([sys.executable, str(doctor_script)])
+    if result.returncode:
+        sys.exit(result.returncode)
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Heiwa Enterprise CLI",
+        description="Heiwa CLI — single-ingress operator console",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="Use 'heiwa <prompt>' for immediate swarm dispatch."
+        epilog=(
+            "Use 'heiwa <prompt>' for immediate dispatch.\n"
+            "Examples:\n"
+            "  heiwa \"research how SpacetimeDB subscriptions work\"\n"
+            "  heiwa \"fix the SQLite fallback in db.py\"\n"
+            "  heiwa chat"
+        )
     )
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
     # Command: chat
-    subparsers.add_parser("chat", help="Launch interactive swarm chat (TUI)")
+    parser_chat = subparsers.add_parser("chat", help="Launch the interactive operator shell")
+    parser_chat.add_argument("prompt", nargs="?", help="Optional initial prompt to send before entering chat")
     
     # Command: dispatch
     parser_dispatch = subparsers.add_parser("dispatch", help="One-shot task dispatch")
     parser_dispatch.add_argument("prompt", nargs="?", help="Prompt to dispatch")
     
     # Command: handshake
-    subparsers.add_parser("handshake", help="Validate full vertical NATS path and Auth barrier")
+    subparsers.add_parser("handshake", help="Validate hub connectivity and auth barrier")
+
+    # Command: doctor
+    subparsers.add_parser("doctor", help="Run local operator diagnostics")
     
     # Command: login
     parser_login = subparsers.add_parser("login", help="Authenticate and provision node identity")
@@ -348,6 +481,16 @@ def main():
 
     # Command: cost
     subparsers.add_parser("cost", help="Show swarm-wide token usage")
+
+    # Command: bench
+    parser_bench = subparsers.add_parser("bench", help="Run the HeiwaBench release-gate suites")
+    parser_bench.add_argument("suite", nargs="?", help="Optional suite name")
+    parser_bench.add_argument("--json", action="store_true", help="Emit JSON output")
+
+    # Command: cells
+    parser_cells = subparsers.add_parser("cells", help="Inspect or match the current HeiwaCells catalog")
+    parser_cells.add_argument("--match", help="Prompt to match against the cell catalog")
+    parser_cells.add_argument("--json", action="store_true", help="Emit JSON output")
     
     # Command: buff
     parser_buff = subparsers.add_parser("buff", help="Natively improve Heiwa using Heiwa")
@@ -358,8 +501,12 @@ def main():
         # Not a command, not a flag -> must be a prompt
         sys.argv.insert(1, "dispatch")
     elif len(sys.argv) == 1:
-        # No args -> Launch interactive chat by default for an enterprise experience
-        cmd_chat(argparse.Namespace(prompt=None))
+        if sys.stdin.isatty() and sys.stdout.isatty():
+            cmd_chat(argparse.Namespace(prompt=None))
+            sys.exit(0)
+        print_banner()
+        parser.print_help()
+        console.print("\n[dim]Try:[/dim] [bold]heiwa[/bold] [dim]for chat, or[/dim] [bold]heiwa \"research SpacetimeDB subscriptions\"[/bold]")
         sys.exit(0)
 
     args = parser.parse_args()
@@ -370,12 +517,18 @@ def main():
         cmd_dispatch(args)
     elif args.command == "handshake":
         cmd_handshake(args)
+    elif args.command == "doctor":
+        cmd_doctor(args)
     elif args.command == "login":
         cmd_login(args)
     elif args.command == "deploy":
         cmd_deploy(args)
     elif args.command == "cost":
         cmd_cost(args)
+    elif args.command == "bench":
+        cmd_bench(args)
+    elif args.command == "cells":
+        cmd_cells(args)
     elif args.command == "status":
         cmd_status(args)
     elif args.command == "buff":

@@ -69,21 +69,21 @@ _INTENT_RULES = (
 )
 
 _INTENT_DEFAULTS = {
-    "status_check": ("railway", "ollama", "tier1_local"),
-    "mesh_ops": ("macbook", "codex", "tier3_orchestrator"),
-    "self_buff": ("macbook", "codex", "tier5_heavy_code"),
+    "status_check": ("railway", "heiwa_ops", "tier1_local"),
+    "mesh_ops": ("macbook", "heiwa_ops", "tier3_orchestrator"),
+    "self_buff": ("macbook", "heiwa_claw", "tier5_heavy_code"),
     "audit": ("both", "heiwa_ops", "tier1_local"),
-    "build": ("macbook", "codex", "tier5_heavy_code"),
-    "research": ("both", "openclaw", "tier6_premium_context"),
-    "strategy": ("both", "openclaw", "tier7_supreme_court"),
-    "media": ("both", "ollama", "tier2_fast_context"),
+    "build": ("macbook", "heiwa_claw", "tier5_heavy_code"),
+    "research": ("both", "heiwa_claw", "tier6_premium_context"),
+    "strategy": ("both", "heiwa_claw", "tier7_supreme_court"),
+    "media": ("both", "heiwa_claw", "tier2_fast_context"),
     "deploy": ("railway", "heiwa_ops", "tier3_orchestrator"),
     "operate": ("railway", "heiwa_ops", "tier3_orchestrator"),
-    "automate": ("railway", "n8n", "tier3_orchestrator"),
-    "automation": ("railway", "n8n", "tier3_orchestrator"),
-    "files": ("macbook", "codex", "tier5_heavy_code"),
-    "chat": ("railway", "ollama", "tier1_local"),
-    "general": ("railway", "ollama", "tier1_local"),
+    "automate": ("railway", "heiwa_ops", "tier3_orchestrator"),
+    "automation": ("railway", "heiwa_ops", "tier3_orchestrator"),
+    "files": ("macbook", "heiwa_ops", "tier1_local"),
+    "chat": ("railway", "heiwa_claw", "tier1_local"),
+    "general": ("railway", "heiwa_claw", "tier1_local"),
 }
 
 
@@ -115,6 +115,23 @@ class IntentProfile:
             "confidence": self.confidence,
             "underspecified": self.underspecified,
         }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "IntentProfile":
+        data = dict(payload or {})
+        return cls(
+            intent_class=str(data.get("intent_class") or "general"),
+            risk_level=str(data.get("risk_level") or "low"),
+            requires_approval=bool(data.get("requires_approval")),
+            preferred_runtime=str(data.get("preferred_runtime") or "railway"),
+            preferred_tool=str(data.get("preferred_tool") or "heiwa_claw"),
+            preferred_tier=str(data.get("preferred_tier") or "tier1_local"),
+            normalized_instruction=str(data.get("normalized_instruction") or ""),
+            assumptions=list(data.get("assumptions") or []),
+            missing_details=list(data.get("missing_details") or []),
+            confidence=float(data.get("confidence") or 0.0),
+            underspecified=bool(data.get("underspecified")),
+        )
 
 
 class IntentNormalizer:

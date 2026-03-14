@@ -200,7 +200,7 @@ class LocalTaskPlanner:
                     instruction=instruction,
                     subject=Subject.TASK_EXEC.value,
                     target_runtime="macbook",
-                    target_tool="heiwa_buff",
+                    target_tool="heiwa_claw",
                     target_tier="tier5_heavy_code",
                 )
             )
@@ -230,7 +230,7 @@ class LocalTaskPlanner:
                     instruction=instruction,
                     subject=Subject.TASK_EXEC.value,
                     target_runtime=profile.preferred_runtime,
-                    target_tool="heiwa_code",
+                    target_tool="heiwa_claw",
                     target_tier=profile.preferred_tier,
                     required_capability="mcp.code_generation",
                 )
@@ -290,7 +290,7 @@ class LocalTaskPlanner:
                     instruction=instruction,
                     subject=Subject.TASK_EXEC.value,
                     target_runtime="both",
-                    target_tool="ollama",
+                    target_tool="heiwa_claw",
                     target_tier=profile.preferred_tier,
                     required_capability="mcp.media",
                 )
@@ -305,7 +305,7 @@ class LocalTaskPlanner:
                     instruction=instruction,
                     subject=Subject.TASK_EXEC.value,
                     target_runtime="railway",
-                    target_tool="n8n",
+                    target_tool="heiwa_ops",
                     target_tier=profile.preferred_tier,
                     required_capability="scheduler.automation",
                 )
@@ -320,7 +320,7 @@ class LocalTaskPlanner:
                 instruction=instruction,
                 subject=Subject.TASK_EXEC.value,
                 target_runtime="railway",
-                target_tool="heiwa_reflex",
+                target_tool="heiwa_claw",
                 target_tier=profile.preferred_tier,
                 required_capability="mcp.strategy",
             )

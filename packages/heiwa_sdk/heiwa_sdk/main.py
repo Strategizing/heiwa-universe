@@ -8,6 +8,7 @@ import os
 import time
 import threading
 import datetime
+import uuid
 from .db import db
 from .config import settings
 from .eligibility import compute_eligibility
@@ -38,6 +39,7 @@ class ProposalInput(BaseModel):
     fingerprint: Optional[str] = None
     payload_raw: Optional[str] = None
     mode: str = "PRODUCTION"  # PRODUCTION or SIMULATION
+    execution_targeting: Optional[Dict[str, Any]] = None
 
 
 class RunInput(BaseModel):
@@ -74,9 +76,12 @@ class PreviewInput(BaseModel):
 
 
 def verify_token(x_auth_token: str = Header(None)):
+    expected_token = settings.HEIWA_AUTH_TOKEN
+    if not expected_token:
+        raise HTTPException(status_code=503, detail="Hub auth token not configured")
     if x_auth_token is None:
         raise HTTPException(status_code=401, detail="Missing Auth Token")
-    if x_auth_token != settings.AUTH_TOKEN:
+    if x_auth_token != expected_token:
         raise HTTPException(status_code=403, detail="Invalid Auth Token")
 
 
@@ -548,40 +553,38 @@ def submit_consent(proposal_id: str, consent: ConsentInput):
     payload_str = proposal.get("payload") or ""
     proposal_hash = hashlib.sha256(payload_str.encode("utf-8")).hexdigest()
 
-    consent_id = db.append_consent(
-        proposal_id,
-        proposal_hash,
-        consent.actor_type,
-        consent.actor_id,
-        consent.decision,
-        consent.comment,
-    )
-    if not consent_id:
-        raise HTTPException(status_code=500, detail="Failed to append consent")
-
-    # If approved, transition proposal to APPROVED
-    if consent.decision == "approve":
-        now = datetime.datetime.now(datetime.timezone.utc)
-        # Calculate expires_at from targeting if present
-        ttl = 3600  # Default 1h
+    consent_id = f"CON-{uuid.uuid4().hex[:8]}"
+    now = datetime.datetime.now(datetime.timezone.utc)
+    expires_at = None
+    decision = consent.decision.upper()
+    if decision == "APPROVE":
+        ttl = 3600
         try:
             targeting = json.loads(proposal.get("execution_targeting") or "{}")
             ttl = targeting.get("ttl_seconds", 3600)
-        except:
+        except Exception:
             pass
-
         expires_at = (now + datetime.timedelta(seconds=ttl)).isoformat()
-        db.transition_proposal_status(
-            proposal_id,
-            "APPROVED",
-            {
-                "approved_at": now.isoformat(),
-                "expires_at": expires_at,
-                "proposal_hash": proposal_hash,
-            },
-        )
-    elif consent.decision == "reject":
-        db.transition_proposal_status(proposal_id, "REJECTED")
+
+    success = db.record_consent(
+        {
+            "consent_id": consent_id,
+            "proposal_id": proposal_id,
+            "proposal_hash": proposal_hash,
+            "actor_type": consent.actor_type,
+            "actor_id": consent.actor_id,
+            "decision": decision,
+            "comment": consent.comment,
+            "metadata": {},
+            "requested_at": proposal.get("created_at") or now.isoformat(),
+            "request_expires_at": expires_at,
+            "request_payload": proposal.get("payload"),
+            "approved_at": now.isoformat() if decision == "APPROVE" else None,
+            "expires_at": expires_at,
+        }
+    )
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to record consent")
 
     return {"status": "consent_recorded", "consent_id": consent_id}
 

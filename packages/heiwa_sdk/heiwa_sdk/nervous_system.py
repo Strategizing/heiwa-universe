@@ -5,6 +5,7 @@ import logging
 import os
 import nats
 from nats.errors import ConnectionClosedError, TimeoutError, NoServersError
+from .config import settings
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -20,7 +21,7 @@ class HeiwaNervousSystem:
         # PRIORITY 1: passed arg
         # PRIORITY 2: NATS_URL from env (Railway)
         # FALLBACK: Localhost for dev
-        self.nats_url = nats_url or os.getenv("NATS_URL") or "nats://localhost:4222"
+        self.nats_url = nats_url or settings.NATS_URL
         self.nc = None
         self.js = None
 

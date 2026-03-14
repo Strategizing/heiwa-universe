@@ -429,8 +429,6 @@
     "notes": "Secret values are never persisted in profile files or observability events"
   },
   "aliases": {
-    "legacy_profile_ids": [
-      "heiwa-limited"
-    ]
+    "legacy_profile_ids": []
   }
 }

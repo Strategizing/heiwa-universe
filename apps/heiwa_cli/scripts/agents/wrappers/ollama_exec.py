@@ -24,7 +24,28 @@ import yaml
 def load_config() -> Dict:
     root = Path(os.environ.get("HEIWA_WORKSPACE_ROOT", ".")).resolve()
     cfg_path = root / "config" / "agents.yaml"
-    return yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    if cfg_path.exists():
+        return yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+
+    return {
+        "providers": {
+            "ollama": {
+                "base_url": os.environ.get("HEIWA_OLLAMA_URL")
+                or os.environ.get("OLLAMA_URL")
+                or "http://127.0.0.1:11434",
+                "default_model": os.environ.get("HEIWA_OLLAMA_MODEL") or "qwen3.5:4b",
+                "fallback_model": os.environ.get("HEIWA_OLLAMA_FALLBACK_MODEL") or "",
+                "timeout_seconds": int(os.environ.get("HEIWA_OLLAMA_TIMEOUT", "120") or "120"),
+                "generation": {
+                    "temperature": float(os.environ.get("HEIWA_OLLAMA_TEMPERATURE", "0.2") or "0.2"),
+                    "num_ctx": int(os.environ.get("HEIWA_OLLAMA_NUM_CTX", "8192") or "8192"),
+                },
+            }
+        },
+        "budgets": {
+            "max_prompt_chars": int(os.environ.get("HEIWA_OLLAMA_MAX_PROMPT_CHARS", "120000") or "120000")
+        },
+    }
 
 
 def setup_logging(root: Path) -> tuple[Path, str]:

@@ -13,7 +13,9 @@ class InstanceVault:
     Uses a master key to derive instance-specific keys.
     """
     def __init__(self, master_key: str = None):
-        self.master_key = master_key or os.getenv("HEIWA_MASTER_KEY", "heiwa-default-safety-key")
+        self.master_key = master_key or os.getenv("HEIWA_MASTER_KEY")
+        if not self.master_key:
+            raise ValueError("HEIWA_MASTER_KEY is required for InstanceVault.")
         self._fernet = self._derive_fernet(self.master_key)
 
     def _derive_fernet(self, secret: str) -> Fernet:

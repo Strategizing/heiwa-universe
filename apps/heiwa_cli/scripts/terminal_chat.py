@@ -1,25 +1,37 @@
+"""
+Heiwa Interactive Shell v5 — HTTP/WebSocket transport.
+
+Sends tasks to the Railway hub via POST /tasks, streams results via
+WS /ws/tasks/{task_id}. Falls back to direct local execution when
+the hub is unreachable.
+"""
+
 import asyncio
 import json
 import logging
 import os
 import sys
 import uuid
-import datetime
 import time
-import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-# --- SOTA BOOTSTRAP ---
-def find_monorepo_root(start_path: Path) -> Path:
-    current = start_path.resolve()
+# --- BOOTSTRAP ---
+def _find_root(start: Path) -> Path:
+    explicit = os.environ.get("HEIWA_ROOT")
+    if explicit:
+        p = Path(explicit).resolve()
+        if (p / "apps").exists() and (p / "packages").exists():
+            return p
+    current = start.resolve()
     for _ in range(5):
         if (current / "apps").exists() and (current / "packages").exists():
             return current
         current = current.parent
-    return Path("/home/devon/heiwa-universe")
+    print("[FATAL] Cannot find Heiwa monorepo root. Set HEIWA_ROOT.", file=sys.stderr)
+    sys.exit(1)
 
-ROOT = find_monorepo_root(Path(__file__).resolve())
+ROOT = _find_root(Path(__file__).resolve())
 for pkg in ["heiwa_sdk", "heiwa_protocol", "heiwa_identity", "heiwa_ui"]:
     path = str(ROOT / f"packages/{pkg}")
     if path not in sys.path:
@@ -27,278 +39,472 @@ for pkg in ["heiwa_sdk", "heiwa_protocol", "heiwa_identity", "heiwa_ui"]:
 if str(ROOT / "apps") not in sys.path:
     sys.path.insert(0, str(ROOT / "apps"))
 
-from heiwa_sdk.config import load_swarm_env, settings
+from heiwa_sdk.config import hub_url_candidates, load_swarm_env, settings
 load_swarm_env()
 
-import nats
-from nats.aio.client import Client as NATSClient
-from heiwa_protocol.protocol import Subject, Payload
-from heiwa_ui.manager import UIManager
 from heiwa_sdk.db import Database
-from heiwa_identity.node import load_node_identity
+from heiwa_sdk.operator_surface import WELCOME_SUGGESTIONS, maybe_fast_path_turn, operator_display_name
 
 from rich.console import Console
+from rich.columns import Columns
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
-from rich.live import Live
 from rich.align import Align
-from rich.status import Status
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
-from prompt_toolkit.completion import WordCompleter, Completer, Completion
-from prompt_toolkit.styles import Style as PromptStyle
-from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.patch_stdout import patch_stdout
 
 console = Console()
 logger = logging.getLogger("heiwa.cli.terminal_chat")
 
+
+def _render_output_text(output: str) -> str:
+    text = str(output or "").strip()
+    if not text:
+        return ""
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end > start:
+        try:
+            payload = json.loads(text[start : end + 1])
+        except json.JSONDecodeError:
+            return text
+        payloads = payload.get("payloads")
+        if isinstance(payloads, list):
+            rendered = []
+            for item in payloads:
+                if isinstance(item, dict):
+                    rendered_text = str(item.get("text") or "").strip()
+                    if rendered_text:
+                        rendered.append(rendered_text)
+            if rendered:
+                return "\n\n".join(rendered)
+    return text
+
+
 class HeiwaCompleter(Completer):
-    def __init__(self):
-        self.commands = [
-            "/status", "/cost", "/nodes", "/clear", "/models", 
-            "/skills", "/exit", "/help", "/sync", "/private", 
-            "/audit", "/model", "/embed"
-        ]
+    COMMANDS = ["/status", "/cost", "/clear", "/models", "/tips", "/exit", "/help", "/model"]
 
     def get_completions(self, document, complete_event):
         text = document.text_before_cursor
         if text.startswith("/"):
-            for cmd in self.commands:
+            for cmd in self.COMMANDS:
                 if cmd.startswith(text):
                     yield Completion(cmd, start_position=-len(text))
-        elif "@" in text:
-            word = text.split("@")[-1]
-            try:
-                for file in Path(".").glob(f"{word}*"):
-                    if file.name.startswith("."): continue
-                    yield Completion(str(file), start_position=-len(word))
-            except: pass
+
 
 class HeiwaShell:
-    """
-    SOTA Heiwa Shell v4 - Reactive & Intelligent.
-    Features: /model auto, ephemeral agent tracking, SHA-512 auth, STDB sessions.
-    """
+    """Interactive shell that communicates with the Railway hub via HTTP + WebSocket."""
+
     def __init__(self, node_name: str):
         self.node_name = node_name
-        self.nc: NATSClient = nats.NATS()
+        self.operator_name = operator_display_name(node_name)
         self.running = True
         self.db = Database()
-        self.task_cache: Dict[str, Any] = {}
-        self.active_agents: Dict[str, str] = {} # task_id -> status_msg
-        self.telemetry = {
-            "macbook": {"cpu": "0%", "ram": "0%", "status": "offline"},
-            "wsl": {"cpu": "0%", "ram": "0%", "status": "online"},
-            "railway": {"cpu": "0%", "ram": "0%", "status": "offline"},
-            "last_cost": "$0.0000",
-            "total_tokens": 0
-        }
-        self.privacy_mode = False
+        self.hub_candidates = hub_url_candidates()
+        self.hub_url = self.hub_candidates[0]
+        self.auth_token = os.getenv("HEIWA_AUTH_TOKEN") or getattr(settings, "HEIWA_AUTH_TOKEN", "") or ""
         self.active_model = os.getenv("HEIWA_MODEL", "auto")
-        
+        self.execution_mode = "standby"
+        self.last_intent = "idle"
+        self.last_tool = "idle"
+        self.last_transport = "idle"
+        self.last_status = "ready"
+        self.last_route_model = "auto"
+        self.last_latency_ms: int | None = None
+        self.turn_count = 0
+
         self.history_path = Path.home() / ".heiwa" / "cli_history"
         self.history_path.parent.mkdir(parents=True, exist_ok=True)
         self.session = PromptSession(
             history=FileHistory(str(self.history_path)),
             auto_suggest=AutoSuggestFromHistory(),
             completer=HeiwaCompleter(),
-            refresh_interval=0.5
+            refresh_interval=0.5,
+            bottom_toolbar=self._bottom_toolbar,
         )
-        
-        self.kb = KeyBindings()
-        @self.kb.add('c-c')
-        def _(event):
-            console.print("\n[yellow]⚠ Interrupting thought stream...[/yellow]")
-            # Logic to send cancel signal over NATS would go here
 
-    async def connect(self):
-        nats_url = settings.NATS_URL
-        try:
-            await self.nc.connect(nats_url, connect_timeout=5)
-            await self.nc.subscribe(Subject.TASK_EXEC_RESULT.value, cb=self.handle_result)
-            await self.nc.subscribe(Subject.LOG_THOUGHT.value, cb=self.handle_thought)
-            await self.nc.subscribe(Subject.NODE_TELEMETRY.value, cb=self.handle_telemetry)
-            await self.nc.subscribe("heiwa.agents.status", cb=self.handle_agent_status)
-            
-            asyncio.create_task(self._update_metrics_loop())
-            return True
-        except Exception as e:
-            console.print(f"[red]❌ Mesh Connection Failed:[/red] {e}")
-            return False
+    def _bottom_toolbar(self):
+        hub_label = self.hub_url.replace("https://", "").replace("http://", "").strip("/") or "offline"
+        latency = f"{self.last_latency_ms}ms" if self.last_latency_ms is not None else "--"
+        return HTML(
+            "<style fg='ansigray'>mode </style>"
+            f"<style fg='ansicyan'>{self.execution_mode}</style>"
+            "<style fg='ansigray'>  hub </style>"
+            f"<style fg='ansiblue'>{hub_label}</style>"
+            "<style fg='ansigray'>  route </style>"
+            f"<style fg='ansigreen'>{self.last_intent}</style>"
+            "<style fg='ansigray'>  tool </style>"
+            f"<style fg='ansiyellow'>{self.last_tool}</style>"
+            "<style fg='ansigray'>  status </style>"
+            f"<style fg='ansimagenta'>{self.last_status}</style>"
+            "<style fg='ansigray'>  latency </style>"
+            f"<style fg='ansiwhite'>{latency}</style>"
+            "<style fg='ansigray'>  turns </style>"
+            f"<style fg='ansiwhite'>{self.turn_count}</style>"
+        )
 
-    async def _update_metrics_loop(self):
-        import psutil
-        while self.running:
+    def _set_route_state(
+        self,
+        *,
+        mode: str,
+        intent: str,
+        tool: str,
+        transport: str,
+        status: str,
+        route_model: str | None = None,
+        latency_ms: int | None = None,
+    ) -> None:
+        self.execution_mode = mode
+        self.last_intent = intent or "unknown"
+        self.last_tool = tool or "unknown"
+        self.last_transport = transport or "unknown"
+        self.last_status = status or "unknown"
+        if route_model:
+            self.last_route_model = route_model
+        self.last_latency_ms = latency_ms
+
+    def _show_welcome(self) -> None:
+        suggestions = "\n".join(f"- `{prompt}`" for prompt in WELCOME_SUGGESTIONS)
+        tips_panel = Panel(
+            Markdown(
+                "### Try these first\n"
+                f"{suggestions}\n\n"
+                "`/status` hub health  •  `/tips` show suggestions  •  `/exit` leave shell"
+            ),
+            title="Suggested Work",
+            border_style="cyan",
+        )
+        shell_panel = Panel(
+            Markdown(
+                "### HEIWA CLI\n"
+                "One operator ingress for chat, research, build, review, deploy, and loop work.\n\n"
+                "The shell stays minimal. Routing, agents, and tools stay visible only when they add value."
+            ),
+            title=f"Session · {self.operator_name}",
+            border_style="blue",
+        )
+        console.print(Columns([shell_panel, tips_panel], expand=True))
+
+    # --- Hub Communication ---
+
+    async def _submit_task(self, text: str) -> Optional[dict]:
+        """POST /tasks to the Railway hub."""
+        task_id = f"cli-task-{uuid.uuid4().hex[:8]}"
+        body = json.dumps({
+            "raw_text": text,
+            "sender_id": self.node_name,
+            "source_surface": "cli",
+            "task_id": task_id,
+        }).encode()
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.auth_token}",
+        }
+
+        last_error = None
+        for candidate in self.hub_candidates:
             try:
-                self.telemetry["wsl"] = {
-                    "cpu": f"{psutil.cpu_percent()}%",
-                    "ram": f"{psutil.virtual_memory().percent}%",
-                    "status": "online"
-                }
-                # Cost and token logic from DB...
-            except: pass
-            await asyncio.sleep(2)
-
-    def get_bottom_toolbar(self):
-        w = self.telemetry["wsl"]
-        m = self.telemetry["macbook"]
-        r = self.telemetry["railway"]
-        
-        # SOTA Minimalist Telemetry
-        status_line = (
-            f' 🍎 {m["cpu"]} │ 🐧 {w["cpu"]} (RTX 3060) │ ☁️ {r["cpu"]} '
-            f'─ 🧠 {self.active_model} ─ 💰 {self.telemetry["last_cost"]} '
-        )
-        if self.active_agents:
-            # Show the most recent ephemeral agent activity
-            latest_task = list(self.active_agents.values())[-1]
-            status_line += f' │ 🦞 {latest_task}'
-            
-        return HTML(f'<style bg="ansiblue" fg="white">{status_line}</style>')
-
-    async def get_embedding(self, text: str) -> Optional[list]:
-        import httpx
-        ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(
-                    f"{ollama_url}/api/embeddings",
-                    json={"model": "qwen3-embedding:4b", "prompt": text}
+                import httpx
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.post(f"{candidate}/tasks", content=body, headers=headers)
+                    if resp.status_code == 200:
+                        self.hub_url = candidate
+                        return resp.json()
+                    last_error = f"HTTP {resp.status_code}"
+                    continue
+            except ImportError:
+                import urllib.request
+                import urllib.error
+                req = urllib.request.Request(
+                    f"{candidate}/tasks", data=body, headers=headers, method="POST",
                 )
-                resp.raise_for_status()
-                return resp.json().get("embedding")
+                try:
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        self.hub_url = candidate
+                        return json.loads(resp.read().decode())
+                except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
+                    last_error = str(e)
+                    continue
+            except Exception as e:
+                last_error = str(e)
+                continue
+        console.print(f"[red]Hub unreachable: {last_error or 'no working hub candidate'}[/red]")
+        return None
+
+    async def _stream_result(self, task_id: str) -> None:
+        """Connect to WS /ws/tasks/{task_id}?token=... and print events."""
+        ws_url = self.hub_url.replace("https://", "wss://").replace("http://", "ws://")
+        ws_url = f"{ws_url}/ws/tasks/{task_id}?token={self.auth_token}"
+
+        try:
+            import websockets
+        except ImportError:
+            console.print("[dim]websockets not installed — result streaming unavailable.[/dim]")
+            return
+
+        try:
+            async with websockets.connect(ws_url, open_timeout=10) as ws:
+                deadline = time.time() + 120
+                while time.time() < deadline:
+                    try:
+                        raw = await asyncio.wait_for(ws.recv(), timeout=35.0)
+                    except asyncio.TimeoutError:
+                        continue
+                    event = json.loads(raw)
+                    status = event.get("status", "")
+                    evt_type = event.get("type", "")
+
+                    if evt_type == "heartbeat":
+                        continue
+                    if status in {"ACKNOWLEDGED", "DISPATCHED_PLAN", "DISPATCHED_FALLBACK"}:
+                        self.last_status = status.lower()
+                        console.print(f"[dim]{event.get('message', status)}[/dim]")
+                    elif status in {"DELIVERED", "PASS"}:
+                        self.last_status = "pass"
+                        summary = event.get("summary", "")
+                        if summary:
+                            console.print(Panel(Markdown(_render_output_text(summary)), border_style="green"))
+                        return
+                    elif status in {"FAIL", "BLOCKED_AUTH", "BLOCKED_NO_CONTENT"}:
+                        self.last_status = status.lower()
+                        console.print(f"[red]{status}: {_render_output_text(event.get('message', ''))}[/red]")
+                        return
+                    else:
+                        content = event.get("content") or event.get("message") or ""
+                        if content:
+                            console.print(f"[dim]{content}[/dim]")
         except Exception as e:
-            logger.debug("Embedding request failed: %s", e)
-            return None
+            logger.debug("WS stream error: %s", e)
+            await self._poll_result(task_id)
 
-    async def handle_agent_status(self, msg):
-        data = json.loads(msg.data.decode())
-        task_id = data.get("task_id")
-        status = data.get("status")
-        if status == "completed":
-            if task_id in self.active_agents: del self.active_agents[task_id]
-        else:
-            self.active_agents[task_id] = data.get("message", "Processing...")
+    async def _poll_result(self, task_id: str, timeout: float = 120.0) -> None:
+        headers = {"Authorization": f"Bearer {self.auth_token}"} if self.auth_token else {}
+        deadline = time.time() + timeout
 
-    async def handle_result(self, msg):
-        data = json.loads(msg.data.decode()).get("data", {})
-        console.print(Panel(Markdown(data.get("summary", "")), title=f"✓ Result: {data.get('task_id')}", border_style="green"))
+        async def _httpx_poll() -> tuple[int | None, Dict[str, Any] | None]:
+            import httpx
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(f"{self.hub_url}/tasks/{task_id}", headers=headers)
+                return resp.status_code, resp.json() if resp.status_code == 200 else None
 
-    async def handle_thought(self, msg):
-        data = json.loads(msg.data.decode()).get("data", {})
-        agent = data.get("agent", "swarm")
-        content = data.get("content", "")
-        console.print(f"[bold cyan]🧠 {agent}[/bold cyan]: [italic dim]{content[:100]}...[/italic dim]")
+        while time.time() < deadline:
+            try:
+                status_code, payload = await _httpx_poll()
+            except Exception:
+                status_code, payload = None, None
 
-    async def handle_telemetry(self, msg):
-        data = json.loads(msg.data.decode()).get("data", {})
-        nid = data.get("node_id", "")
-        cpu = f"{data.get('cpu_pct', 0)}%"
-        if "mac" in nid: self.telemetry["macbook"]["cpu"] = cpu
-        elif "railway" in nid: self.telemetry["railway"]["cpu"] = cpu
+            if status_code == 200 and isinstance(payload, dict):
+                status = str(payload.get("status") or payload.get("run_status") or "").upper()
+                summary = str(payload.get("summary") or payload.get("result") or payload.get("content") or "").strip()
+                if status in {"PASS", "SUCCESS", "COMPLETED"}:
+                    self.last_status = "pass"
+                    if summary:
+                        console.print(Panel(Markdown(_render_output_text(summary)), border_style="green"))
+                    return
+                if status in {"FAIL", "ERROR", "BLOCKED_AUTH", "BLOCKED_NO_CONTENT"}:
+                    self.last_status = status.lower()
+                    console.print(f"[red]{status}: {_render_output_text(summary) or 'task failed'}[/red]")
+                    return
+            await asyncio.sleep(2.0)
+
+    async def _fetch_status_json(self, path: str) -> Dict[str, Any] | None:
+        for candidate in self.hub_candidates:
+            try:
+                import urllib.request
+                req = urllib.request.Request(f"{candidate}{path}", method="GET")
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    self.hub_url = candidate
+                    return json.loads(resp.read().decode())
+            except Exception:
+                continue
+        return None
+
+    # --- Commands ---
 
     async def send_task(self, text: str):
-        # Yap Extraction & Intent Routing
-        model_intent = self.active_model
-        if model_intent == "auto":
-            if len(text) > 300:
-                # Fast distillation
-                console.print("[dim]⚡ Distilling intent from ramble...[/dim]")
-                # In real prod, we'd call qwen3.5:4b here to summarize
-            
-            if any(k in text.lower() for k in ["code", "script", "debug"]):
-                model_intent = "qwen3.5:4b"
-            elif any(k in text.lower() for k in ["embed", "similarity"]):
-                model_intent = "qwen3-embedding:4b"
-            else:
-                model_intent = "gemini-2.0-flash-exp"
+        self.turn_count += 1
+        fast_path = maybe_fast_path_turn(text, self.node_name)
+        if fast_path:
+            self._set_route_state(
+                mode="scale-zero",
+                intent=fast_path.intent,
+                tool=fast_path.tool,
+                transport="local_surface",
+                status="pass",
+                route_model="none",
+                latency_ms=0,
+            )
+            console.print(Panel(Markdown(fast_path.response), title="Heiwa", border_style="cyan"))
+            return
 
-        task_id = str(uuid.uuid4())[:8]
-        self.task_cache[task_id] = text
-        payload = Payload(
-            subject=Subject.TASK_NEW,
-            data={
-                "task_id": task_id,
-                "input": text,
-                "model": model_intent,
-                "node_id": self.node_name
-            }
-        )
-        await self.nc.publish(Subject.TASK_NEW.value, json.dumps(payload.to_dict()).encode())
-        console.print(f"[dim]🚀 Dispatched {task_id} to {model_intent}[/dim]")
+        started = time.perf_counter()
+        result = await self._submit_task(text)
+        if result:
+            task_id = result.get("task_id", "unknown")
+            route = result.get("route", {})
+            route_model = str(route.get("target_model", "default"))
+            self._set_route_state(
+                mode="hub",
+                intent=str(route.get("intent_class", "unknown")),
+                tool=str(route.get("target_tool", "unknown")),
+                transport="http_ws",
+                status="accepted",
+                route_model=route_model,
+                latency_ms=int((time.perf_counter() - started) * 1000),
+            )
+            console.print(
+                f"[dim]route {route.get('intent_class', '?')} -> "
+                f"{route.get('target_tool', '?')} -> {route_model} | hub[/dim]"
+            )
+            await self._stream_result(task_id)
+        else:
+            # Fallback to direct local execution
+            console.print("[yellow]Falling back to direct local execution...[/yellow]")
+            from heiwa_hub.cognition.enrichment import BrokerEnrichmentService
+            from heiwa_protocol.routing import BrokerRouteRequest
+            from heiwa_sdk.heiwaclaw import HeiwaClawGateway
+
+            task_id = f"cli-task-{uuid.uuid4().hex[:8]}"
+            req = BrokerRouteRequest(
+                request_id=f"chat-{task_id}", task_id=task_id, raw_text=text,
+                sender_id=self.node_name, source_surface="cli",
+                auth_validated=bool(self.auth_token),
+            )
+            svc = BrokerEnrichmentService()
+            route = svc.enrich(req)
+            gateway = HeiwaClawGateway(ROOT)
+            dispatch = gateway.resolve(route)
+            self._set_route_state(
+                mode="direct",
+                intent=route.intent_class,
+                tool=dispatch.adapter_tool,
+                transport=dispatch.transport,
+                status="running",
+                route_model=dispatch.target_model or "default",
+                latency_ms=int((time.perf_counter() - started) * 1000),
+            )
+            console.print(
+                f"[dim]route {route.intent_class} -> {dispatch.provider} -> "
+                f"{dispatch.target_model or 'default'} | {dispatch.transport}[/dim]"
+            )
+            exit_code, output = await gateway.execute(route, text)
+            self.last_status = "pass" if exit_code == 0 else "fail"
+            if output:
+                console.print(
+                    Panel(
+                        Markdown(_render_output_text(str(output).strip())),
+                        border_style="green" if exit_code == 0 else "red",
+                    )
+                )
 
     async def execute_command(self, cmd: str):
         parts = cmd.split(" ", 1)
-        base_cmd = parts[0]
-        
-        if base_cmd == "/exit": self.running = False
-        elif base_cmd == "/clear": console.clear()
-        elif base_cmd == "/model":
+        base = parts[0]
+
+        if base == "/exit":
+            self.running = False
+        elif base == "/clear":
+            console.clear()
+        elif base == "/model":
             if len(parts) > 1:
                 self.active_model = parts[1]
-                console.print(f"[green]🤖 Model set to {self.active_model}[/green]")
+                console.print(f"[green]Model set to {self.active_model}[/green]")
             else:
                 await self.show_models()
-        elif base_cmd == "/embed":
-            if len(parts) > 1:
-                vec = await self.get_embedding(parts[1])
-                if vec: console.print(f"[green]✓ Vector generated ({len(vec)} dims)[/green]")
-        elif base_cmd == "/status":
+        elif base == "/status":
             await self.show_status()
-        elif base_cmd == "/help":
-            console.print(Markdown("# Heiwa SOTA Commands\n- `/model <name>`: Switch model (auto, gemini, qwen)\n- `/embed <text>`: Semantic vectorize\n- `/status`: Mesh health\n- `/exit`: Close"))
+        elif base == "/tips":
+            self._show_welcome()
+        elif base == "/help":
+            console.print(Markdown(
+                "# Heiwa CLI\n"
+                "One input box is the default. Slash commands are just operator controls.\n\n"
+                "- `/status`: hub + route state\n"
+                "- `/tips`: show suggested prompts\n"
+                "- `/model <name>`: set an operator preference\n"
+                "- `/clear`: clear the screen\n"
+                "- `/exit`: close the shell"
+            ))
 
     async def show_models(self):
         t = Table(title="Heiwa Model Routing")
-        t.add_column("Provider"); t.add_column("Model"); t.add_column("Tier")
-        t.add_row("Ollama", "qwen3.5:4b", "Local / SOTA Code")
-        t.add_row("Ollama", "qwen3-embedding:4b", "Local / Vector")
-        t.add_row("Google", "gemini-2.0-flash-exp", "Cloud / High Speed")
-        t.add_row("System", "auto", "Heiwa Smart Router")
+        t.add_column("Provider")
+        t.add_column("Model")
+        t.add_column("Tier")
+        t.add_row("Ollama", "llama-4-scout:q4_k_m", "Local")
+        t.add_row("Google", "gemini-3-pro-preview", "Cloud / CLI")
+        t.add_row("Claude", "claude-opus-4-6", "Cloud / CLI")
+        t.add_row("System", "auto", "Smart Router")
         console.print(t)
 
     async def show_status(self):
-        t = Table(title="Heiwa Sovereign Mesh Status")
-        t.add_column("Node"); t.add_column("CPU"); t.add_column("Status")
-        for k, v in self.telemetry.items():
-            if k in ["macbook", "wsl", "railway"]:
-                t.add_row(k.upper(), v["cpu"], f"[green]{v['status']}[/green]" if v['status']=="online" else "[red]offline[/red]")
+        t = Table(title="Heiwa Status")
+        t.add_column("Property")
+        t.add_column("Value")
+        t.add_row("Hub URL", self.hub_url)
+        t.add_row("Auth", "set" if self.auth_token else "[red]not set[/red]")
+        t.add_row("Active Model", self.active_model)
+        t.add_row("Execution Mode", self.execution_mode)
+        t.add_row("Last Route", f"{self.last_intent} -> {self.last_tool}")
+        t.add_row("Last Transport", self.last_transport)
+        t.add_row("Turns", str(self.turn_count))
+        health = await self._fetch_status_json("/health")
+        public = await self._fetch_status_json("/status")
+
+        if health:
+            t.add_row("Hub Status", f"[green]{health.get('status', 'unknown')}[/green]")
+            t.add_row("Backend", str(health.get("state_backend", "unknown")))
+            t.add_row("Transport", str(health.get("gateway_transport", "unknown")))
+        else:
+            t.add_row("Hub Status", "[red]unreachable[/red]")
+
+        if public:
+            t.add_row("Live Nodes", str(public.get("live_nodes", 0)))
+            t.add_row("Active Models", str(public.get("active_models", 0)))
+
         console.print(t)
 
-    async def run(self):
-        if not await self.connect(): return
-        
+    # --- Main Loop ---
+
+    async def run(self, initial_prompt: str = ""):
         console.print(Panel(
-            Align.center("[bold white]HEIWA SOVEREIGN SHELL[/bold white]\n[dim]Connected to mesh via NATS[/dim]"),
-            border_style="ansiblue"
+            Align.center("[bold white]HEIWA CLI[/bold white]\n[dim]single ingress | route-aware | scale-zero first[/dim]"),
+            border_style="blue",
         ))
-        
+
+        if initial_prompt.strip():
+            console.print(f"[dim]Initial prompt:[/dim] {initial_prompt}")
+            await self.send_task(initial_prompt)
+        else:
+            self._show_welcome()
+
         with patch_stdout():
             while self.running:
                 try:
+                    identity_str = self.node_name.split("@")[0] if "@" in self.node_name else self.node_name
                     user_input = await self.session.prompt_async(
-                        HTML('<ansicyan><b>heiwa</b></ansicyan><ansigray>@</ansigray><ansiblue>wsl</ansiblue> <ansigray>></ansigray> '),
-                        bottom_toolbar=self.get_bottom_toolbar
+                        HTML(f'<ansicyan><b>heiwa</b></ansicyan><ansigray>@</ansigray><ansiblue>{identity_str}</ansiblue> <ansigray>></ansigray> '),
                     )
-                    
-                    if not user_input.strip(): continue
+                    if not user_input.strip():
+                        continue
                     if user_input.startswith("/"):
                         await self.execute_command(user_input)
                     else:
                         await self.send_task(user_input)
-                        
                 except (EOFError, KeyboardInterrupt):
                     self.running = False
-        
-        await self.nc.close()
-        console.print("\n[blue]🛑 Session suspended. State persisted to STDB.[/blue]")
+
+        console.print("\n[blue]Session closed.[/blue]")
+
 
 if __name__ == "__main__":
-    node_name = os.getenv("HEIWA_NODE_ID", "wsl@heiwa-thinker")
-    asyncio.run(HeiwaShell(node_name).run())
+    node_name = sys.argv[1] if len(sys.argv) > 1 else os.getenv("HEIWA_NODE_ID", "macbook@heiwa-agile")
+    initial_prompt = " ".join(sys.argv[2:]).strip() if len(sys.argv) > 2 else ""
+    asyncio.run(HeiwaShell(node_name).run(initial_prompt=initial_prompt))

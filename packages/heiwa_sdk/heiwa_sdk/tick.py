@@ -391,22 +391,17 @@ def router_tick() -> dict:
                 # Increment attempt count
                 attempt_count = (p.get("attempt_count") or 0) + 1
 
-                # Update proposal
-                success = db.transition_proposal_status(
+                success = db.assign_proposal_to_node(
                     proposal_id,
-                    "ASSIGNED",
-                    {
-                        "assigned_node_id": node_id,
-                        "assignment_expires_at": assignment_expires,
-                        "hub_signature": hub_signature,
-                        "attempt_count": attempt_count,
-                        "eligibility_snapshot": _json.dumps(
-                            {
-                                "eligible_count": len(eligible),
-                                "assigned_to": node_id,
-                                "timestamp": now_iso,
-                            }
-                        ),
+                    node_id,
+                    assignment_expires,
+                    proposal_hash=proposal_hash,
+                    hub_signature=hub_signature,
+                    attempt_count=attempt_count,
+                    eligibility_snapshot={
+                        "eligible_count": len(eligible),
+                        "assigned_to": node_id,
+                        "timestamp": now_iso,
                     },
                 )
 

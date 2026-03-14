@@ -1,14 +1,17 @@
 
 import asyncio
-import sys
 import os
 
 # Paths
-ROOT_DIR = "/home/devon/heiwa-limited"
-RUNTIME_SCRIPT = os.path.join(ROOT_DIR, "cli/scripts/agent_runtime.py")
-INTERNAL_CONFIG = os.path.join(ROOT_DIR, "fleets/hub/agent.yaml")
-CLIENT_CONFIG = os.path.join(ROOT_DIR, "satellites/vali-org/agent.yaml")
-FIELD_OP_CONFIG = os.path.join(ROOT_DIR, "fleets/local-field-op/agent.yaml")
+ROOT_DIR = os.getenv("HEIWA_ROOT_DIR", "/Users/dmcgregsauce/heiwa")
+RUNTIME_SCRIPT = os.path.join(ROOT_DIR, "apps/heiwa_hub/agent_runtime.py")
+INTERNAL_CONFIG = os.getenv("HEIWA_INTERNAL_AGENT_CONFIG", "")
+CLIENT_CONFIG = os.getenv("HEIWA_CLIENT_AGENT_CONFIG", "")
+FIELD_OP_CONFIG = os.getenv("HEIWA_FIELD_OP_CONFIG", "")
+
+
+def _config_exists(path):
+    return bool(path) and os.path.exists(path)
 
 async def run_agent_test(name, config_path, test_prompt, forbidden_response_fragment=None, expected_response_fragment=None):
     print(f"\n--- Testing Agent: {name} ---")
@@ -72,36 +75,47 @@ async def run_agent_test(name, config_path, test_prompt, forbidden_response_frag
 
 async def main():
     print("Starting Runtime Segregation Verification...")
-    
-    # 1. Test Client Agent (Vali Org)
-    # Scenario: Try to access 'railway' (Internal tool). Should fail.
-    await run_agent_test(
-        name="Client Agent (Vali Org)",
-        config_path=CLIENT_CONFIG,
-        test_prompt="Check railway status",
-        expected_response_fragment="I do not have the 'railway' tool."
-    )
-    
-    # 2. Test Internal Agent
-    # Scenario: Try to access 'railway'. Should succeed.
-    await run_agent_test(
-        name="Heiwa Cloud HQ",
-        config_path=INTERNAL_CONFIG,
-        test_prompt="Check railway status",
-        expected_response_fragment="Executing Railway tool..."
-    )
 
-    # 3. Test Local Field Op
-    # Scenario: Try to access 'filesystem' (fs:read). Should succeed.
-    await run_agent_test(
-        name="Heiwa Field Op",
-        config_path=FIELD_OP_CONFIG,
-        
-        test_prompt="Check filesystem",
-        # We need to ensure the shim prints "Executing...". 
-        # I will update the shim concurrently.
-        expected_response_fragment="Executing Filesystem tool..." 
-    )
+    checks = [
+        (
+            "Client Agent",
+            CLIENT_CONFIG,
+            "Check railway status",
+            None,
+            "I do not have the 'railway' tool.",
+        ),
+        (
+            "Heiwa Cloud HQ",
+            INTERNAL_CONFIG,
+            "Check railway status",
+            None,
+            "Executing Railway tool...",
+        ),
+        (
+            "Heiwa Field Op",
+            FIELD_OP_CONFIG,
+            "Check filesystem",
+            None,
+            "Executing Filesystem tool...",
+        ),
+    ]
+
+    ran_any = False
+    for name, config_path, prompt, forbidden, expected in checks:
+        if not _config_exists(config_path):
+            print(f"SKIP: {name} config is not set or missing. Provide it via HEIWA_*_AGENT_CONFIG.")
+            continue
+        ran_any = True
+        await run_agent_test(
+            name=name,
+            config_path=config_path,
+            test_prompt=prompt,
+            forbidden_response_fragment=forbidden,
+            expected_response_fragment=expected,
+        )
+
+    if not ran_any:
+        print("No canonical isolation configs configured. Set HEIWA_*_AGENT_CONFIG to run this helper.")
 
 if __name__ == "__main__":
     asyncio.run(main())

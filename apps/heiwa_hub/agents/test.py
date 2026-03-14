@@ -15,9 +15,7 @@ logger = logging.getLogger("TestAgent")
 
 class HeartbeatAgent(BaseAgent):
     async def run(self):
-        # 1. Connect to the Swarm
-        # Note: We use the default localhost NATS unless overridden
-        await self.connect()
+        await self.start()
 
         # 2. Setup a Listener (Reflex)
         # If anyone says "heiwa.core.dispatch", we print it.

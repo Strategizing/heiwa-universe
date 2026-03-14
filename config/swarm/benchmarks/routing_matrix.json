@@ -1,0 +1,93 @@
+{
+  "suite": "routing_matrix",
+  "evaluator": "routing_matrix",
+  "description": "Golden route and gateway expectations for the typed broker pipeline.",
+  "cases": [
+    {
+      "name": "build escalation routes through premium HeiwaClaw",
+      "request": {
+        "request_id": "bench-route-build",
+        "task_id": "bench-task-build",
+        "raw_text": "implement a production build refactor with sudo and secret rotation support",
+        "source_surface": "cli",
+        "privacy_level": "local",
+        "auth_validated": true
+      },
+      "expect": {
+        "route.intent_class": "build",
+        "route.risk_level": "high",
+        "route.compute_class": 3,
+        "route.assigned_worker": "class_3_build",
+        "route.target_tool": "heiwa_claw",
+        "dispatch.gateway_tool": "heiwa_claw",
+        "dispatch.adapter_tool": "heiwa_code",
+        "dispatch.websocket_preferred": false,
+        "dispatch.direct_execution": false
+      }
+    },
+    {
+      "name": "sovereign research clamps to local fast path",
+      "request": {
+        "request_id": "bench-route-research",
+        "task_id": "bench-task-research",
+        "raw_text": "research the SpacetimeDB Python SDK subscription model and keep local only",
+        "source_surface": "cli",
+        "privacy_level": "sovereign",
+        "auth_validated": true
+      },
+      "expect": {
+        "route.intent_class": "research",
+        "route.privacy_level": "sovereign",
+        "route.compute_class": 2,
+        "route.assigned_worker": "node_a_orchestrator",
+        "route.target_runtime": "macbook",
+        "dispatch.gateway_tool": "heiwa_claw",
+        "dispatch.adapter_tool": "heiwa_reflex",
+        "dispatch.websocket_preferred": false,
+        "dispatch.direct_execution": false
+      }
+    },
+    {
+      "name": "strategy routes through antigravity oauth lane",
+      "request": {
+        "request_id": "bench-route-strategy",
+        "task_id": "bench-task-strategy",
+        "raw_text": "architect a long-term Railway-first roadmap and adversarially review the tradeoffs",
+        "source_surface": "cli",
+        "privacy_level": "local",
+        "auth_validated": true
+      },
+      "expect": {
+        "route.intent_class": "strategy",
+        "route.compute_class": 3,
+        "route.assigned_worker": "class_3_strategy",
+        "route.target_tool": "heiwa_claw",
+        "dispatch.gateway_tool": "heiwa_claw",
+        "dispatch.adapter_tool": "heiwa_claw",
+        "dispatch.provider": "google-antigravity",
+        "dispatch.rate_group": "google_antigravity",
+        "dispatch.websocket_preferred": false,
+        "dispatch.direct_execution": false
+      }
+    },
+    {
+      "name": "audit remains deterministic direct execution",
+      "request": {
+        "request_id": "bench-route-audit",
+        "task_id": "bench-task-audit",
+        "raw_text": "audit the active config and verify system status",
+        "source_surface": "cli",
+        "auth_validated": true
+      },
+      "expect": {
+        "route.intent_class": "audit",
+        "route.compute_class": 1,
+        "route.target_tool": "heiwa_ops",
+        "dispatch.gateway_tool": "heiwa_ops",
+        "dispatch.adapter_tool": "heiwa_ops",
+        "dispatch.websocket_preferred": false,
+        "dispatch.direct_execution": true
+      }
+    }
+  ]
+}

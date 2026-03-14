@@ -1,125 +1,101 @@
 import asyncio
-import json
 import logging
 import os
 import time
 import uuid
 from typing import Dict
 
-from nats.errors import TimeoutError
-
 from heiwa_hub.agents.base import BaseAgent
-from heiwa_protocol.protocol import Subject, Payload
 from heiwa_hub.cognition.planner import LocalTaskPlanner
+from heiwa_hub.cognition.enrichment import BrokerEnrichmentService
+from heiwa_hub.cognition.intent_normalizer import IntentProfile
+from heiwa_hub.transport import get_worker_manager
+from heiwa_protocol.protocol import Subject, Payload
+from heiwa_protocol.routing import BROKER_ENVELOPE_VERSION, BrokerRouteRequest, BrokerRouteResult
 
 logger = logging.getLogger("Spine")
-BROKER_ENVELOPE_VERSION = "2026-03-06"
+
 
 class SpineAgent(BaseAgent):
     def __init__(self):
         super().__init__(name="heiwa-spine")
-        # Registry: { "node_uuid": last_seen_timestamp }
         self.fleet_registry: Dict[str, float] = {}
         self.planner = LocalTaskPlanner()
-        self.broker_enabled = os.getenv("HEIWA_ENABLE_BROKER", "true").strip().lower() == "true"
+        self.enrichment = BrokerEnrichmentService()
 
     async def run(self):
-        try:
-            await self.connect()
-        except Exception:
-            logger.warning("⚠️ NATS unavailable. Spine running in local mode.")
+        await self.start()
 
-        # 1. Open Ears - Using Enum members
         await self.listen(Subject.NODE_HEARTBEAT, self.handle_heartbeat)
         await self.listen(Subject.CORE_REQUEST, self.handle_request)
         await self.listen(Subject.TASK_NEW, self.handle_request)
 
-        logger.info("🧠 Spine Active. Monitoring Fleet...")
+        logger.info("Spine active. Monitoring fleet...")
 
-        # 2. Maintenance Loop
         try:
             while self.running:
                 self._prune_registry()
-
-                # Only log if we have an active fleet to reduce noise
                 if self.fleet_registry:
-                    logger.info(f"📊 Fleet Status: {len(self.fleet_registry)} active node(s).")
-
+                    logger.info("Fleet: %d active node(s).", len(self.fleet_registry))
                 await asyncio.sleep(10)
         except KeyboardInterrupt:
             await self.shutdown()
 
     async def handle_heartbeat(self, data: dict):
-        """Update the registry when a node pulses."""
         sender = data.get("sender_id")
-        # In a real scenario, you might parse 'data' for CPU load to make routing decisions
-
         if sender:
             if sender not in self.fleet_registry:
-                logger.info(f"🆕 New Node Detected: {sender}")
-
-            # Update timestamp
+                logger.info("New node detected: %s", sender)
             self.fleet_registry[sender] = time.time()
 
     async def handle_request(self, data: dict):
-        """
-        Receive a Task Envelope, verify the Digital Barrier, and dispatch.
-        """
-        print(f"DEBUG: [Spine] Received request data: {json.dumps(data)[:200]}...")
+        """Receive a task envelope, verify auth, enrich via broker, dispatch."""
         from heiwa_sdk.config import settings
+        from heiwa_hub.envelope import extract_auth_token, extract_payload, normalize_sender
 
         expected_token = settings.HEIWA_AUTH_TOKEN
         if not expected_token:
-            logger.error("🛡️  Digital Barrier misconfigured: HEIWA_AUTH_TOKEN is not set. Dropping inbound task.")
+            logger.error("Digital Barrier misconfigured: HEIWA_AUTH_TOKEN not set.")
             return
 
-        from heiwa_hub.envelope import extract_auth_token, extract_payload, normalize_sender
-
-        # --- DIGITAL BARRIER CHECK ---
         sender_id = normalize_sender(data)
         auth_token = extract_auth_token(data)
         if not auth_token or auth_token != expected_token:
-            logger.warning(f"🛡️  Digital Barrier Breach Attempt: Invalid token from sender {sender_id}")
-            await self.speak(
-                Subject.TASK_STATUS,
-                {
-                    "accepted": False,
-                    "reason": "Invalid or missing auth token.",
-                    "task_id": data.get("task_id", data.get("data", {}).get("task_id", "unknown")),
-                    "step_id": "spine-orchestrator",
-                    "status": "BLOCKED_AUTH",
-                    "message": "Invalid or missing auth token.",
-                    "runtime": "spine"
-                }
-            )
+            logger.warning("Digital Barrier: invalid token from %s", sender_id)
+            await self.speak(Subject.TASK_STATUS, {
+                "accepted": False,
+                "reason": "Invalid or missing auth token.",
+                "task_id": data.get("task_id", data.get("data", {}).get("task_id", "unknown")),
+                "step_id": "spine-orchestrator",
+                "status": "BLOCKED_AUTH",
+                "message": "Invalid or missing auth token.",
+                "runtime": "spine",
+            })
             return
 
         payload = extract_payload(data)
         task_id = payload.get("task_id", f"task-{int(time.time())}")
-        
         dispatch_status_code = "DISPATCHED_PLAN"
-        broker_failed = False
-        
-        # --- AUTO-PLANNING FOR RAW REQUESTS ---
-        if not payload.get("steps") and payload.get("raw_text"):
-            if self.broker_enabled and self.nc:
-                try:
-                    payload = await self._route_via_broker(
-                        payload=payload,
-                        task_id=task_id,
-                        sender_id=sender_id,
-                    )
-                    logger.info("🛰️ Broker enriched task %s.", task_id)
-                except TimeoutError:
-                    broker_failed = True
-                    logger.warning("⚠️ Broker timeout for %s. Falling back to inline planning.", task_id)
-                except Exception as e:
-                    broker_failed = True
-                    logger.warning("⚠️ Broker enrichment failed for %s: %s. Falling back inline.", task_id, e)
 
-        if not payload.get("steps") and payload.get("raw_text"):
-            logger.info(f"🔮 Planning raw request for task {task_id}...")
+        # --- BROKER ENRICHMENT (skip if already enriched by /tasks endpoint) ---
+        if payload.get("_pre_enriched"):
+            logger.info("Task %s already enriched by ingress.", task_id)
+        elif not payload.get("steps") and payload.get("raw_text"):
             try:
+                route = self._enrich_via_broker(payload, task_id, sender_id)
+                payload.update(route.to_dict())
+                logger.info("Broker enriched task %s.", task_id)
+            except Exception as e:
+                logger.warning("Broker enrichment failed for %s: %s. Falling back inline.", task_id, e)
+
+        # --- INLINE PLANNING FALLBACK ---
+        if not payload.get("steps") and payload.get("raw_text"):
+            logger.info("Planning raw request for task %s...", task_id)
+            try:
+                profile = None
+                normalization = payload.get("normalization")
+                if isinstance(normalization, dict) and normalization:
+                    profile = IntentProfile.from_dict(normalization)
                 task_plan = self.planner.plan(
                     task_id=task_id,
                     raw_text=payload.get("raw_text"),
@@ -128,43 +104,39 @@ class SpineAgent(BaseAgent):
                     source_message_id=task_id,
                     response_channel_id=payload.get("response_channel_id", "cli"),
                     response_thread_id=payload.get("response_thread_id"),
+                    intent_profile=profile,
                 )
                 payload = task_plan.to_dict()
-                dispatch_status_code = "DISPATCHED_FALLBACK" if broker_failed else "DISPATCHED_PLAN"
+                dispatch_status_code = "DISPATCHED_PLAN"
             except Exception as e:
-                logger.error(f"❌ Planning failed: {e}. Falling back to direct execution.")
-                # Fallback: Create a single direct step
+                logger.error("Planning failed: %s. Direct fallback.", e)
                 payload["steps"] = [{
                     "step_id": "fallback-exec",
                     "instruction": payload.get("raw_text"),
                     "subject": Subject.TASK_EXEC.value,
-                    "target_runtime": "any"
+                    "target_runtime": "any",
                 }]
                 dispatch_status_code = "DISPATCHED_FALLBACK"
 
         intent = payload.get("intent_class", "unknown")
+        logger.info("Received task envelope: %s (Task: %s)", intent, task_id)
 
-        logger.info(f"📥 Received Task Envelope: {intent} (Task: {task_id})")
-
-        # Emit an ACKNOWLEDGED status to Messenger
-        ack_payload = {
+        # ACK
+        await self.speak(Subject.TASK_STATUS, {
             "accepted": True,
             "reason": None,
             "task_id": task_id,
             "step_id": "spine-orchestrator",
             "status": "ACKNOWLEDGED",
-            "message": f"Spine has accepted Task Envelope '{task_id}' for '{intent}'. Execution bounded.",
+            "message": f"Spine accepted '{task_id}' for '{intent}'.",
             "runtime": "spine",
             "response_channel_id": payload.get("response_channel_id"),
             "response_thread_id": payload.get("response_thread_id"),
-        }
-        await self.speak(Subject.TASK_STATUS, ack_payload)
-        logger.info(f"✅ Sent ACKNOWLEDGED status for {task_id}")
+        })
 
+        # --- DISPATCH STEPS ---
         steps = payload.get("steps") or []
         if not isinstance(steps, list) or not steps:
-            logger.warning(f"⚠️ No steps planned for task {task_id}. Creating fallback step.")
-            # Ensure we have at least one step to execute if raw_text exists
             raw_text = payload.get("raw_text") or data.get("raw_text")
             if raw_text:
                 steps = [{
@@ -172,48 +144,26 @@ class SpineAgent(BaseAgent):
                     "instruction": raw_text,
                     "subject": Subject.TASK_EXEC.value,
                     "target_runtime": "any",
-                    "target_tool": "ollama"
+                    "target_tool": "heiwa_claw",
                 }]
                 dispatch_status_code = "DISPATCHED_FALLBACK"
             else:
-                await self.speak(
-                    Subject.TASK_STATUS,
-                    {
-                        "accepted": False,
-                        "reason": "No executable content found in task.",
-                        "task_id": task_id,
-                        "step_id": "spine-orchestrator",
-                        "status": "BLOCKED_NO_CONTENT",
-                        "message": "No executable content found in task.",
-                        "runtime": "spine"
-                    },
-                )
-                return
-
-        if not self.nc:
-            await self.speak(
-                Subject.TASK_STATUS,
-                {
+                await self.speak(Subject.TASK_STATUS, {
                     "accepted": False,
-                    "reason": "Spine cannot dispatch because NATS is unavailable.",
+                    "reason": "No executable content found in task.",
                     "task_id": task_id,
                     "step_id": "spine-orchestrator",
-                    "status": "FAIL",
-                    "message": "Spine cannot dispatch because NATS is unavailable.",
+                    "status": "BLOCKED_NO_CONTENT",
+                    "message": "No executable content found in task.",
                     "runtime": "spine",
-                    "response_channel_id": payload.get("response_channel_id"),
-                    "response_thread_id": payload.get("response_thread_id"),
-                },
-            )
-            logger.warning("⚠️ Cannot dispatch %s; NATS unavailable", task_id)
-            return
+                })
+                return
 
         for step in steps:
             if not isinstance(step, dict):
                 continue
-            step_subject = str(step.get("subject", Subject.TASK_EXEC.value)).strip()
             step_id = str(step.get("step_id", "unknown"))
-            
+
             exec_payload = {
                 "task_id": task_id,
                 "plan_id": payload.get("plan_id"),
@@ -222,9 +172,12 @@ class SpineAgent(BaseAgent):
                 "instruction": step.get("instruction", payload.get("raw_text", "")),
                 "intent_class": payload.get("intent_class", intent),
                 "risk_level": payload.get("risk_level"),
+                "privacy_level": payload.get("privacy_level"),
                 "requested_by": payload.get("requested_by"),
                 "target_runtime": step.get("target_runtime", payload.get("target_runtime", "railway")),
-                "target_tool": step.get("target_tool", payload.get("target_tool", "ollama")),
+                "target_tool": step.get("target_tool", payload.get("target_tool", "heiwa_claw")),
+                "target_model": step.get("target_model", payload.get("target_model", "")),
+                "target_tier": step.get("target_tier", payload.get("target_tier")),
                 "compute_class": payload.get("compute_class"),
                 "assigned_worker": payload.get("assigned_worker"),
                 "requires_approval": payload.get("requires_approval"),
@@ -235,76 +188,63 @@ class SpineAgent(BaseAgent):
                 "envelope_version": payload.get("envelope_version"),
             }
 
-            wrapped = {
-                Payload.SENDER_ID: self.id,
-                Payload.TIMESTAMP: time.time(),
-                Payload.TYPE: "TASK_EXEC_DISPATCH",
-                Payload.DATA: exec_payload,
-            }
-            # Use Subject.TASK_EXEC enum member for SOTA v3.1
-            await self.speak(Subject.TASK_EXEC, exec_payload)
-            logger.info("📤 Dispatched %s/%s to %s", task_id, step_id, Subject.TASK_EXEC)
+            # Try remote worker if task targets a non-Railway runtime
+            dispatched_remote = False
+            target_rt = exec_payload.get("target_runtime", "railway")
+            assigned = exec_payload.get("assigned_worker")
+            if target_rt not in {"railway", "cloud"} or assigned:
+                wm = get_worker_manager()
+                worker_id = assigned or wm.get_worker_for_runtime(target_rt)
+                if worker_id:
+                    pushed = await wm.push_task(worker_id, exec_payload)
+                    if pushed:
+                        dispatched_remote = True
+                        logger.info("Dispatched %s/%s to remote worker %s", task_id, step_id, worker_id)
 
-            await self.speak(
-                Subject.TASK_STATUS,
-                {
-                    "accepted": True,
-                    "reason": None,
-                    "task_id": task_id,
-                    "step_id": step_id,
-                    "status": dispatch_status_code,
-                    "message": f"Spine dispatched step to {step_subject}.",
-                    "runtime": "spine",
-                    "response_channel_id": payload.get("response_channel_id"),
-                    "response_thread_id": payload.get("response_thread_id"),
-                },
-            )
+            if not dispatched_remote:
+                await self.speak(Subject.TASK_EXEC, exec_payload)
+                logger.info("Dispatched %s/%s to local executor", task_id, step_id)
+
+            await self.speak(Subject.TASK_STATUS, {
+                "accepted": True,
+                "reason": None,
+                "task_id": task_id,
+                "step_id": step_id,
+                "status": dispatch_status_code,
+                "message": f"Spine dispatched step {step_id}.",
+                "runtime": "spine",
+                "response_channel_id": payload.get("response_channel_id"),
+                "response_thread_id": payload.get("response_thread_id"),
+            })
+
+    def _enrich_via_broker(self, payload: dict, task_id: str, sender_id: str) -> BrokerRouteResult:
+        """Direct call to BrokerEnrichmentService — no NATS round-trip."""
+        request_id = f"broker-{task_id}-{uuid.uuid4().hex[:8]}"
+        request = BrokerRouteRequest(
+            request_id=request_id,
+            task_id=task_id,
+            raw_text=payload.get("raw_text", ""),
+            sender_id=sender_id,
+            source_surface=payload.get("source", "cli"),
+            response_channel_id=payload.get("response_channel_id", "cli"),
+            response_thread_id=payload.get("response_thread_id"),
+            auth_validated=True,
+            timestamp=time.time(),
+            envelope_version=BROKER_ENVELOPE_VERSION,
+            privacy_level=payload.get("privacy_level"),
+        )
+        result = self.enrichment.enrich(request)
+        if result.error:
+            raise RuntimeError(f"{result.error}: {result.message or ''}".strip())
+        return result
 
     def _prune_registry(self):
-        """Remove nodes that have gone dark."""
         now = time.time()
-        timeout = 30.0 # seconds
-
-        # Identify dead nodes
-        dead_nodes = [nid for nid, last_seen in self.fleet_registry.items() if now - last_seen > timeout]
-
-        for nid in dead_nodes:
-            logger.warning(f"💀 Node Lost: {nid}")
+        dead = [nid for nid, last_seen in self.fleet_registry.items() if now - last_seen > 30.0]
+        for nid in dead:
+            logger.warning("Node lost: %s", nid)
             del self.fleet_registry[nid]
 
-    async def _route_via_broker(self, *, payload: dict, task_id: str, sender_id: str) -> dict:
-        if not self.nc:
-            raise RuntimeError("NATS is unavailable.")
-
-        request_id = f"broker-{task_id}-{uuid.uuid4().hex[:8]}"
-        broker_request = {
-            "request_id": request_id,
-            "task_id": task_id,
-            "raw_text": payload.get("raw_text", ""),
-            "sender_id": sender_id,
-            "source_surface": payload.get("source", "cli"),
-            "response_channel_id": payload.get("response_channel_id", "cli"),
-            "response_thread_id": payload.get("response_thread_id"),
-            "auth_validated": True,
-            "timestamp": time.time(),
-            "envelope_version": BROKER_ENVELOPE_VERSION,
-        }
-
-        response = await self.nc.request(
-            Subject.BROKER_ROUTE.value,
-            json.dumps(broker_request).encode(),
-            timeout=5.0,
-        )
-        routed = json.loads(response.data.decode())
-
-        if routed.get("request_id") != request_id:
-            raise ValueError(
-                f"Broker request_id mismatch for {task_id}: expected {request_id}, got {routed.get('request_id')}"
-            )
-        if routed.get("error"):
-            raise RuntimeError(f"{routed.get('error')}: {routed.get('message', '')}".strip())
-
-        return routed
 
 if __name__ == "__main__":
     agent = SpineAgent()

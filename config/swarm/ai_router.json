@@ -5,7 +5,7 @@
   "foundation": {
     "state_layer": "spacetimedb",
     "cloud_host": "railway",
-    "messaging_bus": "nats_ephemeral",
+    "messaging_bus": "local_bus",
     "cloud_gpu_rental": "banned"
   },
   "models": {
@@ -15,8 +15,9 @@
       "ollama/qwen3.5:4b",
       "siliconflow/deepseek-r2",
       "cerebras/gpt-oss-120b",
-      "google-gemini-cli/gemini-2.5-pro",
-      "anthropic/claude-opus-4.6",
+      "google-gemini-cli/gemini-3-pro-preview",
+      "google-antigravity/gemini-3-pro-high",
+      "claude-code/claude-opus-4-6",
       "openai-codex/gpt-5.3-codex"
     ],
     "registry": {
@@ -77,18 +78,25 @@
         "role": "fast_reasoning"
       },
       "class_3_research": {
-        "id": "google-gemini-cli/gemini-2.5-pro",
+        "id": "google-gemini-cli/gemini-3-pro-preview",
         "provider": "google-gemini-cli",
         "host_node": "cloud@premium-remote",
         "compute_class": 3,
         "role": "research_long_context"
       },
       "class_3_strategy": {
-        "id": "anthropic/claude-opus-4.6",
-        "provider": "anthropic",
+        "id": "google-antigravity/gemini-3-flash",
+        "provider": "google-antigravity",
         "host_node": "cloud@premium-remote",
         "compute_class": 3,
         "role": "strategy_adversarial_review"
+      },
+      "class_3_review": {
+        "id": "claude-code/claude-opus-4-6",
+        "provider": "claude-code",
+        "host_node": "cloud@premium-remote",
+        "compute_class": 3,
+        "role": "adversarial_review"
       },
       "class_3_build": {
         "id": "openai-codex/gpt-5.3-codex",
@@ -99,13 +107,121 @@
       }
     }
   },
+  "providers": {
+    "ollama": {
+      "adapter_tool": "heiwa_reflex",
+      "transport": "local_http",
+      "auth_kind": "local_runtime",
+      "rate_group": "local_ollama",
+      "cli_command": "ollama",
+      "websocket_preferred": false
+    },
+    "local": {
+      "adapter_tool": "heiwa_reflex",
+      "transport": "local_http",
+      "auth_kind": "local_runtime",
+      "rate_group": "local_runtime",
+      "websocket_preferred": false
+    },
+    "vllm": {
+      "adapter_tool": "heiwa_reflex",
+      "transport": "local_http",
+      "auth_kind": "local_runtime",
+      "rate_group": "local_vllm",
+      "websocket_preferred": false
+    },
+    "litellm": {
+      "adapter_tool": "heiwa_reflex",
+      "transport": "local_http",
+      "auth_kind": "local_runtime",
+      "rate_group": "local_litellm",
+      "websocket_preferred": false
+    },
+    "google-gemini-cli": {
+      "adapter_tool": "heiwa_gemini",
+      "transport": "cli_stdio",
+      "auth_kind": "oauth_cli",
+      "rate_group": "google_gemini_cli",
+      "cli_command": "gemini",
+      "websocket_preferred": false
+    },
+    "google-antigravity": {
+      "adapter_tool": "heiwa_claw",
+      "transport": "openclaw_profile_local",
+      "auth_kind": "oauth_openclaw",
+      "rate_group": "google_antigravity",
+      "cli_command": "openclaw",
+      "websocket_preferred": false,
+      "env": {
+        "OPENCLAW_PROFILE": "heiwa-antigravity",
+        "OPENCLAW_COPY_AUTH_FROM_MAIN": "true"
+      }
+    },
+    "claude-code": {
+      "adapter_tool": "heiwa_claude",
+      "transport": "cli_stdio",
+      "auth_kind": "oauth_cli",
+      "rate_group": "claude_code",
+      "cli_command": "claude",
+      "websocket_preferred": false
+    },
+    "anthropic": {
+      "adapter_tool": "heiwa_claude",
+      "transport": "cli_stdio",
+      "auth_kind": "oauth_cli",
+      "rate_group": "claude_code",
+      "cli_command": "claude",
+      "websocket_preferred": false
+    },
+    "codex": {
+      "adapter_tool": "heiwa_code",
+      "transport": "cli_stdio",
+      "auth_kind": "oauth_cli",
+      "rate_group": "openai_codex",
+      "cli_command": "codex",
+      "websocket_preferred": false
+    },
+    "siliconflow": {
+      "adapter_tool": "heiwa_claw",
+      "transport": "openclaw_profile_local",
+      "auth_kind": "api_via_openclaw",
+      "rate_group": "siliconflow",
+      "cli_command": "openclaw",
+      "websocket_preferred": false
+    },
+    "cerebras": {
+      "adapter_tool": "heiwa_claw",
+      "transport": "openclaw_profile_local",
+      "auth_kind": "api_via_openclaw",
+      "rate_group": "cerebras",
+      "cli_command": "openclaw",
+      "websocket_preferred": false
+    },
+    "openrouter": {
+      "adapter_tool": "heiwa_claw",
+      "transport": "openclaw_profile_local",
+      "auth_kind": "api_via_openclaw",
+      "rate_group": "openrouter",
+      "cli_command": "openclaw",
+      "websocket_preferred": false
+    },
+    "groq": {
+      "adapter_tool": "heiwa_claw",
+      "transport": "openclaw_profile_local",
+      "auth_kind": "api_via_openclaw",
+      "rate_group": "groq",
+      "cli_command": "openclaw",
+      "websocket_preferred": false
+    }
+  },
   "routing_policy": {
     "provider_rotation": {
       "premium_remote": [
         "siliconflow/deepseek-r2",
         "cerebras/gpt-oss-120b",
-        "google-gemini-cli/gemini-2.5-pro",
-        "anthropic/claude-opus-4.6",
+        "google-gemini-cli/gemini-3-pro-preview",
+        "google-antigravity/gemini-3-pro-high",
+        "claude-code/claude-opus-4-6",
         "openai-codex/gpt-5.3-codex"
       ]
     },
@@ -120,7 +236,7 @@
       "cheapest_acceptable_route_first",
       "no_cloud_gpu_rental",
       "no_rest_only_multi_turn_agentic_sessions",
-      "nats_is_ephemeral_not_durable_state"
+      "local_bus_is_ephemeral_not_durable_state"
     ]
   },
   "agents": {
@@ -135,7 +251,23 @@
     "antigravity": {
       "compute_class": 3,
       "specialty": "strategy_adversarial_review"
+    },
+    "claude_code": {
+      "compute_class": 3,
+      "specialty": "adversarial_review"
     }
+  },
+  "control_plane": {
+    "railway_project_name": "heiwa-hub",
+    "always_on_services": [
+      "heiwa-cloud-hq",
+      "spacetimedb",
+      "heiwa-scheduler"
+    ],
+    "ephemeral_nodes": [
+      "macbook@heiwa-node-a",
+      "pc@heiwa-node-b"
+    ]
   },
   "mcp_servers": {
     "docker": {
@@ -161,7 +293,6 @@
   },
   "trust_boundaries": [
     "/Users/dmcgregsauce/heiwa",
-    "/Users/dmcgregsauce/heiwa-limited",
     "/Users/dmcgregsauce"
   ]
 }

@@ -6,7 +6,7 @@ echo "[HEIWA] Initializing Cloud HQ..."
 HEIWA_ENABLE_TAILSCALE="${HEIWA_ENABLE_TAILSCALE:-true}"
 
 # 0. Tailscale is optional for Cloud HQ boot. If unavailable, continue in
-# non-mesh mode so Discord/NATS control-plane services stay up.
+# non-mesh mode so the HTTP/WebSocket control plane still comes up.
 if [[ "$HEIWA_ENABLE_TAILSCALE" != "true" ]]; then
     echo "[HEIWA] Tailscale disabled for this Cloud HQ boot (HEIWA_ENABLE_TAILSCALE=false)."
 else
@@ -111,83 +111,6 @@ if [[ "$HEIWA_ENABLE_OLLAMA" == "true" ]]; then
     fi
 else
     echo "[HEIWA] Ollama disabled for this Cloud HQ boot (HEIWA_ENABLE_OLLAMA=false)."
-fi
-
-# 3.5 Launch Tailscale-Only NATS Bridge
-echo "[HEIWA] Starting Tailscale-only NATS bridge..."
-if command -v nats-server &> /dev/null; then
-    HEIWA_CORE_NATS_UPSTREAM_URL="${NATS_URL:-}"
-    HEIWA_BRIDGE_LOCAL_LISTEN="${HEIWA_BRIDGE_LOCAL_LISTEN:-0.0.0.0:4222}"
-    HEIWA_BRIDGE_UPSTREAM_LEAF_URL="${HEIWA_BRIDGE_UPSTREAM_LEAF_URL:-nats://devon:noved@nats.railway.internal:7422}"
-    HEIWA_BRIDGE_WORKER_USER="${HEIWA_BRIDGE_WORKER_USER:-worker}"
-    HEIWA_BRIDGE_WORKER_PASSWORD="${HEIWA_BRIDGE_WORKER_PASSWORD:-heiwa-worker-123}"
-    HEIWA_BRIDGE_CORE_USER="${HEIWA_BRIDGE_CORE_USER:-}"
-    HEIWA_BRIDGE_CORE_PASSWORD="${HEIWA_BRIDGE_CORE_PASSWORD:-}"
-
-    if [[ -z "$HEIWA_BRIDGE_CORE_USER" || -z "$HEIWA_BRIDGE_CORE_PASSWORD" ]]; then
-        if [[ "$HEIWA_CORE_NATS_UPSTREAM_URL" =~ ^nats://([^:@/]+):([^@/]+)@ ]]; then
-            HEIWA_BRIDGE_CORE_USER="${BASH_REMATCH[1]}"
-            HEIWA_BRIDGE_CORE_PASSWORD="${BASH_REMATCH[2]}"
-        fi
-    fi
-
-    if [[ -n "$HEIWA_BRIDGE_CORE_USER" && -n "$HEIWA_BRIDGE_CORE_PASSWORD" ]]; then
-        HEIWA_BRIDGE_LOCAL_URL="${HEIWA_BRIDGE_LOCAL_URL:-nats://${HEIWA_BRIDGE_CORE_USER}:${HEIWA_BRIDGE_CORE_PASSWORD}@127.0.0.1:4222}"
-        BRIDGE_CORE_USER_SNIPPET=$(cat <<EOF
-    ,
-    {
-      user: "${HEIWA_BRIDGE_CORE_USER}"
-      password: "${HEIWA_BRIDGE_CORE_PASSWORD}"
-      permissions: {
-        publish: ["heiwa.>", "_INBOX.>", "\$JS.>"]
-        subscribe: ["heiwa.>", "_INBOX.>", "\$JS.>"]
-      }
-    }
-EOF
-)
-    else
-        HEIWA_BRIDGE_LOCAL_URL="${HEIWA_BRIDGE_LOCAL_URL:-nats://127.0.0.1:4222}"
-        BRIDGE_CORE_USER_SNIPPET=""
-        echo "[HEIWA] WARN: Could not derive Cloud HQ NATS credentials for local bridge; core may fail auth."
-    fi
-
-    cat <<EOF > /tmp/bridge.conf
-listen: ${HEIWA_BRIDGE_LOCAL_LISTEN}
-server_name: "heiwa-bridge"
-
-authorization {
-  users = [
-    {
-      user: "${HEIWA_BRIDGE_WORKER_USER}"
-      password: "${HEIWA_BRIDGE_WORKER_PASSWORD}"
-      permissions: {
-        publish: ["heiwa.>", "_INBOX.>", "\$JS.>"]
-        subscribe: ["heiwa.>", "_INBOX.>", "\$JS.>"]
-      }
-    }${BRIDGE_CORE_USER_SNIPPET}
-  ]
-}
-
-leafnodes {
-  remotes = [
-    {
-      url: "${HEIWA_BRIDGE_UPSTREAM_LEAF_URL}"
-    }
-  ]
-}
-EOF
-    # Run the NATS bridge in the background
-    nats-server -c /tmp/bridge.conf > /tmp/nats-bridge.log 2>&1 &
-
-    # Optional wait to ensure bridge responds
-    sleep 1
-    echo "[HEIWA] NATS bridge is UP."
-    # Route Cloud HQ itself through the local bridge so the core stays functional even if
-    # Railway private-port routing changes for the NATS service.
-    export NATS_URL="${HEIWA_BRIDGE_LOCAL_URL}"
-    echo "[HEIWA] Cloud HQ NATS_URL pinned to local bridge."
-else
-    echo "[HEIWA] nats-server not found, skipping Tailscale NATS bridge."
 fi
 
 # 4. Launch the Core Collective (Spine + Messenger)

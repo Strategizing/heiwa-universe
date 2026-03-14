@@ -1,6 +1,7 @@
 import sqlite3
 import json
 import datetime
+import hashlib
 import sys
 import uuid
 import os
@@ -21,6 +22,9 @@ except ImportError:
     HAS_PSYCOPG2 = False
 
 
+logger = logging.getLogger("SDK.Database")
+
+
 class Database:
     # Type stubs for monkey-patched methods
     insert_thought: Callable[[Any], bool]
@@ -29,7 +33,16 @@ class Database:
     get_debate_chain: Callable[[str], List[Dict[str, Any]]]
 
     def __init__(self):
-        self.stdb = SpacetimeDB(db_identity=os.getenv("STDB_IDENTITY", "c20036703b164bad843aaf1714245ba8089a954065eb5cc913e8b5fee613e157"))
+        self.state_backend = settings.HEIWA_STATE_BACKEND
+        self.stdb_identity = settings.STDB_IDENTITY
+        self.stdb = None
+        if self.stdb_identity:
+            self.stdb = SpacetimeDB(
+                db_identity=self.stdb_identity,
+                server=settings.STDB_SERVER,
+            )
+        if self.state_backend == "spacetimedb" and not self.stdb:
+            raise ValueError("STDB_IDENTITY is required when HEIWA_STATE_BACKEND=spacetimedb.")
         self.use_postgres = settings.use_postgres
         self.db_path = settings.DATABASE_PATH
         self.database_url = settings.DATABASE_URL
@@ -37,11 +50,14 @@ class Database:
 
     def init_db(self):
         """Bootstraps the database schema on startup."""
+        if self.state_backend == "spacetimedb":
+            logger.info("STDB backend selected; skipping compatibility SQL schema bootstrap.")
+            return
         if self.use_postgres:
-            print(f"[DB] Initializing Sovereign Schema (PostgreSQL)...")
+            logger.info("[DB] Initializing compatibility Postgres schema.")
             self._init_db_postgres()
         else:
-            print(f"[DB] Initializing Amnesia Schema (SQLite)...")
+            logger.info("[DB] Initializing compatibility SQLite schema.")
             self._ensure_persistence_check()
             self._init_db()
         
@@ -60,9 +76,9 @@ class Database:
                 )
             """)
             conn.commit()
-            print("[DB] Self-healing schema check completed.")
+            logger.info("[DB] Compatibility schema check completed.")
         except Exception as e:
-            print(f"[DB] Init failed: {e}")
+            logger.error("[DB] Init failed: %s", e)
             raise e
         finally:
             conn.close()
@@ -76,7 +92,7 @@ class Database:
             # Try to touch the file
             path.touch(exist_ok=True)
         except Exception as e:
-            print(f"[CRITICAL] Cannot access DATABASE_PATH {self.db_path}: {e}")
+            logger.critical("Cannot access DATABASE_PATH %s: %s", self.db_path, e)
             sys.exit(1)
 
     def get_connection(self):
@@ -106,6 +122,88 @@ class Database:
             return [dict(zip(columns, row)) for row in rows]
         else:
             return [dict(row) for row in rows]
+
+    @staticmethod
+    def _parse_json_field(value, fallback):
+        if value in (None, ""):
+            return fallback
+        if isinstance(value, (dict, list)):
+            return value
+        try:
+            return json.loads(value)
+        except Exception:
+            return fallback
+
+    def _targeting_from_proposal(self, proposal):
+        targeting = self._parse_json_field(proposal.get("execution_targeting"), {})
+        return targeting if isinstance(targeting, dict) else {}
+
+    def _capability_set(self, node):
+        caps = self._parse_json_field(node.get("capabilities_json"), {})
+        if isinstance(caps, list):
+            return set(str(item) for item in caps)
+        if isinstance(caps, dict):
+            values = set(str(key) for key, val in caps.items() if val)
+            values.update(str(item) for item in caps.get("can_run", []) or [])
+            values.update(str(item) for item in caps.get("models", []) or [])
+            values.update(str(item) for item in caps.get("tools", []) or [])
+            return values
+        return set()
+
+    def _privilege_tier_for_node(self, node):
+        if node.get("privilege_tier"):
+            return node.get("privilege_tier")
+        meta = self._parse_json_field(node.get("meta_json"), {})
+        profile = self._parse_json_field(node.get("profile_json"), {})
+        return (
+            meta.get("privilege_tier")
+            or profile.get("privilege_tier")
+            or "cloud_safe"
+        )
+
+    def _filter_eligible_nodes(self, nodes, requires, privilege_tier="cloud_safe"):
+        eligible = []
+        required = [str(req) for req in (requires or [])]
+        for node in nodes:
+            node_privilege = self._privilege_tier_for_node(node)
+            if privilege_tier == "privileged_local" and node_privilege != "privileged_local":
+                continue
+            capability_set = self._capability_set(node)
+            if all(req in capability_set for req in required):
+                eligible.append(node)
+        return eligible
+
+    def _issue_stdb_capability_lease(self, proposal, holder_id, lease_expires_at, run_id=None):
+        if not self.stdb:
+            return None
+
+        targeting = self._targeting_from_proposal(proposal)
+        proposal_hash = proposal.get("proposal_hash")
+        payload = proposal.get("payload") or ""
+        if not proposal_hash:
+            payload_str = payload if isinstance(payload, str) else json.dumps(payload, sort_keys=True)
+            proposal_hash = hashlib.sha256(payload_str.encode("utf-8")).hexdigest()
+        lease_id = f"LEASE-{uuid.uuid4().hex[:12]}"
+        issued_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        lease_data = {
+            "lease_id": lease_id,
+            "proposal_id": proposal["proposal_id"],
+            "run_id": run_id,
+            "holder_kind": "node",
+            "holder_id": holder_id,
+            "tool_scope": targeting.get("allowed_tools") or targeting.get("tool_scope") or [],
+            "network_scope": targeting.get("network_scope") or {},
+            "filesystem_scope": targeting.get("filesystem_scope") or {},
+            "secret_scope": targeting.get("secret_scope") or [],
+            "privilege_tier": targeting.get("privilege_tier", "cloud_safe"),
+            "status": "ACTIVE",
+            "issued_at": issued_at,
+            "expires_at": lease_expires_at,
+            "hub_signature": proposal.get("hub_signature") or f"SIG-{proposal_hash[:16]}",
+        }
+        if not self.stdb.issue_capability_lease(lease_data):
+            return None
+        return lease_data
 
     def _sql(self, query):
         """Translate SQL placeholders from SQLite (?) to Postgres (%s) if needed."""
@@ -710,6 +808,8 @@ class Database:
         conn.close()
 
     def get_liveness_state(self, key):
+        if self.state_backend == "spacetimedb" and self.stdb:
+            return self.stdb.get_liveness_state(key)
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -721,6 +821,8 @@ class Database:
 
     def set_liveness_state(self, key, state):
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        if self.state_backend == "spacetimedb" and self.stdb:
+            return self.stdb.upsert_liveness_state(key, state, now_iso)
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -755,6 +857,8 @@ class Database:
 
     def get_liveness_state(self, key):
         """Get current liveness state for a service key."""
+        if self.state_backend == "spacetimedb" and self.stdb:
+            return self.stdb.get_liveness_state(key)
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -844,6 +948,15 @@ class Database:
         max_concurrency=1,
     ):
         """Update node heartbeat and status."""
+        if self.state_backend == "spacetimedb" and self.stdb:
+            return self.stdb.upsert_node_heartbeat(
+                node_id=node_id,
+                meta=meta,
+                capabilities=capabilities,
+                agent_version=agent_version,
+                tags=tags,
+                max_concurrency=max_concurrency,
+            )
         conn = self.get_connection()
         cursor = conn.cursor()
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -911,6 +1024,8 @@ class Database:
 
     def list_nodes(self, status=None):
         """List nodes, optionally filtered by status."""
+        if self.state_backend == "spacetimedb" and self.stdb:
+            return self.stdb.list_nodes(status=status)
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -930,6 +1045,8 @@ class Database:
 
     def get_node(self, node_id):
         """Get a single node."""
+        if self.state_backend == "spacetimedb" and self.stdb:
+            return self.stdb.get_node(node_id)
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -944,6 +1061,33 @@ class Database:
         Scan nodes for stale heartbeats and update status.
         Returns list of alerts created.
         """
+        if self.state_backend == "spacetimedb" and self.stdb:
+            now = datetime.datetime.now(datetime.timezone.utc)
+            alerts_created = []
+            for node in self.list_nodes():
+                last_hb_raw = node.get("last_heartbeat_at")
+                if not last_hb_raw:
+                    continue
+                try:
+                    last_hb = datetime.datetime.fromisoformat(str(last_hb_raw))
+                    if last_hb.tzinfo is None:
+                        last_hb = last_hb.replace(tzinfo=datetime.timezone.utc)
+                except Exception:
+                    continue
+
+                age_minutes = (now - last_hb).total_seconds() / 60
+                current_status = node.get("status", "UNKNOWN")
+                if age_minutes > offline_min:
+                    new_status = "OFFLINE"
+                elif age_minutes > silent_min:
+                    new_status = "SILENT"
+                else:
+                    new_status = "ONLINE"
+
+                if new_status != current_status:
+                    self.stdb.set_node_status(node.get("node_id", ""), new_status)
+            return alerts_created
+
         conn = self.get_connection()
         cursor = conn.cursor()
         now = datetime.datetime.now(datetime.timezone.utc)
@@ -1074,9 +1218,17 @@ class Database:
         Record a human consent decision and transition proposal state.
         Phase 2 Gate: QUEUED -> APPROVED (or REJECTED)
         """
+        if self.state_backend == "spacetimedb" and self.stdb:
+            return self.stdb.record_consent(consent_data)
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
+            normalized_decision = str(consent_data["decision"]).upper()
+            approved_at = consent_data.get("approved_at")
+            expires_at = consent_data.get("expires_at")
+            if normalized_decision == "APPROVE" and not approved_at:
+                approved_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
             # 1. Insert Consent Record
             if self.use_postgres:
                 self._exec(cursor, 
@@ -1091,7 +1243,7 @@ class Database:
                         consent_data.get("proposal_hash", "UNKNOWN"),
                         consent_data["actor_type"],
                         consent_data["actor_id"],
-                        consent_data["decision"],
+                        normalized_decision,
                         consent_data.get("comment"),
                         datetime.datetime.now(datetime.timezone.utc).isoformat(),
                         json.dumps(consent_data.get("metadata", {}))
@@ -1110,7 +1262,7 @@ class Database:
                         consent_data.get("proposal_hash", "UNKNOWN"),
                         consent_data["actor_type"],
                         consent_data["actor_id"],
-                        consent_data["decision"],
+                        normalized_decision,
                         consent_data.get("comment"),
                         datetime.datetime.now(datetime.timezone.utc).isoformat(),
                         json.dumps(consent_data.get("metadata", {}))
@@ -1118,15 +1270,32 @@ class Database:
                 )
 
             # 2. Transition Proposal
-            new_status = "APPROVED" if consent_data["decision"] == "APPROVE" else "REJECTED"
-            
-            # Optional: Add approved_at timestamp
-            approved_at = datetime.datetime.now(datetime.timezone.utc).isoformat() if new_status == "APPROVED" else None
+            new_status = "APPROVED" if normalized_decision == "APPROVE" else "REJECTED"
             
             if self.use_postgres:
-                self._exec(cursor, "UPDATE proposals SET status = %s, approved_at = %s WHERE proposal_id = %s", (new_status, approved_at, consent_data["proposal_id"]))
+                self._exec(
+                    cursor,
+                    "UPDATE proposals SET status = %s, approved_at = %s, expires_at = %s, proposal_hash = %s WHERE proposal_id = %s",
+                    (
+                        new_status,
+                        approved_at,
+                        expires_at,
+                        consent_data.get("proposal_hash", "UNKNOWN"),
+                        consent_data["proposal_id"],
+                    ),
+                )
             else:
-                 self._exec(cursor, "UPDATE proposals SET status = ?, approved_at = ? WHERE proposal_id = ?", (new_status, approved_at, consent_data["proposal_id"]))
+                self._exec(
+                    cursor,
+                    "UPDATE proposals SET status = ?, approved_at = ?, expires_at = ?, proposal_hash = ? WHERE proposal_id = ?",
+                    (
+                        new_status,
+                        approved_at,
+                        expires_at,
+                        consent_data.get("proposal_hash", "UNKNOWN"),
+                        consent_data["proposal_id"],
+                    ),
+                )
 
             conn.commit()
             return True
@@ -1139,6 +1308,9 @@ class Database:
 
     def get_model_usage_summary(self, minutes=60):
         """Fetch model usage stats for the last N minutes."""
+        if self.state_backend == "spacetimedb" and self.stdb:
+            return self.stdb.get_model_usage_summary(minutes=minutes)
+
         conn = self.get_connection()
         cursor = conn.cursor()
         cutoff = (
@@ -1181,39 +1353,53 @@ class Database:
             conn.close()
 
     def add_proposal(self, proposal):
+        if self.state_backend == "spacetimedb" and self.stdb:
+            return self.stdb.add_proposal(proposal)
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
-            # Enhanced to support Phase 2 fields if provided
-            status = proposal.get("status", "QUEUED")
-            assigned_node = proposal.get("assigned_node_id")
-            hub_sig = proposal.get("hub_signature")
-            assignment_expires = proposal.get("assignment_expires_at")
-            
-            cols = ["proposal_id", "created_at", "status", "fingerprint", "payload", "payload_raw", "mode"]
+            cols = [
+                "proposal_id",
+                "created_at",
+                "status",
+                "fingerprint",
+                "payload",
+                "payload_raw",
+                "mode",
+            ]
             vals = [
                 proposal["proposal_id"],
-                datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                status,
+                proposal.get("created_at") or datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                proposal.get("status", "QUEUED"),
                 proposal.get("fingerprint"),
                 (
                     json.dumps(proposal["payload"])
-                    if isinstance(proposal["payload"], dict)
+                    if isinstance(proposal["payload"], (dict, list))
                     else proposal["payload"]
                 ),
                 proposal.get("payload_raw"),
                 proposal.get("mode", "PRODUCTION"),
             ]
-            
-            if assigned_node:
-                cols.append("assigned_node_id")
-                vals.append(assigned_node)
-            if hub_sig:
-                cols.append("hub_signature")
-                vals.append(hub_sig)
-            if assignment_expires:
-                cols.append("assignment_expires_at")
-                vals.append(assignment_expires)
+
+            optional_columns = [
+                "execution_targeting",
+                "assigned_node_id",
+                "assignment_expires_at",
+                "proposal_hash",
+                "hub_signature",
+                "approved_at",
+                "expires_at",
+                "eligibility_snapshot",
+                "attempt_count",
+            ]
+            for column in optional_columns:
+                if proposal.get(column) is None:
+                    continue
+                cols.append(column)
+                value = proposal.get(column)
+                if isinstance(value, (dict, list)):
+                    value = json.dumps(value)
+                vals.append(value)
 
             placeholders = ", ".join(["?"] * len(vals))
             col_str = ", ".join(cols)
@@ -1235,6 +1421,18 @@ class Database:
 
     def get_next_proposal(self, node_id):
         """Atomically claim the next proposal for this node."""
+        if self.state_backend == "spacetimedb" and self.stdb:
+            proposal = self.stdb.claim_next_approved_proposal(node_id)
+            if not proposal:
+                return None
+            lease_expires_at = proposal.get("lease_expires_at") or (
+                datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=30)
+            ).isoformat()
+            lease_data = self._issue_stdb_capability_lease(proposal, node_id, lease_expires_at)
+            if lease_data:
+                proposal["lease_id"] = lease_data["lease_id"]
+                proposal["lease_token"] = lease_data["lease_id"]
+            return proposal
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -1295,6 +1493,8 @@ class Database:
             conn.close()
 
     def record_run(self, run_data):
+        if self.state_backend == "spacetimedb" and self.stdb:
+            return self.stdb.record_run(run_data)
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -1343,6 +1543,11 @@ class Database:
 
     def requeue_proposal(self, proposal_id):
         """Operator-initiated requeue. Clears claim and resets to QUEUED."""
+        if self.state_backend == "spacetimedb" and self.stdb:
+            success = self.stdb.requeue_proposal(proposal_id)
+            if success:
+                return {"success": True}
+            return {"success": False, "error": "Failed to requeue proposal"}
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -1378,6 +1583,25 @@ class Database:
             conn.close()
 
     def update_heartbeat(self, proposal_id, node_id, node_instance_id, ts_iso, detail):
+        if self.state_backend == "spacetimedb" and self.stdb:
+            proposal = self.stdb.record_proposal_heartbeat(
+                proposal_id,
+                node_id,
+                node_instance_id,
+                ts_iso,
+                detail,
+            )
+            if not proposal:
+                return None, "NOT_FOUND_OR_REJECTED"
+
+            lease = self.stdb.get_active_capability_lease(proposal_id, node_id)
+            if lease:
+                self.stdb.renew_capability_lease(
+                    lease["lease_id"],
+                    ts_iso,
+                    proposal.get("lease_expires_at") or lease.get("expires_at") or ts_iso,
+                )
+            return proposal, None
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -1421,6 +1645,8 @@ class Database:
             conn.close()
 
     def get_proposals(self, status=None, limit=50):
+        if self.state_backend == "spacetimedb" and self.stdb:
+            return self.stdb.get_proposals(status=status, limit=limit)
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -1441,6 +1667,8 @@ class Database:
             conn.close()
 
     def get_proposal(self, proposal_id):
+        if self.state_backend == "spacetimedb" and self.stdb:
+            return self.stdb.get_proposal(proposal_id)
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -1455,6 +1683,9 @@ class Database:
             conn.close()
 
     def get_runs(self, proposal_id=None, limit=50):
+        if self.state_backend == "spacetimedb" and self.stdb:
+            return self.stdb.get_runs(proposal_id=proposal_id, limit=limit)
+
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -1887,6 +2118,11 @@ class Database:
 
     def get_discord_channel(self, purpose: str) -> Optional[int]:
         """Fetch channel ID by purpose with SpacetimeDB fallback."""
+        if self.state_backend == "spacetimedb" and self.stdb:
+            channel_id = self.stdb.get_discord_channel(purpose)
+            if channel_id is not None:
+                return channel_id
+
         # 1. Local Cache Check
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -1918,6 +2154,11 @@ class Database:
         if val:
             try: return int(val)
             except: pass
+
+    def record_route_decision(self, route_data: Dict[str, Any]) -> bool:
+        if self.state_backend == "spacetimedb" and self.stdb:
+            return self.stdb.record_route_decision(route_data)
+        return True
 
         return None
 
@@ -2441,6 +2682,34 @@ class Database:
         self, proposal_id, proposal_hash, actor_type, actor_id, decision, comment=None
     ):
         """Append a consent record (audit log). Returns consent_id or None on failure."""
+        if self.state_backend == "spacetimedb" and self.stdb:
+            consent_id = f"CON-{uuid.uuid4().hex[:8]}"
+            proposal = self.get_proposal(proposal_id) or {}
+            now_ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            targeting = self._targeting_from_proposal(proposal)
+            ttl_seconds = int(targeting.get("ttl_seconds", 3600))
+            expires_at = (
+                datetime.datetime.now(datetime.timezone.utc)
+                + datetime.timedelta(seconds=ttl_seconds)
+            ).isoformat()
+            success = self.stdb.record_consent(
+                {
+                    "consent_id": consent_id,
+                    "proposal_id": proposal_id,
+                    "proposal_hash": proposal_hash,
+                    "actor_type": actor_type,
+                    "actor_id": actor_id,
+                    "decision": decision,
+                    "comment": comment,
+                    "metadata": {},
+                    "requested_at": proposal.get("created_at") or now_ts,
+                    "request_expires_at": expires_at if str(decision).lower() == "approve" else None,
+                    "request_payload": self._parse_json_field(proposal.get("payload"), proposal.get("payload")),
+                    "approved_at": now_ts if str(decision).lower() == "approve" else None,
+                    "expires_at": expires_at if str(decision).lower() == "approve" else None,
+                }
+            )
+            return consent_id if success else None
         conn = self.get_connection()
         cursor = conn.cursor()
         consent_id = f"CON-{uuid.uuid4().hex[:8]}"
@@ -2474,6 +2743,8 @@ class Database:
 
     def get_consents_for_proposal(self, proposal_id):
         """Get all consents for a proposal (ordered by created_at)."""
+        if self.state_backend == "spacetimedb" and self.stdb:
+            return self.stdb.get_consents_for_proposal(proposal_id)
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -2491,6 +2762,62 @@ class Database:
         Transition a proposal to a new status.
         extra_fields: dict of additional columns to set (e.g., approved_at, expires_at).
         """
+        if self.state_backend == "spacetimedb" and self.stdb:
+            extra_fields = extra_fields or {}
+            proposal = self.get_proposal(proposal_id) or {}
+            payload_str = proposal.get("payload") or ""
+            if not isinstance(payload_str, str):
+                payload_str = json.dumps(payload_str, sort_keys=True)
+            proposal_hash = extra_fields.get("proposal_hash") or proposal.get("proposal_hash")
+            if not proposal_hash and payload_str:
+                proposal_hash = hashlib.sha256(payload_str.encode("utf-8")).hexdigest()
+
+            if new_status == "APPROVED":
+                return self.stdb.approve_proposal(
+                    proposal_id,
+                    proposal_hash or f"HASH-{proposal_id}",
+                    extra_fields.get("approved_at")
+                    or datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    extra_fields.get("expires_at"),
+                )
+            if new_status == "REJECTED":
+                return self.stdb.reject_proposal(proposal_id)
+            if new_status == "ASSIGNED":
+                assigned_node_id = extra_fields.get("assigned_node_id")
+                assignment_expires_at = extra_fields.get("assignment_expires_at")
+                if not assigned_node_id or not assignment_expires_at:
+                    return False
+                hub_signature = extra_fields.get("hub_signature") or proposal.get("hub_signature")
+                if not hub_signature:
+                    hub_signature = f"SIG-{(proposal_hash or proposal_id)[:16]}"
+                return self.stdb.assign_proposal(
+                    proposal_id,
+                    assigned_node_id,
+                    assignment_expires_at,
+                    hub_signature,
+                    proposal_hash or f"HASH-{proposal_id}",
+                    int(extra_fields.get("attempt_count") or proposal.get("attempt_count") or 0),
+                    extra_fields.get("eligibility_snapshot"),
+                )
+            if new_status == "QUEUED":
+                return self.stdb.queue_proposal(
+                    proposal_id,
+                    extra_fields.get("eligibility_snapshot"),
+                )
+            if new_status == "EXPIRED":
+                return self.stdb.expire_proposal(
+                    proposal_id,
+                    extra_fields.get("eligibility_snapshot"),
+                )
+            if new_status == "CLAIMED":
+                claimed = self.stdb.claim_proposal(
+                    proposal_id,
+                    extra_fields.get("node_id") or proposal.get("assigned_node_id") or "",
+                    extra_fields.get("claimed_at"),
+                    extra_fields.get("lease_expires_at"),
+                )
+                return claimed is not None
+            return False
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -2520,49 +2847,61 @@ class Database:
         Get nodes that are ONLINE and match the required capabilities.
         Returns list of node dicts.
         """
+        if self.state_backend == "spacetimedb" and self.stdb:
+            return self._filter_eligible_nodes(
+                self.stdb.list_nodes(status="ONLINE"),
+                requires,
+                privilege_tier,
+            )
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
             # Get ONLINE nodes
             self._exec(cursor, "SELECT * FROM nodes WHERE status = 'ONLINE'")
             nodes = self._rows_to_dicts(cursor.fetchall(), cursor)
-
-            eligible = []
-            for n in nodes:
-                # Check privilege tier
-                node_priv = n.get("privilege_tier") or "cloud_safe"
-                if (
-                    privilege_tier == "privileged_local"
-                    and node_priv != "privileged_local"
-                ):
-                    continue  # Need privileged, node is not
-
-                # Check capabilities
-                caps_json = n.get("capabilities_json") or "[]"
-                try:
-                    caps = (
-                        json.loads(caps_json)
-                        if isinstance(caps_json, str)
-                        else caps_json
-                    )
-                except:
-                    caps = []
-
-                if all(r in caps for r in requires):
-                    eligible.append(n)
-
-            return eligible
+            return self._filter_eligible_nodes(nodes, requires, privilege_tier)
         finally:
             conn.close()
 
-    def assign_proposal_to_node(self, proposal_id, node_id, assignment_expires_at):
+    def assign_proposal_to_node(
+        self,
+        proposal_id,
+        node_id,
+        assignment_expires_at,
+        proposal_hash=None,
+        hub_signature=None,
+        attempt_count=None,
+        eligibility_snapshot=None,
+    ):
         """Assign a proposal to a specific node."""
+        if self.state_backend == "spacetimedb" and self.stdb:
+            proposal = self.get_proposal(proposal_id) or {}
+            payload_str = proposal.get("payload") or ""
+            if not isinstance(payload_str, str):
+                payload_str = json.dumps(payload_str, sort_keys=True)
+            proposal_hash = proposal_hash or proposal.get("proposal_hash")
+            if not proposal_hash and payload_str:
+                proposal_hash = hashlib.sha256(payload_str.encode("utf-8")).hexdigest()
+            hub_signature = hub_signature or proposal.get("hub_signature") or f"SIG-{(proposal_hash or proposal_id)[:16]}"
+            return self.stdb.assign_proposal(
+                proposal_id,
+                node_id,
+                assignment_expires_at,
+                hub_signature,
+                proposal_hash or f"HASH-{proposal_id}",
+                int(attempt_count or proposal.get("attempt_count") or 0),
+                eligibility_snapshot,
+            )
         return self.transition_proposal_status(
             proposal_id,
             "ASSIGNED",
             {
                 "assigned_node_id": node_id,
                 "assignment_expires_at": assignment_expires_at,
+                "proposal_hash": proposal_hash,
+                "hub_signature": hub_signature,
+                "attempt_count": attempt_count,
+                "eligibility_snapshot": eligibility_snapshot,
             },
         )
 
@@ -2576,6 +2915,39 @@ class Database:
         Transition to CLAIMED with lease token.
         Returns list of claimed proposal dicts.
         """
+        if self.state_backend == "spacetimedb" and self.stdb:
+            claimed = []
+            now = datetime.datetime.now(datetime.timezone.utc)
+            now_iso = now.isoformat()
+            rows = self.stdb.query(
+                "SELECT * FROM proposals "
+                "WHERE status = 'ASSIGNED' "
+                f"AND assigned_node_id = '{self.stdb._escape_sql_literal(node_id)}' "
+                f"AND assignment_expires_at > '{self.stdb._escape_sql_literal(now_iso)}' "
+                "AND hub_signature <> '' "
+                "ORDER BY created_at ASC "
+                f"LIMIT {int(max_items)}"
+            )
+            for row in rows:
+                lease_expires = (now + datetime.timedelta(minutes=30)).isoformat()
+                updated = self.stdb.claim_proposal(
+                    row["proposal_id"],
+                    node_id,
+                    now_iso,
+                    lease_expires,
+                )
+                if not updated:
+                    continue
+                lease_data = self._issue_stdb_capability_lease(
+                    updated,
+                    node_id,
+                    updated.get("lease_expires_at") or lease_expires,
+                )
+                if lease_data:
+                    updated["lease_id"] = lease_data["lease_id"]
+                    updated["lease_token"] = lease_data["lease_id"]
+                claimed.append(updated)
+            return claimed
         conn = self.get_connection()
         cursor = conn.cursor()
         claimed = []
@@ -2661,6 +3033,8 @@ class Database:
         Get proposals that are APPROVED or QUEUED and not expired.
         Used by router tick.
         """
+        if self.state_backend == "spacetimedb" and self.stdb:
+            return self.stdb.get_routable_proposals()
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -2681,6 +3055,11 @@ class Database:
 
     def expire_proposal(self, proposal_id, reason=None):
         """Transition a proposal to EXPIRED status."""
+        if self.state_backend == "spacetimedb" and self.stdb:
+            return self.stdb.expire_proposal(
+                proposal_id,
+                {"expired_reason": reason or "no_eligible_nodes"},
+            )
         return self.transition_proposal_status(
             proposal_id,
             "EXPIRED",

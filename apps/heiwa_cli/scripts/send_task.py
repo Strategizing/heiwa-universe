@@ -19,9 +19,10 @@ if str(ROOT / "apps") not in sys.path:
 
 import nats
 from heiwa_protocol.protocol import Subject, Payload
+from heiwa_sdk.config import settings
 
 async def send_command(instruction: str, node_id: str):
-    nats_url = os.getenv("NATS_URL", "nats://localhost:4222")
+    nats_url = settings.NATS_URL
     try:
         nc = await nats.connect(nats_url)
     except Exception as e:
@@ -33,7 +34,6 @@ async def send_command(instruction: str, node_id: str):
     # Wrap in Protocol
     token = os.getenv("HEIWA_AUTH_TOKEN")
     if not token:
-        from heiwa_sdk.config import settings
         token = getattr(settings, "HEIWA_AUTH_TOKEN", "")
 
     payload = {

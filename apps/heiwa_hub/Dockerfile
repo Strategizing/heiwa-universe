@@ -39,13 +39,6 @@ RUN apt-get update && apt-get install -y \
 # Copy venv from builder
 COPY --from=builder /opt/venv /opt/venv
 
-# Install NATS server
-ENV NATS_VERSION=2.10.14
-RUN curl -L https://github.com/nats-io/nats-server/releases/download/v${NATS_VERSION}/nats-server-v${NATS_VERSION}-linux-amd64.tar.gz -o nats.tar.gz && \
-    tar xzf nats.tar.gz && \
-    mv nats-server-v${NATS_VERSION}-linux-amd64/nats-server /usr/local/bin/ && \
-    rm -rf nats-server-v${NATS_VERSION}-linux-amd64 nats.tar.gz
-
 # Install SpacetimeDB CLI
 RUN curl -L "https://github.com/clockworklabs/SpacetimeDB/releases/download/v2.0.3/spacetime-x86_64-unknown-linux-gnu.tar.gz" -o spacetime.tar.gz && \
     tar -xzf spacetime.tar.gz && \
@@ -67,8 +60,8 @@ RUN chmod +x /app/start.sh
 # Cloud Identity
 RUN echo '{"uuid": "heiwa-cloud-hq", "role": "orchestrator", "capabilities": ["routing", "discord"]}' > identity.json
 
-# Expose ports
-EXPOSE 8080 4222 8000
+# Expose hub port
+EXPOSE 8080
 
 # Entrypoint
 CMD ["bash", "/app/start.sh"]
