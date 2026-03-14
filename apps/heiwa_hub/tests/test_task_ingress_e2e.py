@@ -19,6 +19,7 @@ async def _bind_runtime(spine, executor) -> None:
 
     await spine.listen(Subject.CORE_REQUEST, spine.handle_request)
     await spine.listen(Subject.NODE_HEARTBEAT, spine.handle_heartbeat)
+    await spine.listen(Subject.TASK_APPROVAL_DECISION, spine.handle_approval_decision)
     await executor.listen(Subject.TASK_EXEC, executor._handle_exec)
     await executor.listen(Subject.TASK_EXEC_REQUEST_CODE, executor._handle_exec)
     await executor.listen(Subject.TASK_EXEC_REQUEST_RESEARCH, executor._handle_exec)

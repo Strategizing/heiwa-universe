@@ -149,6 +149,12 @@ async def _stream_task_result(hub_url: str, task_id: str, token: str = "", timeo
 
                 if status in {"ACKNOWLEDGED", "DISPATCHED_PLAN", "DISPATCHED_FALLBACK"}:
                     _trace(f"{status}: {event.get('message', '')}")
+                elif status == "AWAITING_APPROVAL":
+                    print(f"Awaiting approval for {task_id}. Use `heiwa approve {task_id}` or `heiwa reject {task_id}`.")
+                    return 2
+                elif status in {"REJECTED", "EXPIRED"}:
+                    print(f"[HEIWA] {status}: {event.get('message', event.get('summary', ''))}")
+                    return 1
                 elif status in {"DELIVERED", "PASS"}:
                     summary = event.get("summary", "")
                     rendered = _render_direct_output(summary) if summary else ""
@@ -206,6 +212,12 @@ async def _poll_task_result(hub_url: str, task_id: str, token: str = "", timeout
                 if summary:
                     print(_render_direct_output(summary))
                 return 0
+            if status == "AWAITING_APPROVAL":
+                print(f"Awaiting approval for {task_id}. Use `heiwa approve {task_id}` or `heiwa reject {task_id}`.")
+                return 2
+            if status in {"REJECTED", "EXPIRED"}:
+                print(f"[HEIWA] {status}: {summary or 'approval rejected'}")
+                return 1
             if status in {"FAIL", "ERROR", "BLOCKED_AUTH", "BLOCKED_NO_CONTENT"}:
                 print(f"[HEIWA] {status}: {summary or 'task failed'}")
                 return 1

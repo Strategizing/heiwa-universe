@@ -25,6 +25,7 @@ from heiwa_sdk import (
 from heiwa_protocol.routing import BrokerRouteRequest
 
 from heiwa_hub.cognition.enrichment import BrokerEnrichmentService
+from heiwa_hub.cognition.approval import get_approval_registry
 from heiwa_hub.transport import get_bus, get_worker_manager
 from heiwa_protocol.protocol import Subject
 
@@ -37,6 +38,7 @@ db = Database()
 state = HubStateService(db)
 mcp_bridge = MCPBridge()
 enrichment = BrokerEnrichmentService()
+approvals = get_approval_registry()
 TASK_SNAPSHOTS: dict[str, dict[str, Any]] = {}
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -82,6 +84,9 @@ async def _record_status_event(envelope: Dict[str, Any]):
         "runtime": payload.get("runtime"),
         "step_id": payload.get("step_id"),
     }
+    if str(payload.get("status") or "").upper() in {"AWAITING_APPROVAL", "APPROVED", "REJECTED", "EXPIRED"}:
+        patch["approval_status"] = payload.get("status")
+        patch["approval_id"] = payload.get("approval_id")
     current = TASK_SNAPSHOTS.get(task_id, {})
     if not current.get("run_status"):
         patch["status"] = payload.get("status")
@@ -346,6 +351,11 @@ class TaskRequest(BaseModel):
     task_id: str | None = None
 
 
+class ApprovalDecisionRequest(BaseModel):
+    actor: str = "operator"
+    reason: str | None = None
+
+
 @app.post("/tasks")
 async def create_task(req: TaskRequest, authorization: str | None = Header(None)):
     """Authenticated task ingress. Enriches once here — Spine skips re-enrichment."""
@@ -368,23 +378,18 @@ async def create_task(req: TaskRequest, authorization: str | None = Header(None)
     # Publish to local bus — include auth_token so Spine's barrier passes,
     # and include enrichment fields so Spine skips double-enrichment.
     bus = get_bus()
-    await bus.publish(Subject.CORE_REQUEST, {
+    route_payload = route.to_dict()
+    route_payload.update({
         "task_id": task_id,
         "raw_text": req.raw_text,
         "source": req.source_surface,
+        "source_surface": req.source_surface,
         "sender_id": req.sender_id,
+        "requested_by": req.sender_id,
         "auth_token": auth_token,
-        "intent_class": route.intent_class,
-        "target_runtime": route.target_runtime,
-        "target_tool": route.target_tool,
-        "target_model": route.target_model,
-        "compute_class": route.compute_class,
-        "assigned_worker": route.assigned_worker,
-        "risk_level": route.risk_level,
-        "privacy_level": route.privacy_level,
-        "normalization": route.normalization if hasattr(route, "normalization") else {},
         "_pre_enriched": True,
-    }, sender_id=req.sender_id)
+    })
+    await bus.publish(Subject.CORE_REQUEST, route_payload, sender_id=req.sender_id)
 
     _snapshot_task(
         task_id,
@@ -393,6 +398,8 @@ async def create_task(req: TaskRequest, authorization: str | None = Header(None)
         sender_id=req.sender_id,
         source_surface=req.source_surface,
         raw_text=req.raw_text,
+        risk_level=route.risk_level,
+        requires_approval=route.requires_approval,
     )
 
     return {
@@ -413,6 +420,102 @@ async def get_task(task_id: str, authorization: str | None = Header(None)):
         if run.get("proposal_id") == task_id or run.get("run_id", "").endswith(task_id):
             return run
     raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+
+
+def _serialize_approval(task_id: str) -> dict[str, Any] | None:
+    state = approvals.get_state(task_id)
+    if not state:
+        return None
+    payload = approvals.get_payload(task_id) or {}
+    return {
+        "task_id": task_id,
+        "status": state.status,
+        "created_at": state.created_at,
+        "expires_at": state.expires_at,
+        "decision_by": state.decision_by,
+        "decision_at": state.decision_at,
+        "reason": state.reason,
+        "approval_id": payload.get("approval_id") or f"approval-{task_id}",
+        "risk_level": payload.get("risk_level"),
+        "source_surface": payload.get("source_surface") or payload.get("source"),
+        "requested_by": payload.get("requested_by"),
+        "raw_text_excerpt": str(payload.get("raw_text") or "")[:200],
+    }
+
+
+@app.get("/approvals")
+async def list_approvals(status: str | None = None, authorization: str | None = Header(None)):
+    _validate_auth_token(authorization)
+    items = []
+    for state in approvals.list_states(status=status):
+        serialized = _serialize_approval(state.task_id)
+        if serialized:
+            items.append(serialized)
+    return {"approvals": items}
+
+
+async def _submit_approval_decision(
+    task_id: str,
+    *,
+    approved: bool,
+    request: ApprovalDecisionRequest,
+    authorization: str | None,
+) -> dict[str, Any]:
+    _validate_auth_token(authorization)
+    state = approvals.get_state(task_id)
+    if not state:
+        raise HTTPException(status_code=404, detail=f"No pending approval for {task_id}")
+    if state.status != "PENDING":
+        serialized = _serialize_approval(task_id)
+        return serialized or {"task_id": task_id, "status": state.status}
+
+    applied = approvals.decide(
+        task_id,
+        approved=approved,
+        actor=request.actor,
+        reason=request.reason,
+    )
+    if not applied:
+        raise HTTPException(status_code=404, detail=f"No pending approval for {task_id}")
+
+    bus = get_bus()
+    await bus.publish(Subject.TASK_APPROVAL_DECISION, {
+        "task_id": task_id,
+        "approved": approved,
+        "actor": request.actor,
+        "reason": request.reason,
+        "_state_applied": True,
+    }, sender_id=request.actor or "operator")
+    serialized = _serialize_approval(task_id)
+    return serialized or {"task_id": task_id, "status": applied.status}
+
+
+@app.post("/tasks/{task_id}/approve")
+async def approve_task(
+    task_id: str,
+    request: ApprovalDecisionRequest,
+    authorization: str | None = Header(None),
+):
+    return await _submit_approval_decision(
+        task_id,
+        approved=True,
+        request=request,
+        authorization=authorization,
+    )
+
+
+@app.post("/tasks/{task_id}/reject")
+async def reject_task(
+    task_id: str,
+    request: ApprovalDecisionRequest,
+    authorization: str | None = Header(None),
+):
+    return await _submit_approval_decision(
+        task_id,
+        approved=False,
+        request=request,
+        authorization=authorization,
+    )
 
 
 @app.websocket("/ws/tasks/{task_id}")

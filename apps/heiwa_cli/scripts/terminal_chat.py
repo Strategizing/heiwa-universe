@@ -266,6 +266,17 @@ class HeiwaShell:
                     if status in {"ACKNOWLEDGED", "DISPATCHED_PLAN", "DISPATCHED_FALLBACK"}:
                         self.last_status = status.lower()
                         console.print(f"[dim]{event.get('message', status)}[/dim]")
+                    elif status == "AWAITING_APPROVAL":
+                        self.last_status = "awaiting_approval"
+                        console.print(
+                            f"[yellow]Awaiting approval for {task_id}.[/yellow] "
+                            f"[dim]Use `heiwa approve {task_id}` or `heiwa reject {task_id}`.[/dim]"
+                        )
+                        return
+                    elif status in {"REJECTED", "EXPIRED"}:
+                        self.last_status = status.lower()
+                        console.print(f"[yellow]{status}: {_render_output_text(event.get('message', '')) or 'approval halted execution'}[/yellow]")
+                        return
                     elif status in {"DELIVERED", "PASS"}:
                         self.last_status = "pass"
                         summary = event.get("summary", "")
@@ -307,6 +318,17 @@ class HeiwaShell:
                     self.last_status = "pass"
                     if summary:
                         console.print(Panel(Markdown(_render_output_text(summary)), border_style="green"))
+                    return
+                if status == "AWAITING_APPROVAL":
+                    self.last_status = "awaiting_approval"
+                    console.print(
+                        f"[yellow]Awaiting approval for {task_id}.[/yellow] "
+                        f"[dim]Use `heiwa approve {task_id}` or `heiwa reject {task_id}`.[/dim]"
+                    )
+                    return
+                if status in {"REJECTED", "EXPIRED"}:
+                    self.last_status = status.lower()
+                    console.print(f"[yellow]{status}: {_render_output_text(summary) or 'approval halted execution'}[/yellow]")
                     return
                 if status in {"FAIL", "ERROR", "BLOCKED_AUTH", "BLOCKED_NO_CONTENT"}:
                     self.last_status = status.lower()

@@ -1,16 +1,16 @@
 import asyncio
 import logging
-import os
 import time
 import uuid
 from typing import Dict
 
 from heiwa_hub.agents.base import BaseAgent
+from heiwa_hub.cognition.approval import auto_approved, get_approval_registry
 from heiwa_hub.cognition.planner import LocalTaskPlanner
 from heiwa_hub.cognition.enrichment import BrokerEnrichmentService
 from heiwa_hub.cognition.intent_normalizer import IntentProfile
 from heiwa_hub.transport import get_worker_manager
-from heiwa_protocol.protocol import Subject, Payload
+from heiwa_protocol.protocol import Subject
 from heiwa_protocol.routing import BROKER_ENVELOPE_VERSION, BrokerRouteRequest, BrokerRouteResult
 
 logger = logging.getLogger("Spine")
@@ -22,6 +22,8 @@ class SpineAgent(BaseAgent):
         self.fleet_registry: Dict[str, float] = {}
         self.planner = LocalTaskPlanner()
         self.enrichment = BrokerEnrichmentService()
+        self.approvals = get_approval_registry()
+        self._approval_timers: Dict[str, asyncio.Task] = {}
 
     async def run(self):
         await self.start()
@@ -29,12 +31,14 @@ class SpineAgent(BaseAgent):
         await self.listen(Subject.NODE_HEARTBEAT, self.handle_heartbeat)
         await self.listen(Subject.CORE_REQUEST, self.handle_request)
         await self.listen(Subject.TASK_NEW, self.handle_request)
+        await self.listen(Subject.TASK_APPROVAL_DECISION, self.handle_approval_decision)
 
         logger.info("Spine active. Monitoring fleet...")
 
         try:
             while self.running:
                 self._prune_registry()
+                self.approvals.prune()
                 if self.fleet_registry:
                     logger.info("Fleet: %d active node(s).", len(self.fleet_registry))
                 await asyncio.sleep(10)
@@ -76,6 +80,8 @@ class SpineAgent(BaseAgent):
         payload = extract_payload(data)
         task_id = payload.get("task_id", f"task-{int(time.time())}")
         dispatch_status_code = "DISPATCHED_PLAN"
+        payload["source_surface"] = payload.get("source_surface") or payload.get("source") or "cli"
+        payload["requested_by"] = payload.get("requested_by") or sender_id
 
         # --- BROKER ENRICHMENT (skip if already enriched by /tasks endpoint) ---
         if payload.get("_pre_enriched"):
@@ -122,17 +128,14 @@ class SpineAgent(BaseAgent):
         logger.info("Received task envelope: %s (Task: %s)", intent, task_id)
 
         # ACK
-        await self.speak(Subject.TASK_STATUS, {
-            "accepted": True,
-            "reason": None,
-            "task_id": task_id,
-            "step_id": "spine-orchestrator",
-            "status": "ACKNOWLEDGED",
-            "message": f"Spine accepted '{task_id}' for '{intent}'.",
-            "runtime": "spine",
-            "response_channel_id": payload.get("response_channel_id"),
-            "response_thread_id": payload.get("response_thread_id"),
-        })
+        await self._emit_task_status(
+            payload,
+            task_id=task_id,
+            step_id="spine-orchestrator",
+            status="ACKNOWLEDGED",
+            message=f"Spine accepted '{task_id}' for '{intent}'.",
+            accepted=True,
+        )
 
         # --- DISPATCH STEPS ---
         steps = payload.get("steps") or []
@@ -148,17 +151,112 @@ class SpineAgent(BaseAgent):
                 }]
                 dispatch_status_code = "DISPATCHED_FALLBACK"
             else:
-                await self.speak(Subject.TASK_STATUS, {
-                    "accepted": False,
-                    "reason": "No executable content found in task.",
-                    "task_id": task_id,
-                    "step_id": "spine-orchestrator",
-                    "status": "BLOCKED_NO_CONTENT",
-                    "message": "No executable content found in task.",
-                    "runtime": "spine",
-                })
+                await self._emit_task_status(
+                    payload,
+                    task_id=task_id,
+                    step_id="spine-orchestrator",
+                    status="BLOCKED_NO_CONTENT",
+                    message="No executable content found in task.",
+                    accepted=False,
+                    reason="No executable content found in task.",
+                )
                 return
 
+        payload["steps"] = steps
+
+        if self._requires_manual_approval(payload):
+            await self._hold_for_approval(task_id, payload)
+            return
+
+        await self._dispatch_steps(payload, task_id, intent, dispatch_status_code)
+
+    async def handle_approval_decision(self, data: dict):
+        payload = data.get("data", data)
+        task_id = str(payload.get("task_id") or "").strip()
+        if not task_id:
+            return
+
+        prior_state = self.approvals.get_state(task_id)
+        if not prior_state:
+            await self._emit_task_status(
+                payload,
+                task_id=task_id,
+                step_id="approval-gate",
+                status="APPROVAL_NOT_FOUND",
+                message=f"No pending approval found for {task_id}.",
+                accepted=False,
+                reason="Approval not found.",
+            )
+            return
+
+        if prior_state.status == "PENDING":
+            if payload.get("_state_applied"):
+                state = prior_state
+            else:
+                approved = self._payload_is_approved(payload)
+                actor = str(payload.get("actor") or payload.get("decision_by") or "operator")
+                reason = payload.get("reason")
+                state = self.approvals.decide(task_id, approved=approved, actor=actor, reason=reason)
+        else:
+            state = prior_state
+
+        if not state:
+            return
+
+        self._cancel_approval_timer(task_id)
+        held_payload = self.approvals.get_payload(task_id) or payload
+
+        if state.status == "APPROVED":
+            exec_payload = self.approvals.consume_payload(task_id) or held_payload
+            await self._emit_task_status(
+                exec_payload,
+                task_id=task_id,
+                step_id="approval-gate",
+                status="APPROVED",
+                message=f"Approval granted for {task_id}. Resuming execution.",
+                accepted=True,
+            )
+            await self._dispatch_steps(
+                exec_payload,
+                task_id,
+                exec_payload.get("intent_class", "unknown"),
+                "DISPATCHED_PLAN",
+            )
+            return
+
+        if state.status == "REJECTED":
+            self.approvals.consume_payload(task_id)
+            await self._emit_task_status(
+                held_payload,
+                task_id=task_id,
+                step_id="approval-gate",
+                status="REJECTED",
+                message=f"Approval rejected for {task_id}.",
+                accepted=False,
+                reason=state.reason or "Rejected by operator.",
+            )
+            return
+
+        if state.status == "EXPIRED":
+            self.approvals.consume_payload(task_id)
+            await self._emit_task_status(
+                held_payload,
+                task_id=task_id,
+                step_id="approval-gate",
+                status="EXPIRED",
+                message=f"Approval expired for {task_id}.",
+                accepted=False,
+                reason=state.reason or "Approval timed out.",
+            )
+
+    async def _dispatch_steps(
+        self,
+        payload: dict,
+        task_id: str,
+        intent: str,
+        dispatch_status_code: str,
+    ) -> None:
+        steps = payload.get("steps") or []
         for step in steps:
             if not isinstance(step, dict):
                 continue
@@ -205,17 +303,109 @@ class SpineAgent(BaseAgent):
                 await self.speak(Subject.TASK_EXEC, exec_payload)
                 logger.info("Dispatched %s/%s to local executor", task_id, step_id)
 
-            await self.speak(Subject.TASK_STATUS, {
-                "accepted": True,
-                "reason": None,
-                "task_id": task_id,
-                "step_id": step_id,
-                "status": dispatch_status_code,
-                "message": f"Spine dispatched step {step_id}.",
-                "runtime": "spine",
-                "response_channel_id": payload.get("response_channel_id"),
-                "response_thread_id": payload.get("response_thread_id"),
-            })
+            await self._emit_task_status(
+                payload,
+                task_id=task_id,
+                step_id=step_id,
+                status=dispatch_status_code,
+                message=f"Spine dispatched step {step_id}.",
+                accepted=True,
+            )
+
+    def _requires_manual_approval(self, payload: dict) -> bool:
+        if not payload.get("requires_approval"):
+            return False
+        source_surface = payload.get("source_surface") or payload.get("source") or "cli"
+        risk_level = payload.get("risk_level") or "low"
+        return not auto_approved(str(source_surface), str(risk_level))
+
+    async def _hold_for_approval(self, task_id: str, payload: dict) -> None:
+        approval_id = str(payload.get("approval_id") or f"approval-{task_id}")
+        stored_payload = dict(payload)
+        stored_payload["approval_id"] = approval_id
+        state = self.approvals.add(task_id, stored_payload)
+
+        await self.speak(Subject.TASK_APPROVAL_REQUEST, {
+            "task_id": task_id,
+            "approval_id": approval_id,
+            "status": state.status,
+            "risk_level": stored_payload.get("risk_level"),
+            "source_surface": stored_payload.get("source_surface"),
+            "requested_by": stored_payload.get("requested_by"),
+            "raw_text_excerpt": str(stored_payload.get("raw_text") or "")[:200],
+            "expires_at": state.expires_at,
+            "response_channel_id": stored_payload.get("response_channel_id"),
+            "response_thread_id": stored_payload.get("response_thread_id"),
+        })
+        await self._emit_task_status(
+            stored_payload,
+            task_id=task_id,
+            step_id="approval-gate",
+            status="AWAITING_APPROVAL",
+            message=f"Task {task_id} is awaiting approval.",
+            accepted=True,
+        )
+        self._schedule_approval_timeout(task_id)
+
+    def _schedule_approval_timeout(self, task_id: str) -> None:
+        self._cancel_approval_timer(task_id)
+        state = self.approvals.get_state(task_id)
+        if not state:
+            return
+
+        async def _timeout_watch() -> None:
+            await asyncio.sleep(max(0.0, state.expires_at - time.time()))
+            current = self.approvals.expire(task_id)
+            if not current or current.status != "EXPIRED":
+                return
+            held_payload = self.approvals.consume_payload(task_id) or {}
+            await self._emit_task_status(
+                held_payload,
+                task_id=task_id,
+                step_id="approval-gate",
+                status="EXPIRED",
+                message=f"Approval expired for {task_id}.",
+                accepted=False,
+                reason=current.reason or "Approval timed out.",
+            )
+
+        self._approval_timers[task_id] = asyncio.create_task(_timeout_watch())
+
+    def _cancel_approval_timer(self, task_id: str) -> None:
+        timer = self._approval_timers.pop(task_id, None)
+        if timer and not timer.done():
+            timer.cancel()
+
+    async def _emit_task_status(
+        self,
+        payload: dict,
+        *,
+        task_id: str,
+        step_id: str,
+        status: str,
+        message: str,
+        accepted: bool,
+        reason: str | None = None,
+    ) -> None:
+        await self.speak(Subject.TASK_STATUS, {
+            "accepted": accepted,
+            "reason": reason,
+            "task_id": task_id,
+            "step_id": step_id,
+            "status": status,
+            "message": message,
+            "runtime": "spine",
+            "response_channel_id": payload.get("response_channel_id"),
+            "response_thread_id": payload.get("response_thread_id"),
+            "approval_id": payload.get("approval_id"),
+        })
+
+    @staticmethod
+    def _payload_is_approved(payload: dict) -> bool:
+        if "approved" in payload:
+            return bool(payload.get("approved"))
+        decision = str(payload.get("decision") or "").strip().lower()
+        return decision in {"approve", "approved", "true", "1", "yes"}
 
     def _enrich_via_broker(self, payload: dict, task_id: str, sender_id: str) -> BrokerRouteResult:
         """Direct call to BrokerEnrichmentService — no NATS round-trip."""

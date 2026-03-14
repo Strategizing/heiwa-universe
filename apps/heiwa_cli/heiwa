@@ -161,6 +161,29 @@ def _fetch_json(url: str, headers: dict[str, str] | None = None, timeout: float 
         return None, str(exc)
 
 
+def _post_json(path: str, payload: dict[str, object], timeout: float = 10.0) -> tuple[str | None, dict | None, str | None]:
+    auth_token = os.getenv("HEIWA_AUTH_TOKEN") or getattr(settings, "HEIWA_AUTH_TOKEN", "") or ""
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": "HeiwaCLI/2.1",
+        "Authorization": f"Bearer {auth_token}",
+    }
+    body = json.dumps(payload).encode()
+    last_error = "no hub candidates configured"
+    for candidate in hub_url_candidates():
+        req = urllib_request.Request(f"{candidate}{path}", data=body, headers=headers, method="POST")
+        try:
+            with urllib_request.urlopen(req, timeout=timeout) as resp:
+                return candidate, json.loads(resp.read().decode()), None
+        except urllib_error.HTTPError as exc:
+            detail = exc.read().decode(errors="ignore").strip()
+            last_error = f"HTTP {exc.code}{(': ' + detail[:160]) if detail else ''}"
+        except Exception as exc:
+            last_error = str(exc)
+    return None, None, last_error
+
+
 def _probe_hub_candidates() -> tuple[str, dict | None, str | None]:
     last_error = "no hub candidates configured"
     for candidate in hub_url_candidates():
@@ -315,6 +338,30 @@ def cmd_dispatch(args):
         pass
     except subprocess.CalledProcessError as e:
         sys.exit(e.returncode)
+
+
+def _cmd_approval_decision(args, approved: bool) -> None:
+    print_banner()
+    init_global_dir()
+    task_id = str(getattr(args, "task_id", "") or "").strip()
+    if not task_id:
+        console.print("[error]Missing task_id.[/error]")
+        sys.exit(1)
+    actor = _node_name()
+    payload = {"actor": actor, "reason": getattr(args, "reason", None)}
+    path = f"/tasks/{task_id}/{'approve' if approved else 'reject'}"
+    hub_url, response, error = _post_json(path, payload)
+    if not response:
+        console.print(f"[error]Approval request failed:[/error] {error or 'unknown error'}")
+        sys.exit(1)
+    status = str(response.get("status", "UNKNOWN"))
+    console.print(
+        Panel(
+            f"Task: [bold]{task_id}[/bold]\nStatus: [cyan]{status}[/cyan]\nHub: {hub_url or 'unknown'}",
+            title="Approval Decision",
+            border_style="green" if approved else "yellow",
+        )
+    )
 
 def cmd_chat(args):
     """Launch the interactive Heiwa operator shell."""
@@ -493,6 +540,14 @@ def main():
     # Command: dispatch
     parser_dispatch = subparsers.add_parser("dispatch", help="One-shot task dispatch")
     parser_dispatch.add_argument("prompt", nargs="?", help="Prompt to dispatch")
+
+    parser_approve = subparsers.add_parser("approve", help="Approve a pending task")
+    parser_approve.add_argument("task_id", help="Pending task id")
+    parser_approve.add_argument("reason", nargs="?", help="Optional approval note")
+
+    parser_reject = subparsers.add_parser("reject", help="Reject a pending task")
+    parser_reject.add_argument("task_id", help="Pending task id")
+    parser_reject.add_argument("reason", nargs="?", help="Optional rejection note")
     
     # Command: handshake
     subparsers.add_parser("handshake", help="Validate hub connectivity and auth barrier")
@@ -549,6 +604,10 @@ def main():
         cmd_chat(args)
     elif args.command == "dispatch":
         cmd_dispatch(args)
+    elif args.command == "approve":
+        _cmd_approval_decision(args, approved=True)
+    elif args.command == "reject":
+        _cmd_approval_decision(args, approved=False)
     elif args.command == "handshake":
         cmd_handshake(args)
     elif args.command == "doctor":
