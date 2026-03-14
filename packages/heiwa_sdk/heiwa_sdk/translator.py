@@ -4,7 +4,7 @@ import json
 
 class HeiwaTranslator:
     """
-    Translates Natural Language into Sovereign Directives (NATS Subjects + JSON Payloads).
+    Translates Natural Language into Sovereign Directives (event keys + JSON payloads).
     """
 
     def __init__(self):

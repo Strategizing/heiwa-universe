@@ -3,8 +3,8 @@ description: "Canonical Heiwa cloud brain and ingress surface for the sovereign 
 version: "2026.03.06"
 permissions:
   - "discord:send"
-  - "nats:publish"
-  - "nats:subscribe"
+  - "hub:task_submit"
+  - "hub:task_stream"
 skills:
   - name: "discord"
     path: "skills/discord"

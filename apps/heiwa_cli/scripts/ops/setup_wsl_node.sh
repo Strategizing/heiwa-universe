@@ -39,7 +39,7 @@ if [[ ! -d ".venv" ]]; then
     python3 -m venv .venv
 fi
 .venv/bin/pip install --upgrade pip
-.venv/bin/pip install -r requirements.txt nats-py python-dotenv
+.venv/bin/pip install -r requirements.txt python-dotenv
 
 # 3.5 Setup OpenClaw (Handle potential 404)
 if ! command -v openclaw &>/dev/null; then

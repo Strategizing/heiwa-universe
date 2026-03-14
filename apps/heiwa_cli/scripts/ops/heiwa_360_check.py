@@ -5,7 +5,7 @@ Heiwa 360 Readiness Check (Enterprise v1.0)
 Validates:
 1) Monorepo structure and critical files
 2) Worker executors and wrappers
-3) Local service readiness (Ollama/NATS/OpenClaw gateway)
+3) Local service readiness (Ollama/OpenClaw gateway)
 4) Railway & Edge health (DNS resolution and HTTP pulse)
 5) Identity and Vault integrity
 """
@@ -138,12 +138,6 @@ def main() -> int:
         say("OK", "service", "ollama listening on 127.0.0.1:11434")
     else:
         say("WARN", "service", "ollama not listening")
-        warns += 1
-
-    if tcp_open("127.0.0.1", 4222):
-        say("OK", "service", "nats listening on 127.0.0.1:4222")
-    else:
-        say("WARN", "service", "local nats not listening (remote mesh may be active)")
         warns += 1
 
     # 5. Cloud & Edge Health

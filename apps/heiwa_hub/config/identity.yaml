@@ -28,7 +28,7 @@ system:
     - "SpacetimeDB as state layer"
     - "Railway as cloud host"
     - "Cheapest acceptable route first"
-    - "NATS is ephemeral, not durable state"
+    - "HTTP/WebSocket ingress with local bus transport"
 
   # Capabilities
   capabilities:
@@ -44,5 +44,5 @@ system:
     node_b: "Ryzen 7 7700X + RTX 3060 12 GB headless GPU worker"
     state_layer: "SpacetimeDB"
     cloud_host: "Railway"
-    messaging_bus: "NATS"
+    messaging_bus: "local_bus + websocket_workers"
     sandbox: "E2B or rootless Docker"

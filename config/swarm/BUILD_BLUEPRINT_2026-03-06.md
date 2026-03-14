@@ -9,13 +9,13 @@ This file is the repo-local operating digest for the March 6, 2026 Heiwa build r
 
 - State layer: SpacetimeDB.
 - Cloud host: Railway.
-- Messaging bus: NATS for ephemeral dispatch, heartbeats, and logs only.
+- Transport layer: HTTP/WebSocket ingress with in-process local bus for co-located agents and worker sessions.
 - Canonical monorepo: `/Users/dmcgregsauce/heiwa`.
 - Local-first execution for private or sovereign tasks.
 - No dedicated cloud GPU rental.
 - No stateless REST-only inference for multi-turn agentic sessions.
 - No 30B+ models on the M4 Pro.
-- No architecture that requires NATS to own durable state.
+- No architecture that requires an external message broker for core ingress or durable state.
 - Monthly fixed cloud floor target stays under `$40`.
 - WebSocket-first inference for all cloud-based multi-turn agentic sessions.
 - MCP Tool Shed: all agent-tool connectivity routes through MCP. No hard-coded API integrations in agent logic.
@@ -75,7 +75,7 @@ This file is the repo-local operating digest for the March 6, 2026 Heiwa build r
 3. Read `/Users/dmcgregsauce/heiwa/config/swarm/BUILD_BLUEPRINT_2026-03-06.md`.
 4. Read `/Users/dmcgregsauce/heiwa/config/swarm/ai_router.json`.
 5. Read `/Users/dmcgregsauce/heiwa/config/identities/profiles.json`.
-6. Subscribe to required NATS subjects.
+6. Verify authenticated hub ingress and worker session transport before accepting work.
 7. Verify SpacetimeDB connectivity before accepting work.
 8. Broadcast initial node heartbeat with compute capabilities.
 

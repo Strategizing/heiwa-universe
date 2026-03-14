@@ -15,7 +15,7 @@ load_env_file() {
             return 0
         fi
         case "$1" in
-            NATS_URL|OPENCLAW_*|PICOCLAW_*|GOOGLE_API_KEY|GROQ_API_KEY|CEREBRAS_API_KEY|OPENROUTER_API_KEY|MISTRAL_API_KEY|TOGETHER_API_KEY)
+            OPENCLAW_*|PICOCLAW_*|GOOGLE_API_KEY|GROQ_API_KEY|CEREBRAS_API_KEY|OPENROUTER_API_KEY|MISTRAL_API_KEY|TOGETHER_API_KEY)
                 return 0
                 ;;
             *)
@@ -59,19 +59,6 @@ fi
 
 export HEIWA_WORKSPACE_ROOT="${HEIWA_WORKSPACE_ROOT:-$ROOT}"
 export HEIWA_LLM_MODE="${HEIWA_LLM_MODE:-local_only}"
-
-# Force local worker bus by default.
-# Set HEIWA_USE_REMOTE_NATS=1 only when workers should use a reachable remote NATS.
-if [[ "${HEIWA_USE_REMOTE_NATS:-0}" == "1" ]]; then
-    export HEIWA_USE_LOCAL_MESH=0
-    export NATS_URL="${NATS_URL:-nats://127.0.0.1:4222}"
-else
-    if [[ -n "${NATS_URL:-}" ]]; then
-        echo "[INFO] Overriding NATS_URL for local worker bus"
-    fi
-    export HEIWA_USE_LOCAL_MESH=1
-    export NATS_URL="${HEIWA_LOCAL_NATS_URL:-nats://127.0.0.1:4222}"
-fi
 
 if [[ -x "$ROOT/.venv313/bin/python" ]]; then
     PYTHON_BIN="$ROOT/.venv313/bin/python"

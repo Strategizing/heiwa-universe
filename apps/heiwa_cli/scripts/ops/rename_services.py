@@ -16,7 +16,6 @@ RENAME_MAP = {
     "hub-api": "heiwa-core",
     "hub-bot": "heiwa-uplink",
     "heiwa-bot": "heiwa-uplink",
-    "nats": "heiwa-synapse",
     "Postgres": "heiwa-vault",
     "hub-cron": "heiwa-pulse",
     "hub-watchdog": "heiwa-sentry"

@@ -13,6 +13,11 @@ if [[ -z "$HEIWA_TOKEN" ]]; then
     HEIWA_TOKEN="faab5ce53c496715150d6aa96b5082b2"
 fi
 
+HEIWA_HUB_URL=$(grep '^HEIWA_HUB_URL=' .env.worker.local 2>/dev/null | cut -d'=' -f2- || true)
+if [[ -z "$HEIWA_HUB_URL" ]]; then
+    HEIWA_HUB_URL="https://api.heiwa.ltd"
+fi
+
 CAPS="standard_compute"
 if [[ "$NODE_TYPE" == "heavy_compute" ]]; then
     CAPS="heavy_compute,gpu_native,standard_compute"
@@ -26,8 +31,7 @@ HEIWA_NODE_ID=$NODE_ID
 HEIWA_NODE_TYPE=$NODE_TYPE
 HEIWA_CAPABILITIES=$CAPS
 HEIWA_AUTH_TOKEN=$HEIWA_TOKEN
-HEIWA_USE_REMOTE_NATS=1
-NATS_URL=$(grep NATS_URL .env.worker.local | cut -d'=' -f2-)
+HEIWA_HUB_URL=$HEIWA_HUB_URL
 HEIWA_LLM_MODE=local_only
 EOF
 )
@@ -50,5 +54,3 @@ else
     echo "3. Copy the env: cp .env.$NODE_ID .env.worker.local"
     echo "4. Run setup: ./apps/heiwa_cli/scripts/ops/install_worker_service.sh"
 fi
-
-

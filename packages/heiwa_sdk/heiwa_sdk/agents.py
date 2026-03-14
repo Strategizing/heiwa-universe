@@ -9,7 +9,7 @@ from heiwa_hub.config import IDENTITY
 class HeiwaAgent(ABC):
     """
     Base class for all Heiwa Sovereign Agents.
-    Handles NATS connectivity, identity context, and Moltbook logging.
+    Handles hub transport connectivity, identity context, and Moltbook logging.
     """
 
     def __init__(self, name: str, capabilities: list):
@@ -19,7 +19,7 @@ class HeiwaAgent(ABC):
         self.identity = {}
 
     async def connect_to_spine(self):
-        """Connects to the NATS Nervous System."""
+        """Connects to the active Heiwa transport layer."""
         await self.nerve.connect()
         print(f"[{self.name}] Integrated into Heiwa Nervous System.")
         # Load Identity Context
@@ -41,7 +41,7 @@ class HeiwaAgent(ABC):
         await self.nerve.publish_directive("heiwa.moltbook.logs", payload)
 
     async def listen_for_directives(self, subject: str):
-        """Subscribes to a NATS subject and routes to execute_directive."""
+        """Subscribes via the compatibility transport and routes to execute_directive."""
         async def handler(msg):
             data = json.loads(msg.data.decode())
             print(f"[{self.name}] Directive Received: {data}")
