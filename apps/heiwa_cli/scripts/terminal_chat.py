@@ -471,6 +471,35 @@ class HeiwaShell:
 
         console.print(t)
 
+        rate_groups = dict((public or {}).get("rate_groups") or {})
+        limited_groups = [
+            (name, data)
+            for name, data in rate_groups.items()
+            if isinstance(data, dict) and not data.get("unlimited")
+        ]
+        if limited_groups:
+            rt = Table(title="OAuth Rate Groups")
+            rt.add_column("Group")
+            rt.add_column("Used", justify="right")
+            rt.add_column("Avail", justify="center")
+            rt.add_column("Cooldown", justify="right")
+            ordered = sorted(
+                limited_groups,
+                key=lambda item: (
+                    bool(item[1].get("available", False)),
+                    -float(item[1].get("cooldown_remaining", 0) or 0),
+                    -(int(item[1].get("used", 0) or 0)),
+                ),
+            )
+            for group, data in ordered[:6]:
+                cooldown = float(data.get("cooldown_remaining", 0) or 0)
+                max_turns = int(data.get("max", 0) or 0)
+                used = int(data.get("used", 0) or 0)
+                available = "[green]yes[/green]" if data.get("available") else "[yellow]cooldown[/yellow]"
+                cooldown_text = f"{int(cooldown)}s" if cooldown > 0 else "—"
+                rt.add_row(group, f"{used}/{max_turns}", available, cooldown_text)
+            console.print(rt)
+
     # --- Main Loop ---
 
     async def run(self, initial_prompt: str = ""):

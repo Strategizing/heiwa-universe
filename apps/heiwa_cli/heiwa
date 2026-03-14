@@ -243,6 +243,7 @@ def cmd_status(args):
     console.print(Panel(table, title="[bold white]Systems Overlay[/bold white]", border_style="brand"))
 
     usage_summary = list((public_status or {}).get("usage_summary") or [])
+    rate_groups = dict((public_status or {}).get("rate_groups") or {})
     if usage_summary:
         usage_table = Table(title="Active Model Usage", box=box.ROUNDED, header_style="brand")
         usage_table.add_column("Model", style="cyan")
@@ -257,6 +258,34 @@ def cmd_status(args):
         console.print(usage_table)
     elif health:
         console.print("[dim]Hub reachable, but no recent usage is recorded yet.[/dim]")
+
+    limited_groups = [
+        (name, data)
+        for name, data in rate_groups.items()
+        if isinstance(data, dict) and not data.get("unlimited")
+    ]
+    if limited_groups:
+        rate_table = Table(title="OAuth Rate Groups", box=box.ROUNDED, header_style="brand")
+        rate_table.add_column("Group", style="cyan")
+        rate_table.add_column("Used", justify="right")
+        rate_table.add_column("Avail", justify="center")
+        rate_table.add_column("Cooldown", justify="right")
+        ordered = sorted(
+            limited_groups,
+            key=lambda item: (
+                bool(item[1].get("available", False)),
+                -float(item[1].get("cooldown_remaining", 0) or 0),
+                -(int(item[1].get("used", 0) or 0)),
+            ),
+        )
+        for group, data in ordered[:6]:
+            cooldown = float(data.get("cooldown_remaining", 0) or 0)
+            max_turns = int(data.get("max", 0) or 0)
+            used = int(data.get("used", 0) or 0)
+            available = "[green]yes[/green]" if data.get("available") else "[yellow]cooldown[/yellow]"
+            cooldown_text = f"{int(cooldown)}s" if cooldown > 0 else "—"
+            rate_table.add_row(group, f"{used}/{max_turns}", available, cooldown_text)
+        console.print(rate_table)
 
     if health_error or public_error:
         console.print("[dim]Tip: run[/dim] [bold]heiwa handshake[/bold] [dim]for a full authenticated ingress check.[/dim]")

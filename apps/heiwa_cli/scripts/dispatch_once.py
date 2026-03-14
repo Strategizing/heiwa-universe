@@ -29,6 +29,15 @@ from heiwa_sdk.operator_surface import maybe_fast_path_turn
 from heiwa_hub.cognition.enrichment import BrokerEnrichmentService
 
 
+def _trace_enabled() -> bool:
+    return str(os.getenv("HEIWA_TRACE", "")).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _trace(message: str) -> None:
+    if _trace_enabled():
+        print(f"[HEIWA] {message}")
+
+
 def _render_direct_output(output: str) -> str:
     text = str(output or "").strip()
     if not text:
@@ -68,11 +77,11 @@ async def _direct_execute(prompt: str, node_id: str, task_id: str, token: str) -
     gateway = HeiwaClawGateway(ROOT)
     dispatch = gateway.resolve(route)
 
-    print(
-        f"[HEIWA] Direct route: {route.intent_class} -> "
+    _trace(
+        f"Direct route: {route.intent_class} -> "
         f"{dispatch.provider or dispatch.adapter_tool} via {dispatch.adapter_tool}"
     )
-    print(f"[HEIWA] Rationale: {route.rationale}")
+    _trace(f"Rationale: {route.rationale}")
     exit_code, output = await gateway.execute(route, prompt)
     rendered = _render_direct_output(output)
     if rendered:
@@ -108,7 +117,7 @@ async def _submit_to_hub(prompt: str, node_id: str, task_id: str, hub_url: str, 
         resp = await client.post(f"{hub_url}/tasks", content=body, headers=headers)
         if resp.status_code == 200:
             return resp.json()
-        print(f"[HEIWA] Hub returned HTTP {resp.status_code}: {resp.text[:200]}")
+        _trace(f"Hub returned HTTP {resp.status_code}: {resp.text[:200]}")
         return None
 
 
@@ -139,7 +148,7 @@ async def _stream_task_result(hub_url: str, task_id: str, token: str = "", timeo
                     continue
 
                 if status in {"ACKNOWLEDGED", "DISPATCHED_PLAN", "DISPATCHED_FALLBACK"}:
-                    print(f"[HEIWA] {status}: {event.get('message', '')}")
+                    _trace(f"{status}: {event.get('message', '')}")
                 elif status in {"DELIVERED", "PASS"}:
                     summary = event.get("summary", "")
                     rendered = _render_direct_output(summary) if summary else ""
@@ -152,7 +161,7 @@ async def _stream_task_result(hub_url: str, task_id: str, token: str = "", timeo
                 else:
                     content = event.get("content") or event.get("message") or ""
                     if content:
-                        print(f"[HEIWA] {content}")
+                        _trace(content)
     except Exception as e:
         logging.getLogger("dispatch").debug("WS stream error: %s", e)
     return await _poll_task_result(hub_url, task_id, token=token, timeout=timeout)
@@ -220,17 +229,21 @@ async def dispatch_once(prompt: str, node_id: str):
             if result:
                 route = result.get("route", {})
                 accepted_id = result.get("task_id", task_id)
-                print(f"[HEIWA] Accepted by hub. Task: {accepted_id}")
+                _trace(f"Accepted by hub. Task: {accepted_id}")
                 if hub_url != hub_url_candidates()[0]:
-                    print(f"[HEIWA] Active hub fallback: {hub_url}")
-                print(f"[HEIWA] Route: {route.get('intent_class')} -> {route.get('target_tool')} ({route.get('target_model', 'default')})")
+                    _trace(f"Active hub fallback: {hub_url}")
+                _trace(
+                    "Route: "
+                    f"{route.get('intent_class')} -> {route.get('target_tool')} "
+                    f"({route.get('target_model', 'default')})"
+                )
                 exit_code = await _stream_task_result(hub_url, accepted_id, token=token)
                 sys.exit(exit_code)
         except Exception as e:
-            print(f"[HEIWA] Hub unreachable ({hub_url}): {e}")
+            _trace(f"Hub unreachable ({hub_url}): {e}")
 
     # Fallback to direct local execution
-    print("[HEIWA] Falling back to direct local route.")
+    _trace("Falling back to direct local route.")
     sys.exit(await _direct_execute(prompt, node_id, task_id, token))
 
 

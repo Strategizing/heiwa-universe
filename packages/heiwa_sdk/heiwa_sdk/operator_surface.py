@@ -5,11 +5,12 @@ import re
 
 
 WELCOME_SUGGESTIONS: tuple[str, ...] = (
+    "what should I work on next in Heiwa",
     "research how SpacetimeDB subscriptions work",
-    "fix the SQLite fallback in db.py",
-    "deploy the hub to Railway and report blockers",
-    "audit the repo for stale NATS artifacts",
-    "summarize Heiwa status and the next highest-leverage fix",
+    "fix the SQLite fallback in db.py and verify it",
+    "review the Railway deployment and report blockers",
+    "summarize Heiwa status and propose the next highest-leverage fix",
+    "deploy the hub and report the result",
 )
 
 

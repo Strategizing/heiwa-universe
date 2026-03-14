@@ -13,10 +13,4 @@ def __getattr__(name: str):
     if name == "HeartbeatAgent":
         from heiwa_hub.agents.test import HeartbeatAgent
         return HeartbeatAgent
-    if name == "OpenClaw":
-        from heiwa_hub.agents.openclaw import OpenClaw
-        return OpenClaw
-    if name == "Codex":
-        from heiwa_hub.agents.codex import Codex
-        return Codex
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
