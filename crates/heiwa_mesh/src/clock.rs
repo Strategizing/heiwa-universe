@@ -28,10 +28,7 @@ impl HybridLogicalClock {
                 counter: 0,
             }
         } else {
-            Self {
-                wall_ms: self.wall_ms,
-                counter: self.counter + 1,
-            }
+            Self::step(self.wall_ms, self.counter)
         }
     }
 
@@ -45,15 +42,38 @@ impl HybridLogicalClock {
             };
         }
         let counter = if self.wall_ms == remote.wall_ms {
-            self.counter.max(remote.counter) + 1
+            self.counter.max(remote.counter)
         } else if self.wall_ms > remote.wall_ms {
-            self.counter + 1
+            self.counter
         } else {
-            remote.counter + 1
+            remote.counter
         };
-        Self {
-            wall_ms: highest,
-            counter,
+        Self::step(highest, counter)
+    }
+
+    /// One logical step past `(wall_ms, counter)`, without overflowing.
+    ///
+    /// The counter is finite, so exhaustion needs a policy rather than a `+ 1`
+    /// that panics in debug builds and wraps to zero in release ones — wrapping
+    /// would sort the new stamp *before* the event it follows, which is the one
+    /// thing an HLC exists to prevent. The carry goes into the wall clock: a
+    /// millisecond later with a fresh counter is strictly greater, and it stays
+    /// within skew because a counter only reaches `u32::MAX` when four billion
+    /// events already shared a single millisecond.
+    fn step(wall_ms: u64, counter: u32) -> Self {
+        match counter.checked_add(1) {
+            Some(counter) => Self { wall_ms, counter },
+            None => match wall_ms.checked_add(1) {
+                Some(wall_ms) => Self {
+                    wall_ms,
+                    counter: 0,
+                },
+                // Both components saturated (~585 million years past the
+                // epoch). Hold the stamp rather than regress: no later value
+                // is representable, and standing still is survivable where
+                // going backwards is not.
+                None => Self { wall_ms, counter },
+            },
         }
     }
 }
@@ -128,6 +148,80 @@ mod tests {
         let next = local.observe(&remote, 900);
         assert_eq!(next.wall_ms, 900);
         assert_eq!(next.counter, 3);
+    }
+
+    #[test]
+    fn a_tick_with_an_exhausted_counter_carries_into_the_wall_clock() {
+        let clock = HybridLogicalClock {
+            wall_ms: 100,
+            counter: u32::MAX,
+        };
+        let next = clock.tick(100);
+        assert_eq!(next.wall_ms, 101, "the carry moves into the wall clock");
+        assert_eq!(next.counter, 0);
+        assert!(next > clock, "an exhausted counter must not wrap backwards");
+    }
+
+    #[test]
+    fn observing_an_exhausted_peer_counter_carries_into_the_wall_clock() {
+        let local = HybridLogicalClock {
+            wall_ms: 100,
+            counter: 0,
+        };
+        let remote = HybridLogicalClock {
+            wall_ms: 500,
+            counter: u32::MAX,
+        };
+        let next = local.observe(&remote, 120);
+        assert_eq!(next.wall_ms, 501);
+        assert_eq!(next.counter, 0);
+        assert!(next > remote, "receipt still happens after send");
+    }
+
+    #[test]
+    fn observing_with_our_own_counter_exhausted_carries_into_the_wall_clock() {
+        let local = HybridLogicalClock {
+            wall_ms: 900,
+            counter: u32::MAX,
+        };
+        let remote = HybridLogicalClock {
+            wall_ms: 100,
+            counter: 0,
+        };
+        let next = local.observe(&remote, 900);
+        assert_eq!(next.wall_ms, 901);
+        assert_eq!(next.counter, 0);
+        assert!(next > local);
+    }
+
+    #[test]
+    fn observing_a_shared_millisecond_with_both_counters_exhausted_still_advances() {
+        let local = HybridLogicalClock {
+            wall_ms: 700,
+            counter: u32::MAX,
+        };
+        let remote = HybridLogicalClock {
+            wall_ms: 700,
+            counter: u32::MAX,
+        };
+        let next = local.observe(&remote, 700);
+        assert_eq!(next.wall_ms, 701);
+        assert_eq!(next.counter, 0);
+        assert!(next > local && next > remote);
+    }
+
+    #[test]
+    fn a_fully_saturated_clock_holds_rather_than_regressing() {
+        let clock = HybridLogicalClock {
+            wall_ms: u64::MAX,
+            counter: u32::MAX,
+        };
+        let next = clock.tick(u64::MAX);
+        assert_eq!(
+            next, clock,
+            "with no later value representable, standing still beats going backwards"
+        );
+        assert_eq!(clock.observe(&clock, u64::MAX), clock);
     }
 
     #[test]
