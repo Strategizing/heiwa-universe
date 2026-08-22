@@ -243,6 +243,30 @@ changing `work_id` or rewriting history. `device_id` is never used as node
 identity. At the replication boundary, the mesh design's required node fields
 apply and unbound Work is refused.
 
+Work bound after the fact still has a history that predates any key. Those
+events cannot be individually signed, because no signer existed when they were
+written, and they must not be re-signed later: a signature over a pre-binding
+event would assert that a node authored something it did not, which is a false
+attestation rather than a migration. They are handled as an **attested
+prefix**:
+
+- `work_node_bound` carries `prior_history_digest`, computed over the ordered
+  pre-binding event prefix using the same chain digest as `MeshEnvelope`;
+- the binding node's signature covers that digest. It attests *"this
+  installation held this history at binding"*, never *"this node authored these
+  events"*;
+- pre-binding events replicate inside that prefix, attributed to
+  `origin_installation_id` and to no node. They carry no per-event signature
+  and are never presented as node-authored;
+- a receiving peer recomputes the prefix digest. A mismatch refuses the entire
+  Work rather than accepting a truncated or partial one, so a Work never
+  replicates with a silently missing beginning;
+- every event after `work_node_bound` is individually signed and chains onto
+  it, so `work_node_bound` is the chain genesis for node-attributed history.
+
+A peer may therefore reject a Work whose prefix it cannot verify, but it can
+never be handed one whose origin has been quietly rewritten.
+
 The local runtime persists Work as versioned operator-domain events through
 `OperatorSessionService`, preserving one local domain writer. The Work
 projector folds those events into the aggregate described by the mesh spec.
@@ -259,12 +283,19 @@ Migration is append-only:
 - new Work creates `work_id` before tasks, connector actions, Work-scoped
   browser control events, or outcome-scoped mesh envelopes are emitted;
 - new `Task.context_id` values equal `work_id`;
-- an existing thread receives one durable `work_linked` event with a generated
-  `work_id` when first promoted into Work;
-- when existing thread/task/connector evidence already carries one consistent,
-  valid `work_id`, migration adopts that ID after collision checks. Conflicting
-  historical IDs produce an explicit migration conflict and are never silently
-  merged;
+- promoting an existing thread resolves its `work_id` in a fixed order, and
+  the first matching rule wins:
+  1. **adopt** — when the thread's own task, connector, or evidence rows
+     already carry one consistent, valid `work_id`, migration adopts it after
+     collision checks;
+  2. **generate** — only when no such ID exists anywhere in that thread's
+     rows, migration mints a new `work_id`.
+  Generating while an adoptable ID exists would orphan the evidence that
+  already carries it, so the order is normative rather than advisory. Either
+  path emits exactly one durable `work_linked` event;
+- conflicting historical IDs on one thread produce an explicit migration
+  conflict. They are never silently merged and never resolved by minting a
+  third ID;
 - historical task or evidence rows are not rewritten. A migration projection
   retains their legacy context and links it to the new Work;
 - L3/L4 domain events associated with a user outcome require `work_id`.
@@ -306,7 +337,8 @@ The snapshot is a bounded baseline, not a payload resent after every event. It
 carries:
 
 - `work_revision`: durable Work aggregate revision;
-- `projection_revision`: monotonic revision of the materialized read model;
+- `projection_epoch`: identity of the current fold of the read model;
+- `projection_revision`: monotonic revision **within** that epoch;
 - `operator_cursor`: durable operator-stream replay boundary;
 - source watermarks for repository, terminal, GitHub, and connector
   projections;
@@ -318,6 +350,7 @@ After baseline load, the authenticated operator WebSocket carries
 ```text
 WorkSessionDeltaV1 {
   work_id,
+  projection_epoch,
   base_projection_revision,
   projection_revision,
   operator_cursor,
@@ -330,11 +363,21 @@ WorkSessionDeltaV1 {
 
 Durable changes advance the operator cursor. Transient provider tokens,
 terminal progress, and resource samples use disposable signal frames and never
-claim durable revision. Clients apply a delta only when
-`base_projection_revision` matches their current projection. A gap, invalid
-cursor, unknown required schema, or backpressure overflow yields
-`resync_required`; the client discards only its disposable projection and
-fetches a fresh snapshot.
+claim durable revision.
+
+`projection_revision` is **not durable across rebuilds**. The projector mints a
+new `projection_epoch` whenever it builds a fold — first start, restart,
+upgrade, schema change, or compaction — and the revision restarts inside it.
+Without the epoch, a client holding revision 3 could reconnect after a restart
+and accept a delta whose `base_projection_revision` is also 3 but which was
+derived from a different fold, silently merging two projections. That failure is
+invisible in the data, so it is excluded by construction rather than detected.
+
+Clients apply a delta only when **both** `projection_epoch` and
+`base_projection_revision` match their current projection. An epoch change, a
+revision gap, an invalid cursor, an unknown required schema, or backpressure
+overflow yields `resync_required`; the client discards only its disposable
+projection and fetches a fresh snapshot.
 
 Collections are stable-ID keyed, bounded, and paginated. Full terminal logs,
 file bodies, diffs, browser frames, and connector bodies load through separate
@@ -1027,6 +1070,9 @@ No generic framework work precedes the integrated product.
 | WF-R10 | Acceptance matrix was not connected to repository enforcement                   | Additive scripts, exact-HEAD stamps, ledgers, Stop-hook compatibility, and CI wiring are required |
 | WF-R11 | Browser target lifetime risked being coupled to Work lifetime                   | Targets remain node-owned resources; only Work-scoped control events require `work_id`            |
 | WF-R12 | Durable Work revision and renderer revision were conflated                      | `work_revision`, `projection_revision`, operator cursor, and source watermarks are distinct       |
+| WF-R13 | `projection_revision` reset on rebuild, so a stale client could merge two folds | `projection_epoch` is minted per fold; a delta applies only when epoch and base revision match    |
+| WF-R14 | Adopt and generate could both fire when promoting a thread, orphaning evidence  | Resolution order is normative: adopt an existing consistent `work_id`, generate only when absent  |
+| WF-R15 | Work bound after the fact had unsigned pre-binding history at the mesh boundary | `work_node_bound` attests a `prior_history_digest`; the prefix replicates unsigned and un-attributed, and a digest mismatch refuses the whole Work |
 
 ## Definition of Done
 
