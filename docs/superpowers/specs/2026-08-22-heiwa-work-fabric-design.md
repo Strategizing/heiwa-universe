@@ -1,9 +1,11 @@
 # Heiwa Work Fabric Design
 
 Date: 2026-08-22
-Status: approved architecture; implementation planning not started
+Status: Draft for review — architecture approved in conversation; written artifact approval pending
 Scope: Heiwa.app, local runtime, multi-repository work, provider agents, productivity context, GitHub collaboration, approvals, and evidence
 Planes: Intake, Execution, Evidence
+Supersedes: `2026-08-14-heiwa-app-product-roadmap-design.md` post-L3 sequencing and standalone placement of § L4; preserves its L4 browser ownership and safety requirements as Release D
+Preserves: accepted L0-L2 contracts and gates; `2026-08-18-L3-calendar-mail-connectors.md` as connector implementation authority; `2026-08-20-heiwa-mesh-runtime-design.md` as `Work`, node, and L5 authority
 
 ## Decision
 
@@ -20,10 +22,36 @@ integrated first-party product that joins:
 - the user's local models and provider-owned subscription or API runtimes;
 - exact approvals, artifacts, verification, and receipts.
 
-The durable user-facing unit is a **Work Session**. A Work Session is a
-read-only projection over the existing operator thread and associated runtime
-state. It may span multiple repositories and provider sessions without creating
-a second write authority.
+The durable coordination unit is **Work**, identified by `work_id` as defined by
+the mesh design. A **Work Session** is the user-facing, read-only projection of
+that Work, its operator threads, workspace, provider sessions, actions, and
+evidence. It may span multiple repositories, nodes, and provider sessions
+without making thread identity or a UI snapshot a second write authority.
+
+## Precedence and Roadmap Reconciliation
+
+This document is the broad product-sequencing authority after L3. It does not
+erase already accepted or implemented layers:
+
+- L0-L2 remain accepted prerequisites with their existing acceptance scripts
+  and SHA-bound stamps.
+- L3 remains governed by its connector spec and live ledger. The Mac-first
+  Apple Calendar lane is already complete through read, T2 approval, live
+  external write, receipt, and journal replay. Google Calendar remains blocked
+  on external account setup; `gmail.send` remains pending.
+- The roadmap's L4 product boundary is absorbed into Release D: a runtime-owned
+  browser service, Chromium sidecar, CDP target registry, dedicated Heiwa
+  profile, node-aware tab ownership, DREX/Action Gate policy, and receipts. The
+  specific screencast and packaging mechanism must pass the Release D spike and
+  may change only through an explicit spec amendment.
+- The mesh design remains authoritative for durable `Work`, `work_id`, node
+  identity, provider-session host affinity, control leases, replication, and
+  L5. This document defines how the local runtime creates and projects Work
+  before mesh transport exists.
+
+Where documents overlap, implementation details already proven at HEAD win
+over greenfield wording here. This spec changes sequencing and composition; it
+does not authorize rebuilding accepted capability.
 
 Compression:
 
@@ -122,6 +150,14 @@ parallel framework:
   producers.
 - Existing approvals, artifacts, receipts, provider adapters, worker leases,
   machine identity, node identity, and herdr pane bridges are starting seams.
+- L0-L2 acceptance gates are real and SHA-bound. They remain prerequisites,
+  not checks this program may replace.
+- L3's Mac-first Apple Calendar lane already supplies executable connector,
+  approval, `work_id`, external-ID, receipt, and replay mechanics. Productivity
+  releases extend that lane instead of creating another connector framework.
+- `MeshEnvelope.work_id` exists as an optional field because some mesh events
+  are not Work-scoped, but no general local `Work` producer exists yet. Release
+  A1 closes that producer gap.
 
 No surface may import another surface to mutate its state. No command handler,
 connector, or renderer path may create a second approval, evidence, session, or
@@ -192,13 +228,56 @@ commands, call connectors directly, or decide whether an action is approved.
 
 ## Core Domain Contracts
 
-### Work Session
+### Work, Thread, and Work Session Identity
 
-`WorkSessionSnapshotV1` is a read-only projection over one operator thread. It
+`Work` is the durable coordination aggregate. `work_id` is its stable primary
+identity across threads, tasks, repositories, provider sessions, nodes, and
+surfaces. `Work.revision` is monotonic; every mutating command supplies its
+expected revision, and stale writers must reload or deliberately replan.
+
+Fresh local work cannot depend on mesh enrollment. Before a node key exists,
+Work records `origin_installation_id`; `origin_node` and `coordinator_node` are
+absent, and the Work is ineligible for mesh replication. Enrollment appends a
+signed `work_node_bound` event that adds the cryptographic node identity without
+changing `work_id` or rewriting history. `device_id` is never used as node
+identity. At the replication boundary, the mesh design's required node fields
+apply and unbound Work is refused.
+
+The local runtime persists Work as versioned operator-domain events through
+`OperatorSessionService`, preserving one local domain writer. The Work
+projector folds those events into the aggregate described by the mesh spec.
+Mesh replication may later carry those events, but it does not introduce a
+second local writer.
+
+An operator thread is an interaction resource attached to Work, not Work's
+identity. V1 creates one primary thread atomically with `work_created`; the
+schema also carries `related_thread_ids` so review, handoff, or channel-specific
+threads can be added later without changing `work_id`.
+
+Migration is append-only:
+
+- new Work creates `work_id` before tasks, connector actions, Work-scoped
+  browser control events, or outcome-scoped mesh envelopes are emitted;
+- new `Task.context_id` values equal `work_id`;
+- an existing thread receives one durable `work_linked` event with a generated
+  `work_id` when first promoted into Work;
+- when existing thread/task/connector evidence already carries one consistent,
+  valid `work_id`, migration adopts that ID after collision checks. Conflicting
+  historical IDs produce an explicit migration conflict and are never silently
+  merged;
+- historical task or evidence rows are not rewritten. A migration projection
+  retains their legacy context and links it to the new Work;
+- L3/L4 domain events associated with a user outcome require `work_id`.
+  Capability, peer-health, and other system-wide events may remain unscoped,
+  which is why `MeshEnvelope.work_id` stays optional.
+
+`WorkSessionSnapshotV1` is a read-only projection keyed by `work_id`. It
 contains:
 
-- `session`: thread ID, title, objective, optional project reference, derived
-  phase, timestamps, and replay cursor;
+- `work`: work ID, Work revision, intent, status, origin installation, optional
+  origin/coordinator nodes, timestamps, and optional project reference;
+- `interaction`: primary thread ID, related thread IDs, derived phase, and
+  operator replay cursor;
 - `attention[]`: severity, deterministic reason, source references, and
   suggested typed intent;
 - `context[]`: reference, kind, source, title, freshness, sensitivity,
@@ -221,6 +300,47 @@ Mail bodies, file contents, browser state, terminal logs, and repository blobs
 are not duplicated into the snapshot. They remain source-owned and are loaded
 through bounded references when authorized.
 
+### Snapshot and Delta Delivery
+
+The snapshot is a bounded baseline, not a payload resent after every event. It
+carries:
+
+- `work_revision`: durable Work aggregate revision;
+- `projection_revision`: monotonic revision of the materialized read model;
+- `operator_cursor`: durable operator-stream replay boundary;
+- source watermarks for repository, terminal, GitHub, and connector
+  projections;
+- pagination tokens or summary counts for large collections.
+
+After baseline load, the authenticated operator WebSocket carries
+`WorkSessionDeltaV1` envelopes derived from the existing operator stream:
+
+```text
+WorkSessionDeltaV1 {
+  work_id,
+  base_projection_revision,
+  projection_revision,
+  operator_cursor,
+  upserts: { family -> rows keyed by stable id },
+  removals: { family -> stable ids },
+  source_watermarks,
+  compatibility,
+}
+```
+
+Durable changes advance the operator cursor. Transient provider tokens,
+terminal progress, and resource samples use disposable signal frames and never
+claim durable revision. Clients apply a delta only when
+`base_projection_revision` matches their current projection. A gap, invalid
+cursor, unknown required schema, or backpressure overflow yields
+`resync_required`; the client discards only its disposable projection and
+fetches a fresh snapshot.
+
+Collections are stable-ID keyed, bounded, and paginated. Full terminal logs,
+file bodies, diffs, browser frames, and connector bodies load through separate
+authorized detail endpoints. This prevents Home from refetching or retaining
+an unbounded Work graph.
+
 ### Workspace
 
 `WorkspaceSnapshotV1` contains:
@@ -236,6 +356,29 @@ through bounded references when authorized.
 
 One Work Session may span multiple repositories. Repository lanes can execute
 concurrently only when their inputs and mutation scopes are independent.
+
+### Cross-Repository Task Graph
+
+Dependency ordering is explicit in `WorkTaskGraphV1`, not inferred from pane
+activity or task text:
+
+- each task names `task_id`, `work_id`, repository and path read/write scopes,
+  expected base commits, acceptance criteria, and required artifacts;
+- directed `depends_on` edges form a validated acyclic graph;
+- barrier nodes model integration, combined verification, publication, or a
+  user decision across repository lanes;
+- the scheduler topologically admits ready tasks and refuses concurrent tasks
+  whose write scopes overlap;
+- a failed required dependency blocks descendants while independent lanes may
+  continue;
+- replanning creates a new graph and increments `Work.revision`; it never
+  mutates the accepted graph invisibly;
+- every task result records the graph revision it satisfied.
+
+Cross-repository publication is an ordered saga, not an atomic transaction.
+Each repository commit, branch push, pull request, check, and follow-up action
+has its own idempotency key and receipt. Partial completion is explicit; Heiwa
+does not claim rollback where GitHub or another service cannot provide it.
 
 ### Surface Definition
 
@@ -257,9 +400,10 @@ All first-party surfaces consume the shared Work Session store.
 
 ### Work Session Projector
 
-Folds operator events, worker leases, terminal state, approvals, artifacts,
-receipts, connector references, and repository projections into
-`WorkSessionSnapshotV1`. It is read-only and replayable.
+Folds Work and operator events, worker leases, terminal state, approvals,
+artifacts, receipts, connector references, and repository projections into
+`WorkSessionSnapshotV1` and `WorkSessionDeltaV1`. It is read-only, bounded, and
+replayable.
 
 ### Attention Engine
 
@@ -277,8 +421,9 @@ to every provider.
 ### Workspace Coordinator
 
 Owns repository discovery, canonical roots, multi-root membership, worktree
-creation, writer leases, dependency ordering, dirty-tree preservation,
-conflict detection, and repository reconciliation.
+creation, writer leases, `WorkTaskGraphV1` validation and topological
+scheduling, dirty-tree preservation, conflict detection, publication sagas,
+and repository reconciliation.
 
 ### Execution Coordinator
 
@@ -365,9 +510,15 @@ provider-reported, estimated, defaulted, and unknown.
 
 ## Productivity Context
 
-Calendar, Mail, Files, Browser, and later connectors are session-attached
+Calendar, Mail, Files, and later account connectors are session-attached
 capabilities with focused inspector views. They do not become separate state or
 execution authorities.
+
+This is extension work, not greenfield replacement. The accepted Mac-first
+Apple Calendar lane already proves connect/disconnect, bounded read, app-side
+staging, immutable T2 approval, live external write, external ID, receipt, and
+journal replay. Release C keeps that implementation and closes Mail, Files,
+Google Calendar, and additional account breadth through the same contracts.
 
 Every first-party connector must implement:
 
@@ -383,6 +534,37 @@ Every first-party connector must implement:
 Passive connector signals may create attention items and summaries. They do not
 silently send messages, alter calendars, publish code, or cause other risky
 effects.
+
+## Browser Work Surface
+
+Release D absorbs the roadmap's L4 browser boundary. `crates/heiwa_browser` is
+a runtime service; Tauri and TypeScript only display frames and submit typed
+intents. The runtime owns Chromium lifecycle, CDP, target discovery, profile
+state, ownership, policy, evidence, and recovery.
+
+The selected product shape is:
+
+- a packaged Chromium sidecar with a dedicated Heiwa user-data directory under
+  the per-user configuration root, never the user's system-browser profile;
+- raw CDP available only inside the Rust browser service;
+- `Page.startScreencast` or a measured replacement delivering bounded frames to
+  the app without turning the renderer into browser authority;
+- a target registry keyed by node and target identity;
+- `Owner::User { node_id }` or `Owner::Agent { session_id }`, with explicit,
+  receipted handoff before an agent may control a user-owned target;
+- page content treated as untrusted data, never executable instruction;
+- credentials usable inside the dedicated profile but never extractable into
+  model context, evidence, logs, or renderer state;
+- read/extract/screenshot, navigate/open, click/fill/submit, and
+  credential/payment/destructive actions mapped through existing risk and
+  Action Gate policy.
+
+Before product implementation, Release D runs a bounded cross-platform spike
+covering sidecar packaging, frame latency, input fidelity, accessibility,
+clipboard, downloads, pop-ups, authentication, crash recovery, and resource
+cost. Failure of `Page.startScreencast` to meet the product bar changes only the
+display transport through a spec amendment; it does not move browser policy,
+profile, ownership, or CDP authority into TypeScript.
 
 ## User Experience
 
@@ -428,16 +610,17 @@ product silo.
 
 ### Create
 
-Direct intent or a promoted attention item creates an operator thread and Work
-Session projection with objective, acceptance criteria, workspace, bounded
-context, policy, and replay cursor.
+Direct intent or a promoted attention item atomically creates durable Work,
+`work_id`, its primary operator thread, and the first Work Session projection
+with objective, acceptance criteria, workspace, bounded context, policy, and
+replay cursor.
 
 ### Prepare
 
 Workspace Coordinator snapshots repository HEADs, dirty state, branches,
 remotes, worktrees, pull requests, and upstream divergence. It preserves user
 changes, creates isolated worktrees for mutation, reserves scopes, and provides
-the facts DREX needs to build a visible plan.
+the facts DREX needs to build and validate a visible `WorkTaskGraphV1`.
 
 ### Execute
 
@@ -567,6 +750,12 @@ Safe routing may work around unavailable providers, connectors, or optional
 context. It may not route around approval, privacy, root, lease, or integrity
 boundaries.
 
+Offline repository, GitHub, browser, or connector state remains readable only
+with its recorded freshness and source watermark. Heiwa may stage a future
+action while offline, but it revalidates Work revision, remote drift,
+permissions, approval, and idempotency immediately before execution. It never
+blindly retries an `uncertain` external effect.
+
 Persistence behavior is strict:
 
 - missing record means unconfigured or empty;
@@ -594,58 +783,103 @@ The program's public-ready test is one fresh-user chain:
 1. install a certified empty build;
 2. connect provider-owned inference, GitHub, and one productivity ecosystem;
 3. open a workspace containing at least two repositories;
-4. promote a real productivity signal or submit direct intent;
-5. route work across eligible local and subscription inference;
-6. execute in isolated worktrees and visible panes;
-7. show identical Home, Work, and Agent truth;
-8. produce diffs, tests, artifacts, staged actions, and exact approval;
-9. publish an authorized branch and draft pull request;
-10. record commit, pull request, checks, and productivity follow-up receipts;
-11. restart or update and restore the session without data loss, duplicated
+4. create one durable Work whose `work_id` appears across thread, tasks,
+   connector events, browser control events, actions, artifacts, and receipts;
+5. promote a real productivity signal or submit direct intent;
+6. route work across eligible local and subscription inference;
+7. execute the validated dependency graph in isolated worktrees and visible
+   panes;
+8. inspect or act through a node-owned browser target under the same Work;
+9. show identical Home, Work, and Agent truth through snapshot plus deltas;
+10. produce diffs, tests, artifacts, staged actions, and exact approval;
+11. publish an authorized branch and draft pull request;
+12. record commit, pull request, checks, and productivity follow-up receipts;
+13. restart or update and restore the session without data loss, duplicated
     effects, or false completion.
 
 ### Acceptance Matrix
 
-| Area               | Required proof                                                                    |
-| ------------------ | --------------------------------------------------------------------------------- |
-| Fresh install      | No phantom accounts, sessions, workers, connectors, receipts, or maintainer paths |
-| Inference          | Provider auth remains provider-owned; unavailable candidates reroute honestly     |
-| Multi-repository   | One session changes at least two repositories through isolated worktrees          |
-| Workers            | Every verified worker has identity, lease, liveness, scope, and outcome           |
-| Multiplexer        | Panes support navigation and documented restart/reattach behavior                 |
-| Shared projections | Home, Work, and Agent agree from one event cursor                                 |
-| Approvals          | Modified, expired, replayed, stale, and self-approved actions cannot execute      |
-| GitHub             | Drift, branch publication, draft pull request, checks, and receipts work          |
-| Productivity       | Connect, read, bounded context, staged write, execute, receipt, and revoke work   |
-| Recovery           | Crash injection does not lose local truth or duplicate uncertain effects          |
-| Compatibility      | Missing, corrupt, future, and incompatible state remain distinguishable           |
-| Privacy            | Renderer, logs, evidence, artifacts, and GitHub contain no raw secrets            |
-| Update             | Exact version transition preserves active and completed work honestly             |
-| Multi-user         | Disposable user roots never share state, auth, paths, or receipts                 |
+| Area                | Required proof                                                                          |
+| ------------------- | --------------------------------------------------------------------------------------- |
+| Fresh install       | No phantom accounts, sessions, workers, connectors, receipts, or maintainer paths       |
+| Work identity       | One durable `work_id` joins threads, tasks, events, actions, artifacts, and receipts    |
+| Projection delivery | Bounded snapshot plus ordered deltas recover from gaps without full-graph polling       |
+| Inference           | Provider auth remains provider-owned; unavailable candidates reroute honestly           |
+| Multi-repository    | One session changes at least two repositories through isolated worktrees                |
+| Dependency graph    | DAG validation, scope-conflict refusal, failure propagation, and revisioned replan work |
+| Workers             | Every verified worker has identity, lease, liveness, scope, and outcome                 |
+| Multiplexer         | Panes support navigation and documented restart/reattach behavior                       |
+| Shared projections  | Home, Work, and Agent agree from one event cursor                                       |
+| Approvals           | Modified, expired, replayed, stale, and self-approved actions cannot execute            |
+| GitHub              | Drift, branch publication, draft pull request, checks, and receipts work                |
+| Productivity        | Connect, read, bounded context, staged write, execute, receipt, and revoke work         |
+| Browser             | Node-aware ownership, explicit handoff, hostile-page refusal, and Action Gate work      |
+| Recovery            | Crash injection does not lose local truth or duplicate uncertain effects                |
+| Compatibility       | Missing, corrupt, future, and incompatible state remain distinguishable                 |
+| Privacy             | Renderer, logs, evidence, artifacts, and GitHub contain no raw secrets                  |
+| Update              | Exact version transition preserves active and completed work honestly                   |
+| Multi-user          | Disposable user roots never share state, auth, paths, or receipts                       |
 
 ### Test Layers
 
-1. Contract tests for snapshots, workers, workspaces, actions, approvals,
-   artifacts, receipts, connectors, and schema negotiation.
-2. State-machine tests for replay, cancellation, restart, expired leases,
-   concurrent writers, partial corruption, future schemas, and uncertain
-   effects.
+1. Contract tests for Work identity and revision, task graphs, snapshots,
+   deltas, workers, workspaces, actions, approvals, artifacts, receipts,
+   connectors, browser targets, and schema negotiation.
+2. State-machine tests for replay, snapshot/delta resync, cancellation,
+   restart, expired leases, stale Work revisions, concurrent writers, partial
+   corruption, future schemas, and uncertain effects.
 3. Adapter contract suites using fake provider CLIs, models, Git remotes,
-   GitHub, productivity services, terminal adapters, and secure storage.
+   GitHub, productivity services, Chromium/CDP, terminal adapters, and secure
+   storage.
 4. Desktop tests for fresh install, onboarding, projection agreement, panes,
-   diff review, approval invalidation, degraded states, keyboard use, and
-   accessibility.
+   diff review, bounded incremental rendering, browser ownership, approval
+   invalidation, degraded states, keyboard use, and accessibility.
 5. Packaged Tauri acceptance against disposable state and a temporary checkout
    runtime port. Browser preview is not packaged-app proof.
 6. Opt-in account-backed smoke tests against authorized provider, GitHub, and
    productivity test accounts before public connector certification.
 7. Adversarial tests for secret and prompt injection, symlink escape, malicious
-   repositories, forged workers, replayed approvals, renderer compromise,
-   uncertain network completion, and hostile schema data.
+   repositories, hostile pages, forged workers, replayed approvals, renderer
+   compromise, uncertain network completion, and hostile schema data.
 
 All automated tests use disposable configuration and evidence roots. They do
 not depend on maintainer accounts, warm state, existing panes, or installed
 runtime data.
+
+### Acceptance Gates and SHA-Bound Stamps
+
+The existing layer gates remain additive prerequisites:
+
+- `scripts/check_l0_acceptance.sh`;
+- `scripts/check_l1_acceptance.sh`;
+- `scripts/check_l2_acceptance.sh`;
+- `scripts/hooks/stop_l0l1_gate.sh` and its exact-HEAD stamps.
+
+L3 has accepted live evidence but no dedicated acceptance script or Stop-hook
+stamp. Before the remaining connector ledger can claim full L3 completion, the
+implementation must add `scripts/check_l3_acceptance.sh`, an exact-HEAD stamp,
+and the same stop-gate behavior. The gate preserves the already accepted Apple
+Calendar lane and adds only the connector breadth claimed complete at that
+HEAD.
+
+Each Work Fabric checkpoint receives a focused acceptance script and ledger
+section before it can be marked complete:
+
+- `scripts/check_work_fabric_a1_acceptance.sh` — durable Work plus
+  one-repository loop;
+- `scripts/check_work_fabric_a2_acceptance.sh` — multi-repository task graph;
+- `scripts/check_work_fabric_b_acceptance.sh` — GitHub collaboration;
+- `scripts/check_work_fabric_c_acceptance.sh` — productivity fusion;
+- `scripts/check_work_fabric_d_acceptance.sh` — browser work surface;
+- `scripts/check_work_fabric_e_acceptance.sh` — full tandem loop.
+
+Every script writes a stamp only for a clean exact HEAD. The Stop hook blocks a
+completion claim when the matching ledger section is complete but its stamp is
+missing or stale. The implementation may generalize the existing hook while
+preserving `scripts/hooks/stop_l0l1_gate.sh` as a compatibility entrypoint.
+`check_ci_local.sh` must invoke all gates whose ledger sections claim completion
+before those features can be promoted. Framework extraction and extension gates
+are added only when Releases F and G are authorized.
 
 ## Promotion and Release
 
@@ -689,14 +923,39 @@ outcomes, not artificial patch size. Every release includes user experience,
 runtime authority, failure states, approvals, tests, installed-runtime proof,
 and evidence.
 
-### Release A — Local Multi-Repository Workbench
+Release labels are acceptance checkpoints, not a forced serial calendar. Their
+dependency graph is:
 
-Fresh-install truth, Work Session and Workspace projections, multiple local
-repositories, isolated worktrees, provider-owned agents, terminal panes,
-Home/Work/Agent agreement, diffs, tests, local artifacts, approvals, receipts,
-and restart recovery.
+```text
+A1 -> A2 -> B -----------\
+  \-> C ------------------+-> E -> F -> G
+  \-> D -----------------/
+```
 
-This is independently useful for governed local development.
+Current L3 connector implementation may continue in parallel, but no new L3/L4
+outcome is accepted complete until A1 produces canonical `work_id`. A2/B and D
+then proceed on their own dependencies. Public alpha and framework extraction
+still wait for the integrated E gate.
+
+### Release A1 — Durable Work and One-Repository Loop
+
+Fresh-install truth; durable `Work` production; `work_id` migration;
+WorkSession snapshot/delta delivery; one local repository; one isolated
+worktree; one provider-owned worker and terminal pane; Home/Work/Agent
+agreement; diff, test, artifact, approval, receipt, and restart recovery.
+
+This is independently useful: a user can complete governed local repository
+work without GitHub or productivity accounts.
+
+### Release A2 — Multi-Repository Coordination
+
+Multi-root Workspace, `WorkTaskGraphV1`, explicit repository/path scopes,
+topological scheduling, overlapping-write refusal, parallel independent lanes,
+barriers, revisioned replanning, cross-repository verification, and partial
+publication-saga evidence.
+
+This is independently useful for coordinated frontend/backend/docs or monorepo
+plus dependency work.
 
 ### Release B — GitHub Collaboration
 
@@ -709,29 +968,42 @@ canonical.
 
 ### Release C — Productivity Fusion
 
-First-party Calendar, Mail, and Files contracts with connect, health, bounded
-read, context reference, staged action, Action Gate execution, receipt, revoke,
-and honest failure behavior. One account ecosystem is certified end to end
-before additional ecosystems implement the same contract.
+Extend the existing Mac-first Apple Calendar implementation; do not rebuild it.
+Complete first-party Calendar, Mail, and Files contracts with connect, health,
+bounded read, context reference, staged action, Action Gate execution, receipt,
+revoke, and honest failure behavior. Finish Google Calendar only after its
+external OAuth dependency is supplied; add `gmail.send` through the existing
+approval executor; certify each additional ecosystem against the same contract.
 
 Each connector ships only with a real read-to-action outcome.
 
-### Release D — Tandem Operating Loop
+### Release D — Browser Work Surface
+
+Absorb roadmap L4: runtime-owned `heiwa_browser`, packaged Chromium sidecar,
+dedicated profile, CDP target registry, node-aware tab ownership, explicit
+handoff, bounded frame transport, typed browser actions, hostile-page handling,
+Action Gate enforcement, receipts, crash recovery, and cross-platform packaged
+acceptance.
+
+This is independently useful for research, authenticated web work, previews,
+and governed browser automation within a Work Session.
+
+### Release E — Tandem Operating Loop
 
 Certify the integrated acceptance workflow from productivity signal through
-multi-repository/provider execution, exact approval, GitHub result,
-productivity follow-up, restart, and receipt.
+multi-repository/provider execution, browser context or action, exact approval,
+GitHub result, productivity follow-up, restart, and receipt.
 
 This is the public-alpha threshold for the broader work operating system.
 
-### Release E — Internal Framework Extraction
+### Release F — Internal Framework Extraction
 
-After Releases A through D prove identical contracts across at least three
+After Releases A1 through E prove identical contracts across at least three
 first-party surfaces, extract stable `SurfaceDefinition`, intent, event,
 permission, empty-state, compatibility, and test-harness APIs. Remove
 first-party special cases. Keep extension loading closed.
 
-### Release F — Third-Party Extension Surface
+### Release G — Third-Party Extension Surface
 
 Only after the internal contracts survive real use and one compatibility
 migration, add signed packages, capability manifests, sandboxed execution,
@@ -739,11 +1011,33 @@ explicit permissions, revocation, upgrades, and connector/surface SDKs.
 
 No generic framework work precedes the integrated product.
 
+## Review Resolution Record
+
+| ID     | Review defect                                                                   | Resolution                                                                                        |
+| ------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| WF-R1  | `Work` and Work Session competed as primary containers                          | `Work` is durable and keyed by `work_id`; Work Session is its read projection                     |
+| WF-R2  | Operator thread ID would have become accidental Work identity                   | Threads attach to Work; V1 has a primary thread and future related threads                        |
+| WF-R3  | Existing `MeshEnvelope.work_id` had no general producer                         | Release A1 creates Work before scoped domain activity and defines append-only migration           |
+| WF-R4  | Fresh local Work could not supply cryptographic `origin_node` before enrollment | Local Work is installation-bound and non-replicable until signed node binding                     |
+| WF-R5  | Relationship to roadmap L4 and mesh/L3 specs was unstated                       | Explicit supersedes/preserves rules and a browser Release D were added                            |
+| WF-R6  | Release C read like a greenfield connector implementation                       | Accepted Apple Calendar capability is named and preserved                                         |
+| WF-R7  | Release A bundled too many independently valuable outcomes                      | A1 one-repository Work loop and A2 multi-repository coordination are separate gates               |
+| WF-R8  | Snapshot had no scalable incremental-delivery contract                          | Bounded snapshot, typed deltas, watermarks, pagination, backpressure, and resync are specified    |
+| WF-R9  | Cross-repository dependency ordering had no mechanism                           | Revisioned DAG, scope-conflict checks, barriers, topological scheduling, and sagas are specified  |
+| WF-R10 | Acceptance matrix was not connected to repository enforcement                   | Additive scripts, exact-HEAD stamps, ledgers, Stop-hook compatibility, and CI wiring are required |
+| WF-R11 | Browser target lifetime risked being coupled to Work lifetime                   | Targets remain node-owned resources; only Work-scoped control events require `work_id`            |
+| WF-R12 | Durable Work revision and renderer revision were conflated                      | `work_revision`, `projection_revision`, operator cursor, and source watermarks are distinct       |
+
 ## Definition of Done
 
 This architecture program is complete only when:
 
 - the integrated acceptance workflow passes from a clean install;
+- durable `Work` is the only coordination aggregate, `work_id` is produced
+  before scoped domain activity, and threads remain attached interaction
+  resources;
+- bounded snapshot/delta delivery and `WorkTaskGraphV1` pass recovery,
+  backpressure, conflict, and stale-revision tests;
 - all acceptance-matrix proofs exist at one exact protected-main commit;
 - a certified release from that commit installs and updates on supported
   platforms;
@@ -751,8 +1045,12 @@ This architecture program is complete only when:
 - no surface or adapter bypasses the operator stream, DREX, Action Gate,
   evidence, or secure-storage boundaries;
 - GitHub source sync and private evidence remain separated;
+- the roadmap's L4 browser capability passes node-aware ownership, hostile-page,
+  Action Gate, crash-recovery, and packaged cross-platform acceptance;
 - worker and approval legitimacy survive crash, replay, drift, and adversarial
   testing;
+- existing L0-L3 evidence remains accepted and Work Fabric gates/stamps are
+  additive, current, and wired into the completion hook;
 - third-party extension APIs remain closed until the first-party extraction
   gate is satisfied;
 - the release receipt connects decision, implementation, tests, installed
