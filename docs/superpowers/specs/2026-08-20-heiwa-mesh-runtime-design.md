@@ -565,7 +565,7 @@ The mesh does not reorder the roadmap. It constrains it:
 | ID | Decision | Owner |
 |---|---|---|
 | D1 | **Resolved 2026-08-20.** Device-to-device plus optional user-supplied ciphertext relay; no hosted authority plane. | Devon |
-| D3 | Whether `LocalIdentity` gains the node keypair or a sibling record holds it. Leaning sibling, so identity stays contact-free as L2 established. | Architecture, resolvable in implementation |
+| D3 | **Resolved 2026-08-22 in implementation: sibling record.** `mesh-node.json` sits beside `local-identity.json`, bound to the same `installation_id`; `LocalIdentity` stays contact-free. See `docs/superpowers/ledgers/2026-08-22-L5-mesh-task-ledger.md`. | Architecture |
 | D4 | Peer transport concretely — QUIC direct, an existing overlay, or relay-only first. Affects the reachability cost accepted under D1. | Architecture, needs a spike |
 | D5 | Whether mobile ships as a Tauri mobile target or a native shell over the same Rust core. Not needed until after L5.0. | Deferred |
 

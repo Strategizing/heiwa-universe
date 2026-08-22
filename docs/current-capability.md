@@ -101,6 +101,13 @@
 - placeholder agent personas as productized capabilities
 - full provider-normalized multi-turn tool calling across every provider
 - executable connector breadth beyond the Mac-first Apple Calendar lane
+- the mesh as a working fabric. `crates/heiwa_mesh` gives this machine a node
+  identity, a signed and hash-chained envelope frame, and an expiring
+  capability advertisement, all provable on one machine. There is no peer
+  transport, no pairing, and no replication: an enrolled node has no peers and
+  cannot reach another device. `heiwa mesh status` and the Home machine
+  perspective both state that, and a mesh state that cannot be read is
+  reported as `unknown` rather than as `local_only`.
 
 ## Evidence rule
 

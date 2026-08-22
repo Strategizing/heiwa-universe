@@ -8,6 +8,17 @@ function platformLabel(os: string | undefined): string {
   return "This device";
 }
 
+/**
+ * Exhaustive, because the runtime can also answer "unknown". A ternary with a
+ * fallback would render an unreadable mesh state as "peer enrolled" — the
+ * opposite of the truth.
+ */
+function syncLabel(status: string | undefined): string {
+  if (status === "local_only") return "sync local only";
+  if (status === "peer_enrolled") return "peer enrolled";
+  return "sync state unavailable";
+}
+
 function memoryLabel(bytes: number | undefined): string | null {
   if (!bytes) return null;
   return `${(bytes / 1024 ** 3).toFixed(0)} GB memory`;
@@ -73,12 +84,17 @@ export function MachinePerspective() {
                   <strong>Shared data</strong>
                   <span>Work and evidence use one user scope.</span>
                 </div>
-                <span class="state-chip planned">
-                  {current().perspective?.sync_status === "local_only"
-                    ? "sync local only"
-                    : "peer enrolled"}
-                </span>
+                <span class="state-chip planned">{syncLabel(current().perspective?.sync_status)}</span>
               </div>
+              <Show when={current().perspective?.mesh_errors?.[0]?.message}>
+                {(message) => (
+                  <div class="machine-recognition-error" role="alert">
+                    <strong>Mesh state could not be read</strong>
+                    <span>{message()}</span>
+                  </div>
+                )}
+              </Show>
+
               <p class="quiet machine-boundary">
                 Capabilities, credentials, processes, and live resource pressure stay on this device.
               </p>

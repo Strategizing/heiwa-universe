@@ -1033,6 +1033,7 @@ fn print_help() {
     println!("  app [runtime status]          Probe local Heiwa.app runtime readiness");
     println!("  workers heartbeat             Register local worker liveness");
     println!("  workers status                Show worker registry");
+    println!("  mesh status|enroll            Node identity for this machine (no peers yet)");
     println!("  auto status|create|tick       Manage local background automations");
     println!("  approvals list|show|decide    Manage local approval packets");
     println!("  mail status|accounts          Mail.app metadata-only bridge probe");

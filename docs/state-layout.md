@@ -12,6 +12,8 @@ Default location: `~/.heiwa/` (override via `HEIWA_HOME`).
 | `~/.heiwa/accounts.json` | runtime  | Connected provider accounts (status, models, expiry refs)       |
 | `~/.heiwa/local-identity.json` | runtime | Local per-installation identity established during first run |
 | `~/.heiwa/identity.json` | runtime  | Optional Heiwa service-login identity and token; distinct from first-run identity |
+| `~/.heiwa/mesh-node.json` | `heiwa mesh enroll` | This machine's mesh node record: fingerprint and public key only. The private key is in the OS credential store under service `heiwa-mesh`, never here |
+| `~/.heiwa/mesh-peers.json` | peer enrolment (not built) | Enrolled peer nodes and revocations. Absent on every installation today; absence reads as no peers, an unreadable file reads as unknown |
 | `~/.heiwa/machine.json`  | runtime  | Stable device id plus refreshed platform, hardware, runtime, and local capability manifest |
 | `~/.heiwa/evidence/`     | runtime  | Canonical versioned JSONL evidence journals                     |
 | `~/.heiwa/secrets/`      | runtime  | OS-keychain-backed secret refs; never raw secrets in plain JSON |
