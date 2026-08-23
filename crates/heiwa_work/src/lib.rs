@@ -7,11 +7,13 @@
 
 pub mod events;
 pub mod model;
+pub mod projector;
 
 pub use events::{
     work_created_event, work_linked_event, WorkCreatedPayload, WorkLinkOrigin, WorkLinkedPayload,
 };
 pub use model::{Work, WorkId, WorkStatus, SCHEMA_VERSION};
+pub use projector::{fold, WorkProjection};
 
 #[derive(Debug, thiserror::Error)]
 pub enum WorkError {
