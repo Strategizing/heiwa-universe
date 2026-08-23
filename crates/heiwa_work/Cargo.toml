@@ -18,3 +18,11 @@ serde_json = "1"
 sha2 = "0.10"
 thiserror = "2"
 uuid = { version = "1", features = ["v4"] }
+
+# heiwa_work is a foundation package and heiwa-session is a runtime one, so
+# this edge points "upward". It is a dev-dependency only, which Cargo permits
+# even when heiwa-session later depends on heiwa_work — dev-dependency cycles
+# are legal and do not affect the normal build graph. Do not promote it.
+[dev-dependencies]
+heiwa-session = { path = "../heiwa_session" }
+tempfile = "3"
