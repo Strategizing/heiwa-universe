@@ -408,6 +408,7 @@ fn base_event(
         turn_id: turn_id.map(|s| s.to_string()),
         run_id: None,
         call_id: call_id.map(|s| s.to_string()),
+        work_id: None,
         event_type,
         occurred_at: "2026-07-18T00:00:00Z".to_string(),
         actor: OperatorActor {

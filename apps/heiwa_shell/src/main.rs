@@ -3395,6 +3395,7 @@ fn finish_auxiliary_turn(
         turn_id: Some(context.turn_id.clone()),
         run_id: None,
         call_id: None,
+        work_id: None,
         event_type: heiwa_evidence::OperatorEventType::TurnCompleted,
         occurred_at: heiwa_evidence::now_iso(),
         actor: heiwa_evidence::OperatorActor {

@@ -134,6 +134,14 @@ pub struct OperatorEvent {
     pub turn_id: Option<String>,
     pub run_id: Option<String>,
     pub call_id: Option<String>,
+    /// The `Work` this event belongs to, when it belongs to one.
+    ///
+    /// Optional by design rather than by omission: events that describe a user
+    /// outcome carry it, and system-wide events (capability, peer health) have
+    /// no Work to name. Skipped when absent so every event already on disk
+    /// deserializes unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_id: Option<String>,
     pub event_type: OperatorEventType,
     pub occurred_at: String,
     pub actor: OperatorActor,
@@ -726,6 +734,7 @@ mod lineage_race_tests {
             turn_id: Some("turn-race".to_string()),
             run_id: None,
             call_id: None,
+            work_id: None,
             event_type: OperatorEventType::UserMessage,
             occurred_at: "2026-07-20T00:00:00Z".to_string(),
             actor: OperatorActor {
@@ -901,5 +910,71 @@ mod lineage_race_tests {
             journal.read_after(None, 1),
             Err(CursorError::UnstableLineage { attempts: 3 })
         ));
+    }
+}
+
+/// The `work_id` scope carried on every operator envelope.
+///
+/// Serialization is the contract here: events written before Work existed must
+/// keep reading, and an unscoped event must not start emitting a null field.
+#[cfg(test)]
+mod work_scope_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn test_event(id: &str) -> OperatorEvent {
+        OperatorEvent {
+            schema_version: OPERATOR_EVENT_SCHEMA_VERSION,
+            event_id: id.to_string(),
+            thread_id: "thread-1".to_string(),
+            turn_id: None,
+            run_id: None,
+            call_id: None,
+            work_id: None,
+            event_type: OperatorEventType::UserMessage,
+            occurred_at: "2026-08-22T00:00:00Z".to_string(),
+            actor: OperatorActor {
+                kind: "operator".to_string(),
+                id: "local-operator".to_string(),
+            },
+            risk_class: OperatorRisk::Low,
+            sensitivity: OperatorSensitivity::LocalPrivate,
+            parent_event_id: None,
+            correlation_id: None,
+            source_refs: vec![],
+            evidence_refs: vec![],
+            payload: json!({"text": "scope"}),
+        }
+    }
+
+    #[test]
+    fn an_event_without_a_work_id_round_trips_and_omits_the_field() {
+        let event = test_event("evt-1");
+        let json = serde_json::to_value(&event).expect("serialize");
+        assert!(
+            json.get("work_id").is_none(),
+            "an unscoped event must not carry a null work_id: {json}"
+        );
+        let restored: OperatorEvent = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(restored.work_id, None);
+    }
+
+    #[test]
+    fn an_event_written_before_work_existed_still_reads() {
+        // Every event already on disk lacks the field entirely.
+        let mut json = serde_json::to_value(test_event("evt-2")).expect("serialize");
+        json.as_object_mut().expect("object").remove("work_id");
+        let restored: OperatorEvent = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(restored.work_id, None, "absence must not be an error");
+    }
+
+    #[test]
+    fn a_work_scoped_event_carries_its_work_id() {
+        let mut event = test_event("evt-3");
+        event.work_id = Some("work-abc".to_string());
+        let json = serde_json::to_value(&event).expect("serialize");
+        assert_eq!(json["work_id"], "work-abc");
+        let restored: OperatorEvent = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(restored.work_id.as_deref(), Some("work-abc"));
     }
 }

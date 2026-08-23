@@ -1765,6 +1765,7 @@ fn runtime_event(
         turn_id: Some(turn_id.to_string()),
         run_id: None,
         call_id: call_id.map(str::to_string),
+        work_id: None,
         event_type,
         occurred_at: now_iso(),
         actor: OperatorActor {

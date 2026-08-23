@@ -925,6 +925,7 @@ fn new_event(
         turn_id,
         run_id: None,
         call_id,
+        work_id: None,
         event_type,
         occurred_at,
         actor,

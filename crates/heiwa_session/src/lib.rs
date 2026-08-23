@@ -516,6 +516,7 @@ fn legacy_event(
         turn_id,
         run_id: None,
         call_id,
+        work_id: None,
         event_type,
         occurred_at: legacy_occurred_at(legacy_ts_unix_ms),
         actor: OperatorActor {
@@ -554,6 +555,7 @@ fn new_operator_event(
         turn_id,
         run_id: None,
         call_id,
+        work_id: None,
         event_type,
         occurred_at: now_iso(),
         actor: OperatorActor {
