@@ -26,6 +26,7 @@ members = [
     "crates/heiwa_session",
     "crates/heiwa_tui",
     "crates/heiwa_vault",
+    "crates/heiwa_work",
 ]
 resolver = "2"
 
