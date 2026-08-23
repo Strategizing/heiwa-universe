@@ -6,12 +6,14 @@
 //! input. See `docs/superpowers/specs/2026-08-22-heiwa-work-fabric-design.md`.
 
 pub mod events;
+pub mod migration;
 pub mod model;
 pub mod projector;
 
 pub use events::{
     work_created_event, work_linked_event, WorkCreatedPayload, WorkLinkOrigin, WorkLinkedPayload,
 };
+pub use migration::{resolve_work_id, MigrationConflict, WorkIdResolution};
 pub use model::{Work, WorkId, WorkStatus, SCHEMA_VERSION};
 pub use projector::{fold, WorkProjection};
 
