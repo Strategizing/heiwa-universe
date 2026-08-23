@@ -120,6 +120,8 @@ pub enum OperatorEventType {
     TurnCancelRequested,
     TurnInterrupted,
     LegacySessionImported,
+    WorkCreated,
+    WorkLinked,
 }
 
 /// One operator-facing runtime event: the durable record type appended to

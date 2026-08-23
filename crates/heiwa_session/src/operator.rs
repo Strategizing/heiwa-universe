@@ -1046,6 +1046,14 @@ fn validate_event(threads: &HashMap<String, FoldedThread>, event: &OperatorEvent
         );
     }
 
+    if requires_work_id(&event.event_type) && event.work_id.is_none() {
+        bail!(
+            "rejected operator event {}: event type {:?} requires work_id",
+            event.event_id,
+            event.event_type
+        );
+    }
+
     if event.event_type == OperatorEventType::TurnStarted {
         validate_turn_started(threads, event)?;
     } else if let Some(turn_id) = &event.turn_id {
@@ -1194,6 +1202,14 @@ fn requires_turn_id(event_type: &OperatorEventType) -> bool {
             | OperatorEventType::AssistantCompleted
             | OperatorEventType::ToolCallStarted
             | OperatorEventType::ToolCallCompleted
+    )
+}
+
+/// Event types that describe a `Work` and are meaningless without naming it.
+fn requires_work_id(event_type: &OperatorEventType) -> bool {
+    matches!(
+        event_type,
+        OperatorEventType::WorkCreated | OperatorEventType::WorkLinked
     )
 }
 
@@ -1523,7 +1539,11 @@ fn apply_to_existing_thread(
         | OperatorEventType::ArtifactCreated
         | OperatorEventType::TestResult
         | OperatorEventType::ReceiptLinked
-        | OperatorEventType::LegacySessionImported => apply_nonterminal_touch(entry, event),
+        | OperatorEventType::LegacySessionImported
+        // Work events name the thread without opening or closing a turn: the
+        // thread is active because of them, but its turn state is untouched.
+        | OperatorEventType::WorkCreated
+        | OperatorEventType::WorkLinked => apply_nonterminal_touch(entry, event),
     }
 }
 
@@ -2124,5 +2144,46 @@ mod tests {
                 }),
             ))
             .is_err());
+    }
+
+    #[test]
+    fn a_work_event_without_a_work_id_is_rejected() {
+        use heiwa_evidence::{OperatorRisk, OperatorSensitivity, OPERATOR_EVENT_SCHEMA_VERSION};
+        use std::collections::HashMap;
+
+        use super::validate_event;
+
+        let threads = HashMap::new();
+        let mut event = OperatorEvent {
+            schema_version: OPERATOR_EVENT_SCHEMA_VERSION,
+            event_id: "evt-1".to_string(),
+            thread_id: "thread-1".to_string(),
+            turn_id: None,
+            run_id: None,
+            call_id: None,
+            work_id: None,
+            event_type: OperatorEventType::WorkCreated,
+            occurred_at: "2026-08-22T00:00:00Z".to_string(),
+            actor: OperatorActor {
+                kind: "user".to_string(),
+                id: "local".to_string(),
+            },
+            risk_class: OperatorRisk::Low,
+            sensitivity: OperatorSensitivity::LocalPrivate,
+            parent_event_id: None,
+            correlation_id: None,
+            source_refs: Vec::new(),
+            evidence_refs: Vec::new(),
+            payload: json!({}),
+        };
+
+        let error = validate_event(&threads, &event).expect_err("work events must be scoped");
+        assert!(
+            error.to_string().contains("requires work_id"),
+            "the refusal must name the missing field: {error}"
+        );
+
+        event.work_id = Some("work-abc".to_string());
+        validate_event(&threads, &event).expect("a scoped work event is accepted");
     }
 }
