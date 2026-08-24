@@ -3640,6 +3640,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "heiwa_workspace"
+version = "0.1.0"
+dependencies = [
+ "heiwa_evidence",
+ "heiwa_work",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "hermit-abi"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
