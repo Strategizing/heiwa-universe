@@ -3643,6 +3643,7 @@ dependencies = [
 name = "heiwa_workspace"
 version = "0.1.0"
 dependencies = [
+ "heiwa-session",
  "heiwa_evidence",
  "heiwa_work",
  "serde",

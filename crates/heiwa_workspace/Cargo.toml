@@ -18,5 +18,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 
+# heiwa_workspace is a foundation package and heiwa-session is a runtime one,
+# so this edge points "upward". It is a dev-dependency only, which Cargo
+# permits and which leaves the normal build graph unchanged. Do not promote it.
 [dev-dependencies]
+heiwa-session = { path = "../heiwa_session" }
 tempfile = "3"
