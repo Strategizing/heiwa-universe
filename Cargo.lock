@@ -3433,6 +3433,7 @@ dependencies = [
  "heiwa_receipts",
  "heiwa_vault",
  "heiwa_work",
+ "heiwa_workspace",
  "hostname",
  "libc",
  "reqwest 0.12.28",

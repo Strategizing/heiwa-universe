@@ -1035,6 +1035,7 @@ fn print_help() {
     println!("  workers status                Show worker registry");
     println!("  mesh status|enroll            Node identity for this machine (no peers yet)");
     println!("  work list|create              Durable Work on this installation");
+    println!("  workspace status|prepare      Repository hold for a Work");
     println!("  auto status|create|tick       Manage local background automations");
     println!("  approvals list|show|decide    Manage local approval packets");
     println!("  mail status|accounts          Mail.app metadata-only bridge probe");
