@@ -10,6 +10,7 @@ pub mod cost;
 pub mod goal;
 pub mod life;
 pub mod mail;
+pub mod mesh;
 pub mod release_update;
 pub mod schedule;
 pub mod workers;

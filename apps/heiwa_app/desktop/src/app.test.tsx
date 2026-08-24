@@ -34,6 +34,7 @@ function harness(
     machineOs?: string;
     machineName?: string;
     machineRecognitionError?: { code: string; message: string };
+    machineSyncStatus?: string;
     emptyHerd?: boolean;
   } = {},
 ): Harness {
@@ -93,7 +94,7 @@ function harness(
                 locality: "local",
                 execution_scope: "this_device",
                 data_scope: "shared_user",
-                sync_status: "local_only",
+                sync_status: overrides.machineSyncStatus ?? "local_only",
               },
               recognition_error: overrides.machineRecognitionError,
             },
@@ -618,6 +619,21 @@ describe("operator seam", () => {
         expect(text).toContain("12 cores");
         expect(text).toContain("Shared data");
         expect(text).toContain("sync local only");
+      });
+  });
+
+  it("does not claim peer sync when the mesh state could not be read", () => {
+    const { state } = harness({ machineSyncStatus: "unknown" });
+
+    render(() => <App state={state} />);
+
+    return Promise.resolve()
+      .then(() => Promise.resolve())
+      .then(() => {
+        const text = document.querySelector(".machine-perspective")?.textContent ?? "";
+        expect(text).not.toContain("peer enrolled");
+        expect(text).not.toContain("sync local only");
+        expect(text).toContain("sync state unavailable");
       });
   });
 

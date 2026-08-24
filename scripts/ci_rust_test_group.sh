@@ -25,6 +25,7 @@ foundation_packages=(
   heiwa_evidence
   heiwa_identity
   heiwa_mcp
+  heiwa_mesh
   heiwa_oauth
   heiwa_quota
   heiwa_receipts
@@ -92,6 +93,7 @@ foundation_a_targets=(
 foundation_b_targets=(
   command_parse
   local_tools
+  mesh_node
   policy
   runtime
   smoke

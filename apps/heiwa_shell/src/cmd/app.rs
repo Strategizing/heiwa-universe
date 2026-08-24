@@ -3663,19 +3663,9 @@ fn machine_perspective_payload() -> Value {
         if let Some(error) = recognition_error {
             object.insert("recognition_error".to_string(), error);
         }
-        // L5.0 will populate this with enrolled node fingerprints. Keep the
-        // pre-mesh local handle (`device_id`) out of peer identity.
-        let enrolled_peer_ids: Vec<String> = Vec::new();
         object.insert(
             "perspective".to_string(),
-            json!({
-                "locality": "local",
-                "execution_scope": "this_device",
-                "data_scope": "shared_user",
-                "sync_status": machine_sync_status(&enrolled_peer_ids),
-                "transport": "not_configured",
-                "enrolled_peer_count": enrolled_peer_ids.len(),
-            }),
+            machine_perspective(&crate::home::heiwa_runtime_dir()),
         );
     }
     machine
@@ -3711,12 +3701,42 @@ fn machine_manifest_issue_code(issue: heiwa_install::MachineManifestLoadIssue) -
     }
 }
 
-fn machine_sync_status(enrolled_peer_ids: &[String]) -> &'static str {
-    if enrolled_peer_ids.is_empty() {
-        "local_only"
-    } else {
-        "peer_enrolled"
+/// This machine's place in the mesh, read from state rather than asserted.
+///
+/// Peer identity is the node fingerprint, never the pre-mesh local handle
+/// (`device_id`). A mesh read that fails is reported as `unknown` and carried
+/// in `mesh_errors`; rendering it as `local_only` would turn "I could not look"
+/// into "there is nobody there".
+fn machine_perspective(runtime_root: &Path) -> Value {
+    let mesh = match crate::cmd::mesh::summarize(runtime_root) {
+        Ok(summary) => summary,
+        Err(error) => json!({
+            "node": Value::Null,
+            "enrolled_peer_ids": [],
+            "sync_status": "unknown",
+            "transport": "not_configured",
+            "errors": [{ "code": "mesh_state_unreadable", "message": error.to_string() }],
+        }),
+    };
+    let peer_ids = mesh["enrolled_peer_ids"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+
+    let mut perspective = json!({
+        "locality": "local",
+        "execution_scope": "this_device",
+        "data_scope": "shared_user",
+        "sync_status": mesh["sync_status"],
+        "transport": mesh["transport"],
+        "node_id": mesh["node"]["node_id"],
+        "enrolled_peer_count": peer_ids.len(),
+        "enrolled_peer_ids": peer_ids,
+    });
+    if let Some(errors) = mesh.get("errors") {
+        perspective["mesh_errors"] = errors.clone();
     }
+    perspective
 }
 
 fn resource_payload() -> Value {
@@ -7033,11 +7053,38 @@ mod app_readmodel_tests {
     }
 
     #[test]
-    fn machine_sync_status_is_derived_from_enrolled_peer_count() {
-        assert_eq!(machine_sync_status(&[]), "local_only");
+    fn machine_perspective_reads_the_mesh_state_rather_than_asserting_no_peers() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let perspective = machine_perspective(dir.path());
+
+        assert_eq!(perspective["locality"], "local");
+        assert_eq!(perspective["execution_scope"], "this_device");
+        assert_eq!(perspective["data_scope"], "shared_user");
+        assert_eq!(perspective["sync_status"], "local_only");
+        assert_eq!(perspective["enrolled_peer_count"], 0);
+        assert!(
+            perspective["node_id"].is_null(),
+            "an un-enrolled machine has no node id: {perspective}"
+        );
+    }
+
+    #[test]
+    fn machine_perspective_surfaces_an_unreadable_mesh_registry() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            heiwa_mesh::peers::registry_path_in(dir.path()),
+            "{ not json",
+        )
+        .expect("write corrupt registry");
+
+        let perspective = machine_perspective(dir.path());
         assert_eq!(
-            machine_sync_status(&["sha256:peer-fingerprint".to_string()]),
-            "peer_enrolled"
+            perspective["sync_status"], "unknown",
+            "a machine that cannot read its own mesh state must not claim local_only: {perspective}"
+        );
+        assert_eq!(
+            perspective["mesh_errors"][0]["code"],
+            "peer_registry_unreadable"
         );
     }
 

@@ -103,7 +103,10 @@ export type MachineSnapshot = {
     data_scope?: string;
     sync_status?: string;
     transport?: string;
+    node_id?: string | null;
     enrolled_peer_count?: number;
+    enrolled_peer_ids?: string[];
+    mesh_errors?: { code?: string; message?: string }[];
   };
   recognition_error?: {
     code?: string;
