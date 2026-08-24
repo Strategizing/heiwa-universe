@@ -12,5 +12,15 @@
 //! See `docs/superpowers/specs/2026-08-22-heiwa-work-fabric-design.md`.
 
 pub mod git;
+pub mod repository;
 
 pub use git::{git, GitError};
+pub use repository::{snapshot_in, RepositorySnapshotV1, REPOSITORY_SNAPSHOT_VERSION};
+
+#[derive(Debug, thiserror::Error)]
+pub enum WorkspaceError {
+    #[error("{path} is not a git repository")]
+    NotARepository { path: String },
+    #[error(transparent)]
+    Git(#[from] GitError),
+}
