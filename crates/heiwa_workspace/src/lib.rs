@@ -11,6 +11,7 @@
 //!
 //! See `docs/superpowers/specs/2026-08-22-heiwa-work-fabric-design.md`.
 
+pub mod events;
 pub mod git;
 pub mod lease;
 pub mod projection;
@@ -18,6 +19,10 @@ pub mod repository;
 pub mod scope;
 pub mod worktree;
 
+pub use events::{
+    workspace_prepared_event, workspace_released_event, WorkspacePreparedPayload,
+    WorkspaceReleasedPayload,
+};
 pub use git::{git, GitError};
 pub use lease::{acquire_writer_lease, release_writer_lease, WriterLease};
 pub use projection::{

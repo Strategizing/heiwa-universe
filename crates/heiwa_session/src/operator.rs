@@ -1209,7 +1209,10 @@ fn requires_turn_id(event_type: &OperatorEventType) -> bool {
 fn requires_work_id(event_type: &OperatorEventType) -> bool {
     matches!(
         event_type,
-        OperatorEventType::WorkCreated | OperatorEventType::WorkLinked
+        OperatorEventType::WorkCreated
+            | OperatorEventType::WorkLinked
+            | OperatorEventType::WorkspacePrepared
+            | OperatorEventType::WorkspaceReleased
     )
 }
 
@@ -1543,7 +1546,9 @@ fn apply_to_existing_thread(
         // Work events name the thread without opening or closing a turn: the
         // thread is active because of them, but its turn state is untouched.
         | OperatorEventType::WorkCreated
-        | OperatorEventType::WorkLinked => apply_nonterminal_touch(entry, event),
+        | OperatorEventType::WorkLinked
+        | OperatorEventType::WorkspacePrepared
+        | OperatorEventType::WorkspaceReleased => apply_nonterminal_touch(entry, event),
     }
 }
 

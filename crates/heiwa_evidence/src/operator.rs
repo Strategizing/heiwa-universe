@@ -122,6 +122,8 @@ pub enum OperatorEventType {
     LegacySessionImported,
     WorkCreated,
     WorkLinked,
+    WorkspacePrepared,
+    WorkspaceReleased,
 }
 
 /// One operator-facing runtime event: the durable record type appended to
