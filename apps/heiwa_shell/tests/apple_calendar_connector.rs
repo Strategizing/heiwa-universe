@@ -66,14 +66,63 @@ fn available_port() -> u16 {
         .port()
 }
 
+/// Wait until the runtime can actually serve a request.
+///
+/// A successful `TcpStream::connect` is not readiness. It only proves the
+/// listening socket is bound and the kernel accepted the connection into the
+/// backlog; the server can still reset it before handling anything, which
+/// surfaces as `ConnectionReset` at the *read* of the first real request
+/// rather than at the connect. Under load that race is reliable enough to fail
+/// CI, so readiness here means one complete request/response round trip.
 fn wait_for_runtime(port: u16) {
-    for _ in 0..120 {
-        if TcpStream::connect(("127.0.0.1", port)).is_ok() {
+    // A healthy runtime serves in well under a second, so a generous ceiling
+    // costs nothing in the normal case and buys the headroom a loaded CI
+    // runner needs to start a fresh process.
+    const ATTEMPTS: u32 = 600;
+    const INTERVAL: Duration = Duration::from_millis(50);
+
+    for _ in 0..ATTEMPTS {
+        if serves_a_request(port) {
             return;
         }
-        thread::sleep(Duration::from_millis(50));
+        thread::sleep(INTERVAL);
     }
-    panic!("temporary Heiwa runtime did not start on port {port}");
+    panic!(
+        "temporary Heiwa runtime did not serve a request on port {port} within {:?}",
+        INTERVAL * ATTEMPTS
+    );
+}
+
+/// One full round trip against a read-only route, or `false`.
+///
+/// Every failure mode is a retry rather than a panic: while the runtime is
+/// still starting, refusing, resetting, and answering partially are all
+/// expected.
+fn serves_a_request(port: u16) -> bool {
+    let Ok(mut stream) = TcpStream::connect(("127.0.0.1", port)) else {
+        return false;
+    };
+    // Bound the wait so a wedged server fails the loop instead of hanging it.
+    if stream
+        .set_read_timeout(Some(Duration::from_millis(500)))
+        .is_err()
+    {
+        return false;
+    }
+    if write!(
+        stream,
+        "GET /api/v1/calendar/resources HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n"
+    )
+    .is_err()
+    {
+        return false;
+    }
+    let mut response = String::new();
+    if stream.read_to_string(&mut response).is_err() {
+        return false;
+    }
+    // A complete response, not one the server abandoned part-way.
+    response.starts_with("HTTP/1.1") && response.contains("\r\n\r\n")
 }
 
 fn post_json(port: u16, target: &str, body: &serde_json::Value) -> String {
