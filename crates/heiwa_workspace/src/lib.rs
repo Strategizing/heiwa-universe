@@ -12,11 +12,13 @@
 //! See `docs/superpowers/specs/2026-08-22-heiwa-work-fabric-design.md`.
 
 pub mod git;
+pub mod lease;
 pub mod repository;
 pub mod scope;
 pub mod worktree;
 
 pub use git::{git, GitError};
+pub use lease::{acquire_writer_lease, release_writer_lease, WriterLease};
 pub use repository::{snapshot_in, RepositorySnapshotV1, REPOSITORY_SNAPSHOT_VERSION};
 pub use scope::resolve_in_scope;
 pub use worktree::{
@@ -33,4 +35,8 @@ pub enum WorkspaceError {
     PathEscape { root: String, path: String },
     #[error("{work_id} already holds a worktree in this repository")]
     WorktreeExists { work_id: String },
+    #[error("{repo_root} is already held for writing by {held_by}")]
+    LeaseHeld { repo_root: String, held_by: String },
+    #[error("evidence journal error: {0}")]
+    Evidence(String),
 }
