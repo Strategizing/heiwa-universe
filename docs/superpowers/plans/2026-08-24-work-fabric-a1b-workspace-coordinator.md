@@ -1784,9 +1784,9 @@ pub fn test_projection_in(
         .args(args)
         .current_dir(worktree)
         .output()
-        .map_err(|source| WorkspaceError::CommandUnavailable {
+        .map_err(|error| WorkspaceError::CommandUnavailable {
             command: command.to_string(),
-            source: source.to_string(),
+            reason: error.to_string(),
         })?;
 
     let mut combined = String::from_utf8_lossy(&output.stdout).to_string();
@@ -1822,8 +1822,10 @@ pub fn test_projection_in(
 Add to `WorkspaceError`:
 
 ```rust
-    #[error("could not run verification command {command}: {source}")]
-    CommandUnavailable { command: String, source: String },
+    // Not named `source`: thiserror reserves that for a nested Error, and
+    // this is the io failure rendered as text.
+    #[error("could not run verification command {command}: {reason}")]
+    CommandUnavailable { command: String, reason: String },
 ```
 
 and extend the projection re-export:

@@ -13,12 +13,16 @@
 
 pub mod git;
 pub mod lease;
+pub mod projection;
 pub mod repository;
 pub mod scope;
 pub mod worktree;
 
 pub use git::{git, GitError};
 pub use lease::{acquire_writer_lease, release_writer_lease, WriterLease};
+pub use projection::{
+    diff_projection_in, test_projection_in, ChangedFile, DiffProjectionV1, TestProjectionV1,
+};
 pub use repository::{snapshot_in, RepositorySnapshotV1, REPOSITORY_SNAPSHOT_VERSION};
 pub use scope::resolve_in_scope;
 pub use worktree::{
@@ -39,4 +43,8 @@ pub enum WorkspaceError {
     LeaseHeld { repo_root: String, held_by: String },
     #[error("evidence journal error: {0}")]
     Evidence(String),
+    // Not named `source`: thiserror reserves that for a nested Error, and
+    // this is the io failure rendered as text.
+    #[error("could not run verification command {command}: {reason}")]
+    CommandUnavailable { command: String, reason: String },
 }
