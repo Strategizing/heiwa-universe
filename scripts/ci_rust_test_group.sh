@@ -30,6 +30,7 @@ foundation_packages=(
   heiwa_quota
   heiwa_receipts
   heiwa_work
+  heiwa_workspace
 )
 
 shell_api_targets=(
@@ -100,6 +101,7 @@ foundation_b_targets=(
   smoke
   telemetry_pane
   work_core
+  workspace_core
 )
 
 validate_groups() {

@@ -22,6 +22,25 @@ when its verification runs.
 | 9 | `heiwa work` command | done | `cargo test -p heiwa-shell --bin heiwa cmd::work` |
 | 10 | CI grouping and ledger | done | `bash scripts/ci_rust_test_group.sh --check` |
 
+## Release A1-b — Workspace Coordinator
+
+Plan: `docs/superpowers/plans/2026-08-24-work-fabric-a1b-workspace-coordinator.md`
+
+| # | Step | Status | Verification |
+|---|---|---|---|
+| 1 | Single git process boundary | done | `cargo test -p heiwa_workspace` |
+| 2 | Repository snapshot | done | `cargo test -p heiwa_workspace` |
+| 3 | Canonical roots and symlink refusal | done | `cargo test -p heiwa_workspace` |
+| 4 | Isolated worktree lifecycle | done | `cargo test -p heiwa_workspace` |
+| 5 | Writer lease on the evidence stream | done | `cargo test -p heiwa_workspace` |
+| 6 | Refusal boundary for uncommitted work | done | `cargo test -p heiwa_workspace` |
+| 7 | Bounded diff projection | done | `cargo test -p heiwa_workspace` |
+| 8 | Test projection | done | `cargo test -p heiwa_workspace` |
+| 9 | Workspace operator events | done | `cargo test -p heiwa_workspace -p heiwa-session` |
+| 10 | Integration through journal and repository | done | `cargo test -p heiwa_workspace --test workspace_core` |
+| 11 | `heiwa workspace` command | done | `cargo test -p heiwa-shell --bin heiwa cmd::workspace` |
+| 12 | CI grouping and ledger | done | `bash scripts/ci_rust_test_group.sh --check` |
+
 ## Deferred with reason
 
 - `work_node_bound` and `prior_history_digest` (WF-R15) need an enrolled mesh
@@ -29,11 +48,16 @@ when its verification runs.
   changing an earlier one, so building the type now would produce something
   nothing can emit.
 - `scripts/check_work_fabric_a1_acceptance.sh` lands in A1-c, when the whole
-  A1 checkpoint can pass. A1-a alone cannot satisfy it.
+  A1 checkpoint can pass. Neither A1-a nor A1-b alone can satisfy it.
+- Multi-repository coordination (`WorkTaskGraphV1`, scope reservation,
+  barriers, publication sagas) is Release A2. A1-b's lease is per repository.
+- `SandboxMode::Worktree` stays unwired until A1-c, where something actually
+  runs inside the worktree.
+- Commit and push from a worktree need the Action Gate, which is A1-c.
+- Upstream divergence needs a remote and a fetch, which is a network effect
+  belonging with the GitHub Collaboration Service in Release B.
 
 ## Not started
 
-- A1-b — Workspace Coordinator: one repository, one worktree, writer lease,
-  diff and test projections.
 - A1-c — worker and pane bound to Work, tri-surface agreement, approval to
   receipt, restart recovery, and the A1 acceptance script.
