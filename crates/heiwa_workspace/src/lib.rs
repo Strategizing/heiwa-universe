@@ -14,10 +14,14 @@
 pub mod git;
 pub mod repository;
 pub mod scope;
+pub mod worktree;
 
 pub use git::{git, GitError};
 pub use repository::{snapshot_in, RepositorySnapshotV1, REPOSITORY_SNAPSHOT_VERSION};
 pub use scope::resolve_in_scope;
+pub use worktree::{
+    create_worktree_in, list_worktrees_in, remove_worktree_in, ListedWorktree, WorktreeHandle,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum WorkspaceError {
@@ -27,4 +31,6 @@ pub enum WorkspaceError {
     Git(#[from] GitError),
     #[error("{path} resolves outside the permitted root {root}")]
     PathEscape { root: String, path: String },
+    #[error("{work_id} already holds a worktree in this repository")]
+    WorktreeExists { work_id: String },
 }
