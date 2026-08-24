@@ -106,8 +106,11 @@ pub fn list_worktrees_in(repo_root: &Path) -> Result<Vec<ListedWorktree>, Worksp
 pub fn remove_worktree_in(repo_root: &Path, handle: &WorktreeHandle) -> Result<(), WorkspaceError> {
     git(repo_root, &["worktree", "remove", "--force", &handle.path])?;
     // The branch outlives the directory otherwise, and the next Work with the
-    // same id would collide with a ref nothing points at.
-    let _ = git(repo_root, &["branch", "-D", &handle.branch]);
+    // same id would collide with a ref nothing points at. A deletion git
+    // refuses is therefore incomplete cleanup, not a detail: reporting it as
+    // success hands back a repository that will reject the next preparation
+    // for this Work with no record of why.
+    git(repo_root, &["branch", "-D", &handle.branch])?;
     Ok(())
 }
 
@@ -278,6 +281,42 @@ mod tests {
         assert!(
             source.path().join("a.txt").exists(),
             "removing a worktree must never touch the source"
+        );
+    }
+
+    #[test]
+    fn a_refused_branch_deletion_reaches_the_caller() {
+        let source = repo();
+        let holding = tempfile::tempdir().expect("holding");
+        let handle = create_worktree_in(source.path(), holding.path(), "work-abc").expect("create");
+
+        // Reject deletion of this Work's branch and nothing else, so the only
+        // thing under test is what removal does when git says no.
+        let hooks = source.path().join(".git").join("hooks");
+        std::fs::create_dir_all(&hooks).expect("hooks dir");
+        let hook = hooks.join("reference-transaction");
+        std::fs::write(
+            &hook,
+            "#!/bin/sh\nwhile read -r old new ref; do\n  case \"$ref\" in\n    refs/heads/heiwa/*) exit 1 ;;\n  esac\ndone\nexit 0\n",
+        )
+        .expect("write hook");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755))
+                .expect("make the hook executable");
+        }
+
+        let error = remove_worktree_in(source.path(), &handle)
+            .expect_err("a branch git would not delete is incomplete cleanup, not success");
+        assert!(matches!(error, WorkspaceError::Git(_)), "{error:?}");
+        assert!(
+            crate::git::git(
+                source.path(),
+                &["rev-parse", "--verify", "--quiet", &handle.branch]
+            )
+            .is_ok(),
+            "the stale branch is exactly what the caller now knows about"
         );
     }
 }
