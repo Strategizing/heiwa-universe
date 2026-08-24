@@ -82,6 +82,8 @@ pub struct WorkSessionDeltaV1 {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ResyncReason {
+    /// A frame for another Work cannot mutate this projection.
+    WorkChanged,
     /// The projector rebuilt; revisions from the old fold mean nothing now.
     EpochChanged,
     /// A delta was missed, replayed, or arrived out of order.
@@ -97,6 +99,7 @@ pub enum DeltaApplyOutcome {
 /// What a client tracks between frames.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClientProjection {
+    pub work_id: String,
     pub epoch: ProjectionEpoch,
     pub projection_revision: u64,
 }
@@ -104,6 +107,7 @@ pub struct ClientProjection {
 impl ClientProjection {
     pub fn from_snapshot(snapshot: &WorkSessionSnapshotV1) -> Self {
         Self {
+            work_id: snapshot.work_id.clone(),
             epoch: snapshot.projection_epoch.clone(),
             projection_revision: snapshot.projection_revision,
         }
@@ -112,12 +116,19 @@ impl ClientProjection {
     /// Decide a delta. Epoch is checked before revision: a matching revision
     /// across two folds is a coincidence, not agreement.
     pub fn accept(&self, delta: &WorkSessionDeltaV1) -> DeltaApplyOutcome {
+        if delta.work_id != self.work_id {
+            return DeltaApplyOutcome::ResyncRequired {
+                reason: ResyncReason::WorkChanged,
+            };
+        }
         if delta.projection_epoch != self.epoch {
             return DeltaApplyOutcome::ResyncRequired {
                 reason: ResyncReason::EpochChanged,
             };
         }
-        if delta.base_projection_revision != self.projection_revision {
+        if delta.base_projection_revision != self.projection_revision
+            || delta.projection_revision <= delta.base_projection_revision
+        {
             return DeltaApplyOutcome::ResyncRequired {
                 reason: ResyncReason::RevisionGap,
             };
@@ -138,6 +149,7 @@ mod tests {
 
     fn client() -> ClientProjection {
         ClientProjection {
+            work_id: "work-abc".to_string(),
             epoch: epoch("fold-1"),
             projection_revision: 3,
         }
@@ -178,6 +190,16 @@ mod tests {
     }
 
     #[test]
+    fn a_delta_must_advance_beyond_its_base_revision() {
+        assert_eq!(
+            client().accept(&delta(3, 3, epoch("fold-1"))),
+            DeltaApplyOutcome::ResyncRequired {
+                reason: ResyncReason::RevisionGap
+            }
+        );
+    }
+
+    #[test]
     fn a_delta_from_a_different_fold_forces_a_resync_even_at_a_matching_revision() {
         // The bug this exists to prevent: after a projector rebuild the
         // revision restarts, so base 3 matches by coincidence while the two
@@ -188,6 +210,20 @@ mod tests {
             DeltaApplyOutcome::ResyncRequired {
                 reason: ResyncReason::EpochChanged
             }
+        );
+    }
+
+    #[test]
+    fn a_delta_for_another_work_never_applies_to_this_projection() {
+        let mut foreign = delta(3, 4, epoch("fold-1"));
+        foreign.work_id = "work-def".to_string();
+
+        assert!(
+            matches!(
+                client().accept(&foreign),
+                DeltaApplyOutcome::ResyncRequired { .. }
+            ),
+            "matching epoch and revision cannot cross a Work identity boundary"
         );
     }
 

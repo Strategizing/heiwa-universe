@@ -39,7 +39,8 @@ impl WorkCreatedPayload {
         if event.event_type != OperatorEventType::WorkCreated {
             return None;
         }
-        serde_json::from_value(event.payload.clone()).ok()
+        let payload: Self = serde_json::from_value(event.payload.clone()).ok()?;
+        (payload.primary_thread_id == event.thread_id).then_some(payload)
     }
 }
 
@@ -48,7 +49,8 @@ impl WorkLinkedPayload {
         if event.event_type != OperatorEventType::WorkLinked {
             return None;
         }
-        serde_json::from_value(event.payload.clone()).ok()
+        let payload: Self = serde_json::from_value(event.payload.clone()).ok()?;
+        (payload.thread_id == event.thread_id).then_some(payload)
     }
 }
 
@@ -190,5 +192,30 @@ mod tests {
             WorkLinkedPayload::from_event(&created).is_none(),
             "reading a payload must check the event type, not just the shape"
         );
+    }
+
+    #[test]
+    fn a_payload_cannot_rebind_an_event_to_another_thread() {
+        let work_id = WorkId::generate(|| "abc".to_string());
+        let mut created = work_created_event(
+            &work_id,
+            "thread-envelope",
+            "intent",
+            "installation-1",
+            "2026-08-22T00:00:00Z",
+            || "evt-1".to_string(),
+        );
+        created.payload["primary_thread_id"] = serde_json::json!("thread-payload");
+        assert!(WorkCreatedPayload::from_event(&created).is_none());
+
+        let mut linked = work_linked_event(
+            &work_id,
+            "thread-envelope",
+            WorkLinkOrigin::Adopted,
+            "2026-08-22T00:01:00Z",
+            || "evt-2".to_string(),
+        );
+        linked.payload["thread_id"] = serde_json::json!("thread-payload");
+        assert!(WorkLinkedPayload::from_event(&linked).is_none());
     }
 }

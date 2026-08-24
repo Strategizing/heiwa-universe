@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 
 use heiwa_evidence::OperatorJournal;
 use heiwa_session::operator::OperatorSessionService;
-use heiwa_work::{fold, work_created_event, WorkId};
+use heiwa_work::{fold, work_created_event, Work, WorkId, WorkProjection};
 
 pub fn run(args: &[String]) -> Result<()> {
     match args.first().map(String::as_str) {
@@ -39,8 +39,8 @@ fn service(root: &Path) -> Result<OperatorSessionService> {
 }
 
 fn list(args: &[String]) -> Result<()> {
-    let root = crate::home::heiwa_runtime_dir();
-    let summary = summarize(&root)?;
+    let paths = heiwa_config::HeiwaPaths::resolve();
+    let summary = summarize(&paths.evidence_dir)?;
     if has_flag(args, "--json") {
         println!("{summary}");
         return Ok(());
@@ -73,8 +73,8 @@ fn create_command(args: &[String]) -> Result<()> {
         .iter()
         .find(|arg| !arg.starts_with("--"))
         .ok_or_else(|| anyhow!("usage: heiwa work create \"<intent>\""))?;
-    let root = crate::home::heiwa_runtime_dir();
-    let identity = heiwa_identity::load_from(&root)
+    let paths = heiwa_config::HeiwaPaths::resolve();
+    let identity = heiwa_identity::load_from(&paths.runtime_root)
         .map_err(|error| anyhow!("{error}"))?
         .ok_or_else(|| {
             anyhow!(
@@ -82,7 +82,7 @@ fn create_command(args: &[String]) -> Result<()> {
             )
         })?;
 
-    let created = create(&root, intent, &identity.installation_id)?;
+    let created = create(&paths.evidence_dir, intent, &identity.installation_id)?;
     if has_flag(args, "--json") {
         println!("{created}");
     } else {
@@ -124,20 +124,7 @@ pub(crate) fn create(root: &Path, intent: &str, installation_id: &str) -> Result
 
 /// Every Work visible on this installation, plus damage found while folding.
 pub(crate) fn summarize(root: &Path) -> Result<Value> {
-    let service = service(root)?;
-    let threads = service
-        .list_threads(512)
-        .map_err(|error| anyhow!("{error}"))?;
-
-    let mut events = Vec::new();
-    for thread in &threads {
-        let page = service
-            .events_after(&thread.thread_id, None, 1024)
-            .map_err(|error| anyhow!("{error}"))?;
-        events.extend(page.events.into_iter().map(|row| row.event));
-    }
-
-    let projection = fold(&events);
+    let projection = project(root)?;
     let work: Vec<Value> = projection
         .all()
         .map(|work| {
@@ -160,6 +147,34 @@ pub(crate) fn summarize(root: &Path) -> Result<Value> {
         "work": work,
         "skipped_events": projection.skipped_events,
     }))
+}
+
+/// Fold the operator stream in durable append order.
+///
+/// Reading each thread separately destroys cross-thread ordering: a later
+/// `work_linked` can be visited before its earlier `work_created`, making valid
+/// history look damaged. The journal cursor is the order authority.
+pub(crate) fn project(root: &Path) -> Result<WorkProjection> {
+    const PAGE_SIZE: usize = 256;
+
+    let journal = OperatorJournal::new(root.to_path_buf()).map_err(|error| anyhow!("{error}"))?;
+    let mut cursor: Option<String> = None;
+    let mut events = Vec::new();
+    loop {
+        let page = journal
+            .read_after(cursor.as_deref(), PAGE_SIZE)
+            .map_err(|error| anyhow!("{error}"))?;
+        if page.events.is_empty() {
+            break;
+        }
+        cursor = page.next_cursor;
+        events.extend(page.events.into_iter().map(|row| row.event));
+    }
+    Ok(fold(&events))
+}
+
+pub(crate) fn find(root: &Path, work_id: &str) -> Result<Option<Work>> {
+    Ok(project(root)?.work(work_id).cloned())
 }
 
 fn has_flag(args: &[String], flag: &str) -> bool {
@@ -228,6 +243,44 @@ mod tests {
         assert_eq!(
             summary["skipped_events"], 1,
             "damage found while folding must reach the surface: {summary}"
+        );
+    }
+
+    #[test]
+    fn summarizing_related_threads_preserves_global_event_order() {
+        use heiwa_work::{work_linked_event, WorkLinkOrigin};
+
+        let dir = root();
+        let service = service(dir.path()).expect("service");
+        service.ensure_thread("thread-z-primary").expect("primary");
+        service.ensure_thread("thread-a-related").expect("related");
+        let work_id = WorkId::parse("work-ordered").expect("work id");
+        service
+            .append_event(work_created_event(
+                &work_id,
+                "thread-z-primary",
+                "preserve event order",
+                "installation-1",
+                "2026-08-24T00:00:00Z",
+                || "evt-created".to_string(),
+            ))
+            .expect("work created");
+        service
+            .append_event(work_linked_event(
+                &work_id,
+                "thread-a-related",
+                WorkLinkOrigin::Adopted,
+                "2026-08-24T00:01:00Z",
+                || "evt-linked".to_string(),
+            ))
+            .expect("work linked");
+
+        let summary = summarize(dir.path()).expect("summarize");
+        assert_eq!(summary["skipped_events"], 0, "{summary}");
+        assert_eq!(
+            summary["work"][0]["related_thread_ids"],
+            serde_json::json!(["thread-a-related"]),
+            "{summary}"
         );
     }
 }

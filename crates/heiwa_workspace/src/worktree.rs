@@ -53,6 +53,11 @@ pub fn create_worktree_in(
     holding_dir: &Path,
     work_id: &str,
 ) -> Result<WorktreeHandle, WorkspaceError> {
+    if heiwa_work::WorkId::parse(work_id).is_none() {
+        return Err(WorkspaceError::InvalidWorkId {
+            work_id: work_id.to_string(),
+        });
+    }
     let branch = branch_for(work_id);
 
     if list_worktrees_in(repo_root)?
@@ -225,6 +230,24 @@ mod tests {
         assert!(
             matches!(error, WorkspaceError::WorktreeExists { .. }),
             "{error:?}"
+        );
+    }
+
+    #[test]
+    fn a_worktree_refuses_an_identity_that_is_not_one_safe_component() {
+        let source = repo();
+        let holding = tempfile::tempdir().expect("holding");
+
+        let error = create_worktree_in(source.path(), holding.path(), "work-nested/value")
+            .expect_err("Work identity becomes both a path and a git ref component");
+
+        assert!(
+            matches!(error, WorkspaceError::InvalidWorkId { .. }),
+            "{error:?}"
+        );
+        assert!(
+            !holding.path().join("work-nested").exists(),
+            "refusal happens before filesystem mutation"
         );
     }
 

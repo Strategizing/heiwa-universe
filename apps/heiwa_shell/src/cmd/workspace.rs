@@ -9,16 +9,16 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 
-use heiwa_evidence::JsonlTransport;
-use heiwa_workspace::{acquire_writer_lease, create_worktree_in, diff_projection_in, snapshot_in};
+use heiwa_evidence::{JsonlTransport, OperatorJournal};
+use heiwa_session::operator::OperatorSessionService;
+use heiwa_workspace::{
+    acquire_writer_lease, create_worktree_in, diff_projection_in, remove_worktree_in,
+    revoke_writer_lease, snapshot_in, workspace_prepared_event, WorktreeHandle, WriterLease,
+};
 
 /// Where Heiwa keeps the worktrees it owns.
 fn holding_dir(runtime_root: &Path) -> PathBuf {
     runtime_root.join("worktrees")
-}
-
-fn evidence_dir(runtime_root: &Path) -> PathBuf {
-    runtime_root.join("evidence")
 }
 
 pub fn run(args: &[String]) -> Result<()> {
@@ -92,13 +92,19 @@ fn prepare(args: &[String]) -> Result<()> {
         .iter()
         .find(|arg| !arg.starts_with("--"))
         .ok_or_else(|| anyhow!("usage: heiwa workspace prepare <work_id>"))?;
-    let runtime_root = crate::home::heiwa_runtime_dir();
-    let identity = heiwa_identity::load_from(&runtime_root)
+    let paths = heiwa_config::HeiwaPaths::resolve();
+    let identity = heiwa_identity::load_from(&paths.runtime_root)
         .map_err(|error| anyhow!("{error}"))?
         .ok_or_else(|| anyhow!("no local identity on this installation; run first-run setup"))?;
     let cwd = std::env::current_dir()?;
 
-    let prepared = prepare_for(&runtime_root, &cwd, work_id, &identity.installation_id)?;
+    let prepared = prepare_for(
+        &paths.runtime_root,
+        &paths.evidence_dir,
+        &cwd,
+        work_id,
+        &identity.installation_id,
+    )?;
     if has_flag(args, "--json") {
         println!("{prepared}");
     } else {
@@ -124,20 +130,30 @@ fn prepare(args: &[String]) -> Result<()> {
 /// never leaves a stray directory behind.
 pub(crate) fn prepare_for(
     runtime_root: &Path,
+    evidence_root: &Path,
     repo_root: &Path,
     work_id: &str,
     installation_id: &str,
 ) -> Result<Value> {
+    let work = crate::cmd::work::find(evidence_root, work_id)?
+        .ok_or_else(|| anyhow!("Work {work_id} does not exist on this installation"))?;
+    if work.origin_installation_id != installation_id {
+        return Err(anyhow!(
+            "Work {work_id} belongs to installation {}, not {installation_id}",
+            work.origin_installation_id
+        ));
+    }
+
     let snapshot = snapshot_in(repo_root).map_err(|error| anyhow!("{error}"))?;
-    let evidence = evidence_dir(runtime_root);
-    std::fs::create_dir_all(&evidence)?;
-    let transport = JsonlTransport::new(evidence.clone()).map_err(|error| anyhow!("{error}"))?;
+    std::fs::create_dir_all(evidence_root)?;
+    let transport =
+        JsonlTransport::new(evidence_root.to_path_buf()).map_err(|error| anyhow!("{error}"))?;
 
     let now = chrono::Utc::now();
     let expires = now + chrono::Duration::hours(8);
 
-    acquire_writer_lease(
-        &evidence,
+    let lease = acquire_writer_lease(
+        evidence_root,
         &transport,
         work_id,
         &snapshot.root,
@@ -150,11 +166,52 @@ pub(crate) fn prepare_for(
 
     let holding = holding_dir(runtime_root);
     std::fs::create_dir_all(&holding)?;
-    let handle =
-        create_worktree_in(repo_root, &holding, work_id).map_err(|error| anyhow!("{error}"))?;
+    let handle = match create_worktree_in(repo_root, &holding, work_id) {
+        Ok(handle) => handle,
+        Err(error) => {
+            return Err(compensate_failed_prepare(
+                &transport,
+                &lease,
+                repo_root,
+                None,
+                anyhow!("{error}"),
+            ));
+        }
+    };
 
-    let diff =
-        diff_projection_in(Path::new(&handle.path), 200).map_err(|error| anyhow!("{error}"))?;
+    let diff = match diff_projection_in(Path::new(&handle.path), 200) {
+        Ok(diff) => diff,
+        Err(error) => {
+            return Err(compensate_failed_prepare(
+                &transport,
+                &lease,
+                repo_root,
+                Some(&handle),
+                anyhow!("{error}"),
+            ));
+        }
+    };
+
+    let service = OperatorSessionService::new(
+        OperatorJournal::new(evidence_root.to_path_buf()).map_err(|error| anyhow!("{error}"))?,
+    );
+    let occurred_at = chrono::Utc::now().to_rfc3339();
+    if let Err(error) = service.append_event(workspace_prepared_event(
+        work_id,
+        &work.primary_thread_id,
+        &snapshot.root,
+        &handle,
+        &occurred_at,
+        || uuid::Uuid::new_v4().to_string(),
+    )) {
+        return Err(compensate_failed_prepare(
+            &transport,
+            &lease,
+            repo_root,
+            Some(&handle),
+            anyhow!("{error}"),
+        ));
+    }
 
     Ok(json!({
         "work_id": work_id,
@@ -166,6 +223,40 @@ pub(crate) fn prepare_for(
         "source_dirty_paths": snapshot.dirty_paths,
         "changed_files": diff.total_files,
     }))
+}
+
+fn compensate_failed_prepare(
+    transport: &JsonlTransport,
+    lease: &WriterLease,
+    repo_root: &Path,
+    handle: Option<&WorktreeHandle>,
+    cause: anyhow::Error,
+) -> anyhow::Error {
+    let mut cleanup_failures = Vec::new();
+    if let Some(handle) = handle {
+        if let Err(error) = remove_worktree_in(repo_root, handle) {
+            cleanup_failures.push(format!("worktree cleanup failed: {error}"));
+        }
+    }
+    let revoked_at = chrono::Utc::now().to_rfc3339();
+    if let Err(error) = revoke_writer_lease(
+        transport,
+        lease,
+        &revoked_at,
+        "WORKSPACE_PREPARE_FAILED",
+        &cause.to_string(),
+    ) {
+        cleanup_failures.push(format!("lease compensation failed: {error}"));
+    }
+
+    if cleanup_failures.is_empty() {
+        cause
+    } else {
+        anyhow!(
+            "workspace preparation failed: {cause}; {}",
+            cleanup_failures.join("; ")
+        )
+    }
 }
 
 #[cfg(test)]
@@ -182,6 +273,22 @@ mod tests {
         heiwa_workspace::git(path, &["add", "."]).expect("add");
         heiwa_workspace::git(path, &["commit", "-qm", "one"]).expect("commit");
         dir
+    }
+
+    fn evidence(runtime: &Path) -> PathBuf {
+        runtime.join("evidence")
+    }
+
+    fn work(runtime: &Path) -> String {
+        crate::cmd::work::create(&evidence(runtime), "prepare repository work", "install-1")
+            .expect("create Work")["work_id"]
+            .as_str()
+            .expect("work id")
+            .to_string()
+    }
+
+    fn prepare_test(runtime: &Path, repo: &Path, work_id: &str) -> Result<Value> {
+        prepare_for(runtime, &evidence(runtime), repo, work_id, "install-1")
     }
 
     #[test]
@@ -209,13 +316,31 @@ mod tests {
     }
 
     #[test]
+    fn preparing_an_unknown_work_is_refused_before_any_hold_is_taken() {
+        let source = repo();
+        let runtime = tempfile::tempdir().expect("runtime");
+
+        let error = prepare_test(runtime.path(), source.path(), "work-missing")
+            .expect_err("a workspace must belong to durable Work");
+
+        assert!(error.to_string().contains("does not exist"), "{error}");
+        let view = heiwa_evidence::WorkerStateView::replay(&evidence(runtime.path()))
+            .expect("replay leases");
+        assert!(view.leases.is_empty(), "no lease may be taken: {view:?}");
+        assert!(
+            !holding_dir(runtime.path()).join("work-missing").exists(),
+            "no worktree may be created"
+        );
+    }
+
+    #[test]
     fn preparing_a_workspace_returns_the_worktree_it_created() {
         let source = repo();
         let runtime = tempfile::tempdir().expect("runtime");
-        let prepared =
-            prepare_for(runtime.path(), source.path(), "work-abc", "install-1").expect("prepare");
+        let work_id = work(runtime.path());
+        let prepared = prepare_test(runtime.path(), source.path(), &work_id).expect("prepare");
 
-        assert_eq!(prepared["work_id"], "work-abc");
+        assert_eq!(prepared["work_id"], work_id);
         let worktree = prepared["worktree_path"].as_str().expect("path");
         assert!(
             std::path::Path::new(worktree).join("a.txt").exists(),
@@ -224,16 +349,85 @@ mod tests {
     }
 
     #[test]
+    fn successful_preparation_records_the_workspace_on_its_work() {
+        let source = repo();
+        let runtime = tempfile::tempdir().expect("runtime");
+        let work_id = work(runtime.path());
+
+        prepare_test(runtime.path(), source.path(), &work_id).expect("prepare");
+
+        let journal =
+            heiwa_evidence::OperatorJournal::new(evidence(runtime.path())).expect("journal");
+        let page = journal.read_after(None, 64).expect("replay");
+        let prepared = page
+            .events
+            .iter()
+            .find(|row| {
+                row.event.event_type == heiwa_evidence::OperatorEventType::WorkspacePrepared
+            })
+            .expect("workspace_prepared event");
+        assert_eq!(prepared.event.work_id.as_deref(), Some(work_id.as_str()));
+        let expected_path = holding_dir(runtime.path())
+            .join(&work_id)
+            .canonicalize()
+            .expect("created worktree has a canonical path");
+        assert_eq!(
+            prepared.event.payload["worktree_path"],
+            serde_json::Value::String(expected_path.display().to_string())
+        );
+    }
+
+    #[test]
     fn preparing_a_repository_twice_is_refused_with_the_holder_named() {
         let source = repo();
         let runtime = tempfile::tempdir().expect("runtime");
-        prepare_for(runtime.path(), source.path(), "work-abc", "install-1").expect("first");
+        let first_work = work(runtime.path());
+        let second_work = work(runtime.path());
+        prepare_test(runtime.path(), source.path(), &first_work).expect("first");
 
-        let error = prepare_for(runtime.path(), source.path(), "work-def", "install-1")
+        let error = prepare_test(runtime.path(), source.path(), &second_work)
             .expect_err("one writer per repository");
         assert!(
-            error.to_string().contains("work-abc"),
+            error.to_string().contains(&first_work),
             "the refusal must name the holder: {error}"
+        );
+    }
+
+    #[test]
+    fn failed_worktree_creation_does_not_leave_the_repository_leased() {
+        let source = repo();
+        let runtime = tempfile::tempdir().expect("runtime");
+        let failed_work = work(runtime.path());
+        let successful_work = work(runtime.path());
+        let failed_branch = format!("heiwa/{failed_work}");
+        heiwa_workspace::git(source.path(), &["branch", &failed_branch, "HEAD"])
+            .expect("pre-existing branch forces worktree creation to fail");
+
+        prepare_test(runtime.path(), source.path(), &failed_work)
+            .expect_err("the worktree branch already exists");
+
+        prepare_test(runtime.path(), source.path(), &successful_work)
+            .expect("a failed preparation must give the repository back");
+
+        let view = heiwa_evidence::WorkerStateView::replay(&evidence(runtime.path()))
+            .expect("replay leases");
+        let failed = view
+            .leases
+            .values()
+            .find(|lease| lease.task_id == failed_work)
+            .expect("failed lease remains as evidence");
+        assert_eq!(failed.status, "revoked");
+        assert_eq!(
+            failed.failure_code.as_deref(),
+            Some("WORKSPACE_PREPARE_FAILED")
+        );
+        assert_eq!(
+            view.leases
+                .values()
+                .filter(|lease| matches!(lease.status.as_str(), "issued" | "acked"))
+                .count(),
+            1,
+            "only the successful preparation may remain live"
         );
     }
 }

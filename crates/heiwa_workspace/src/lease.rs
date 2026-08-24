@@ -9,7 +9,7 @@
 
 use std::path::Path;
 
-use heiwa_evidence::{EvidenceTransport, PersistedWorkerLease, WorkerStateView};
+use heiwa_evidence::{EvidenceTransport, JsonlTransport, PersistedWorkerLease};
 use serde::{Deserialize, Serialize};
 
 use crate::WorkspaceError;
@@ -30,6 +30,7 @@ pub struct WriterLease {
     /// *replaces* the issued one — anything not repeated here is destroyed.
     pub node_id: String,
     pub issued_at: String,
+    pub expires_at: String,
 }
 
 fn capability_for(repo_root: &str) -> String {
@@ -42,9 +43,9 @@ fn capability_for(repo_root: &str) -> String {
 /// `evidence_dir` is where the journal lives; the caller resolves it, because
 /// this crate resolves no roots.
 #[allow(clippy::too_many_arguments)]
-pub fn acquire_writer_lease<T: EvidenceTransport>(
+pub fn acquire_writer_lease(
     evidence_dir: &Path,
-    transport: &T,
+    transport: &JsonlTransport,
     work_id: &str,
     repo_root: &str,
     installation_id: &str,
@@ -53,43 +54,45 @@ pub fn acquire_writer_lease<T: EvidenceTransport>(
     new_lease_id: impl FnOnce() -> String,
 ) -> Result<WriterLease, WorkspaceError> {
     let capability = capability_for(repo_root);
+    if transport.dir() != evidence_dir {
+        return Err(WorkspaceError::Evidence(format!(
+            "lease transport root {} does not match replay root {}",
+            transport.dir().display(),
+            evidence_dir.display()
+        )));
+    }
 
-    let view = WorkerStateView::replay(evidence_dir)
-        .map_err(|error| WorkspaceError::Evidence(error.to_string()))?;
+    let lease_id = new_lease_id();
+    let persisted = PersistedWorkerLease {
+        lease_id: lease_id.clone(),
+        task_id: work_id.to_string(),
+        // A1-b has no separate worker session yet; A1-c introduces one and
+        // will carry it here. Naming the Work is honest in the meantime.
+        session_id: work_id.to_string(),
+        // No mesh node identity is required for local Work, exactly as
+        // `Work.origin_node` stays `None` until enrolment.
+        node_id: installation_id.to_string(),
+        capability: capability.clone(),
+        status: "issued".to_string(),
+        issued_at: issued_at.to_string(),
+        updated_at: issued_at.to_string(),
+        expires_at: expires_at.to_string(),
+        acked_at: None,
+        completed_at: None,
+        failure_code: None,
+        reason: None,
+    };
 
-    if let Some(held) = view
-        .leases
-        .values()
-        .find(|lease| lease.capability == capability && LIVE.contains(&lease.status.as_str()))
+    if let Some(held) = transport
+        .try_acquire_worker_lease(persisted)
+        .map_err(|error| WorkspaceError::Evidence(error.to_string()))?
     {
+        debug_assert!(LIVE.contains(&held.status.as_str()));
         return Err(WorkspaceError::LeaseHeld {
             repo_root: repo_root.to_string(),
             held_by: held.task_id.clone(),
         });
     }
-
-    let lease_id = new_lease_id();
-    transport
-        .upsert_worker_lease(PersistedWorkerLease {
-            lease_id: lease_id.clone(),
-            task_id: work_id.to_string(),
-            // A1-b has no separate worker session yet; A1-c introduces one and
-            // will carry it here. Naming the Work is honest in the meantime.
-            session_id: work_id.to_string(),
-            // No mesh node identity is required for local Work, exactly as
-            // `Work.origin_node` stays `None` until enrolment.
-            node_id: installation_id.to_string(),
-            capability: capability.clone(),
-            status: "issued".to_string(),
-            issued_at: issued_at.to_string(),
-            updated_at: issued_at.to_string(),
-            expires_at: expires_at.to_string(),
-            acked_at: None,
-            completed_at: None,
-            failure_code: None,
-            reason: None,
-        })
-        .map_err(|error| WorkspaceError::Evidence(error.to_string()))?;
 
     Ok(WriterLease {
         lease_id,
@@ -97,14 +100,17 @@ pub fn acquire_writer_lease<T: EvidenceTransport>(
         capability,
         node_id: installation_id.to_string(),
         issued_at: issued_at.to_string(),
+        expires_at: expires_at.to_string(),
     })
 }
 
-/// Give the repository back.
-pub fn release_writer_lease<T: EvidenceTransport>(
+fn finish_writer_lease<T: EvidenceTransport>(
     transport: &T,
     lease: &WriterLease,
-    released_at: &str,
+    finished_at: &str,
+    status: &str,
+    failure_code: Option<&str>,
+    reason: &str,
 ) -> Result<(), WorkspaceError> {
     transport
         .upsert_worker_lease(PersistedWorkerLease {
@@ -113,16 +119,50 @@ pub fn release_writer_lease<T: EvidenceTransport>(
             session_id: lease.work_id.clone(),
             node_id: lease.node_id.clone(),
             capability: lease.capability.clone(),
-            status: "completed".to_string(),
+            status: status.to_string(),
             issued_at: lease.issued_at.clone(),
-            updated_at: released_at.to_string(),
-            expires_at: released_at.to_string(),
+            updated_at: finished_at.to_string(),
+            expires_at: lease.expires_at.clone(),
             acked_at: None,
-            completed_at: Some(released_at.to_string()),
-            failure_code: None,
-            reason: Some("workspace released".to_string()),
+            completed_at: Some(finished_at.to_string()),
+            failure_code: failure_code.map(str::to_string),
+            reason: Some(reason.to_string()),
         })
         .map_err(|error| WorkspaceError::Evidence(error.to_string()))
+}
+
+/// Give the repository back after successful use.
+pub fn release_writer_lease<T: EvidenceTransport>(
+    transport: &T,
+    lease: &WriterLease,
+    released_at: &str,
+) -> Result<(), WorkspaceError> {
+    finish_writer_lease(
+        transport,
+        lease,
+        released_at,
+        "completed",
+        None,
+        "workspace released",
+    )
+}
+
+/// Give the repository back because preparation or execution failed.
+pub fn revoke_writer_lease<T: EvidenceTransport>(
+    transport: &T,
+    lease: &WriterLease,
+    revoked_at: &str,
+    failure_code: &str,
+    reason: &str,
+) -> Result<(), WorkspaceError> {
+    finish_writer_lease(
+        transport,
+        lease,
+        revoked_at,
+        "revoked",
+        Some(failure_code),
+        reason,
+    )
 }
 
 #[cfg(test)]
@@ -272,6 +312,10 @@ mod tests {
         assert_eq!(
             stored.issued_at, "2026-08-24T00:00:00Z",
             "release must not rewrite when the lease was issued"
+        );
+        assert_eq!(
+            stored.expires_at, "2026-08-24T01:00:00Z",
+            "release must preserve the original expiry fact"
         );
     }
 

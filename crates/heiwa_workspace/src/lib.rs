@@ -24,7 +24,7 @@ pub use events::{
     WorkspaceReleasedPayload,
 };
 pub use git::{git, GitError};
-pub use lease::{acquire_writer_lease, release_writer_lease, WriterLease};
+pub use lease::{acquire_writer_lease, release_writer_lease, revoke_writer_lease, WriterLease};
 pub use projection::{
     diff_projection_in, test_projection_in, ChangedFile, DiffProjectionV1, TestProjectionV1,
 };
@@ -44,6 +44,8 @@ pub enum WorkspaceError {
     PathEscape { root: String, path: String },
     #[error("{work_id} already holds a worktree in this repository")]
     WorktreeExists { work_id: String },
+    #[error("{work_id} is not a valid Work identity")]
+    InvalidWorkId { work_id: String },
     #[error("{repo_root} is already held for writing by {held_by}")]
     LeaseHeld { repo_root: String, held_by: String },
     #[error("evidence journal error: {0}")]

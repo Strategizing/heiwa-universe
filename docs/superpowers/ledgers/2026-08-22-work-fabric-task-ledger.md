@@ -41,6 +41,21 @@ Plan: `docs/superpowers/plans/2026-08-24-work-fabric-a1b-workspace-coordinator.m
 | 11 | `heiwa workspace` command | done | `cargo test -p heiwa-shell --bin heiwa cmd::workspace` |
 | 12 | CI grouping and ledger | done | `bash scripts/ci_rust_test_group.sh --check` |
 
+## A1 cohesion repair — 2026-08-24
+
+Independent post-feature review found invariants that the component tests did
+not compose across journal, Work, and Workspace boundaries.
+
+| # | Repaired invariant | Status | Verification |
+|---|---|---|---|
+| 1 | One capability has one atomic lease winner across transports | done | `cargo test -p heiwa_evidence --test state` |
+| 2 | Corrupt lease state fails closed and expired leases close before succession | done | `cargo test -p heiwa_evidence --test state` |
+| 3 | Work, workspace leases, and workspace events share the resolved evidence root | done | `cargo test -p heiwa-shell --bin heiwa cmd::work` |
+| 4 | Failed workspace preparation removes its clean worktree and revokes its lease | done | `cargo test -p heiwa-shell --bin heiwa cmd::workspace` |
+| 5 | Workspace preparation requires durable Work and appends `workspace_prepared` | done | `cargo test -p heiwa-shell --bin heiwa cmd::workspace` |
+| 6 | Work folding preserves global operator-cursor order across threads | done | `cargo test -p heiwa-shell --bin heiwa cmd::work` |
+| 7 | Work IDs are safe path/ref components; client deltas cannot cross Work or regress revision | done | `cargo test -p heiwa_work -p heiwa_workspace` |
+
 ## Deferred with reason
 
 - `work_node_bound` and `prior_history_digest` (WF-R15) need an enrolled mesh

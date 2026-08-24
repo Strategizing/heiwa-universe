@@ -26,7 +26,12 @@ impl WorkId {
     /// Accept an existing id, or refuse it.
     pub fn parse(value: &str) -> Option<Self> {
         let rest = value.strip_prefix(WORK_ID_PREFIX)?;
-        if rest.is_empty() {
+        if rest.is_empty()
+            || rest.len() > 128
+            || !rest
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+        {
             return None;
         }
         Some(Self(value.to_string()))
@@ -113,6 +118,23 @@ mod tests {
             "a thread id must never silently become a work id"
         );
         assert!(WorkId::parse("").is_none());
+    }
+
+    #[test]
+    fn a_work_id_is_safe_as_one_path_and_git_ref_component() {
+        for invalid in [
+            "work-../escape",
+            "work-nested/value",
+            "work-has space",
+            "work-has\nnewline",
+            "work-💥",
+        ] {
+            assert!(
+                WorkId::parse(invalid).is_none(),
+                "unsafe identity must be refused: {invalid:?}"
+            );
+        }
+        assert!(WorkId::parse("work-abc_123-def").is_some());
     }
 
     fn work() -> Work {
