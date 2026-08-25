@@ -13,4 +13,6 @@ pub mod mail;
 pub mod mesh;
 pub mod release_update;
 pub mod schedule;
+pub mod work;
 pub mod workers;
+pub mod workspace;

@@ -3432,6 +3432,8 @@ dependencies = [
  "heiwa_quota",
  "heiwa_receipts",
  "heiwa_vault",
+ "heiwa_work",
+ "heiwa_workspace",
  "hostname",
  "libc",
  "reqwest 0.12.28",
@@ -3619,6 +3621,32 @@ name = "heiwa_vault"
 version = "0.1.0"
 dependencies = [
  "keyring",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "heiwa_work"
+version = "0.1.0"
+dependencies = [
+ "heiwa-session",
+ "heiwa_evidence",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "heiwa_workspace"
+version = "0.1.0"
+dependencies = [
+ "heiwa-session",
+ "heiwa_evidence",
+ "heiwa_work",
  "serde",
  "serde_json",
  "tempfile",

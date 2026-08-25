@@ -20,6 +20,7 @@ fn event(
         turn_id: Some("turn-1".into()),
         run_id: None,
         call_id: None,
+        work_id: None,
         event_type: kind,
         occurred_at: "2026-07-18T00:00:00Z".into(),
         actor: OperatorActor {

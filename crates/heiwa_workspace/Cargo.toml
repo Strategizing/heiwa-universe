@@ -1,0 +1,26 @@
+[package]
+name = "heiwa_workspace"
+version = "0.1.0"
+edition = "2021"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Repository snapshots, isolated worktrees, and writer leases for Heiwa Work."
+
+[dependencies]
+heiwa_evidence = { path = "../heiwa_evidence" }
+heiwa_work = { path = "../heiwa_work" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+# heiwa_workspace is a foundation package and heiwa-session is a runtime one,
+# so this edge points "upward". It is a dev-dependency only, which Cargo
+# permits and which leaves the normal build graph unchanged. Do not promote it.
+[dev-dependencies]
+heiwa-session = { path = "../heiwa_session" }
+tempfile = "3"

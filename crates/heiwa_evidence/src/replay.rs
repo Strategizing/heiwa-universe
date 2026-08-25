@@ -39,6 +39,19 @@ pub fn read_stream(dir: &Path, kind: &str) -> Result<ReplayedStream> {
     }
 
     let _stream_lock = lock_stream(dir, kind)?;
+    read_stream_unlocked(dir, kind)
+}
+
+/// Read a stream when the caller already holds its append lock.
+///
+/// This is crate-private because skipping the lock is sound only inside an
+/// existing stream transaction such as atomic worker-lease acquisition.
+pub(crate) fn read_stream_unlocked(dir: &Path, kind: &str) -> Result<ReplayedStream> {
+    let path = stream_path(dir, kind);
+    if !path.exists() {
+        return Ok(ReplayedStream::default());
+    }
+
     let mut raw = Vec::new();
     OpenOptions::new()
         .read(true)

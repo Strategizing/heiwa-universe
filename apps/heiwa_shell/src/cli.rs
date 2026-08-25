@@ -44,6 +44,14 @@ pub async fn try_handle(args: &[String]) -> Result<bool> {
             cmd::mesh::run(&args[2..])?;
             Ok(true)
         }
+        Some("work") => {
+            cmd::work::run(&args[2..])?;
+            Ok(true)
+        }
+        Some("workspace") => {
+            cmd::workspace::run(&args[2..])?;
+            Ok(true)
+        }
         Some("mail") => {
             cmd::mail::run(&args[2..]).await?;
             Ok(true)

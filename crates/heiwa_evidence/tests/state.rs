@@ -49,6 +49,101 @@ fn lease(id: &str, session_id: &str, status: &str) -> PersistedWorkerLease {
 }
 
 #[test]
+fn concurrent_acquisition_of_one_capability_has_exactly_one_winner() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let first = JsonlTransport::new(dir.path().to_path_buf()).expect("first transport");
+    let second = JsonlTransport::new(dir.path().to_path_buf()).expect("second transport");
+    let start = std::sync::Arc::new(std::sync::Barrier::new(3));
+
+    let first_start = std::sync::Arc::clone(&start);
+    let first_worker = std::thread::spawn(move || {
+        first_start.wait();
+        first
+            .try_acquire_worker_lease(lease("first", "work-first", "issued"))
+            .expect("first acquisition")
+    });
+
+    let second_start = std::sync::Arc::clone(&start);
+    let second_worker = std::thread::spawn(move || {
+        second_start.wait();
+        second
+            .try_acquire_worker_lease(lease("second", "work-second", "issued"))
+            .expect("second acquisition")
+    });
+
+    start.wait();
+    let outcomes = [
+        first_worker.join().expect("first worker"),
+        second_worker.join().expect("second worker"),
+    ];
+
+    assert_eq!(
+        outcomes.iter().filter(|outcome| outcome.is_none()).count(),
+        1,
+        "one caller acquires; the other receives the durable holder"
+    );
+    let held = outcomes
+        .iter()
+        .find_map(|outcome| outcome.as_ref())
+        .expect("one caller is refused");
+    assert_eq!(held.capability, "exec");
+
+    let view = WorkerStateView::replay(dir.path()).expect("replay");
+    let live = view
+        .leases
+        .values()
+        .filter(|lease| matches!(lease.status.as_str(), "issued" | "acked"))
+        .count();
+    assert_eq!(live, 1, "the journal must contain one live owner");
+}
+
+#[test]
+fn a_damaged_lease_stream_fails_closed_instead_of_minting_a_second_owner() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let stream = dir.path().join("worker_leases.jsonl");
+    std::fs::write(&stream, b"{not valid json}\n").expect("damage fixture");
+    let transport = JsonlTransport::new(dir.path().to_path_buf()).expect("transport");
+
+    let error = transport
+        .try_acquire_worker_lease(lease("candidate", "work-candidate", "issued"))
+        .expect_err("unknown lease state cannot be treated as free");
+
+    assert!(error.to_string().contains("damaged"), "{error}");
+    assert_eq!(
+        std::fs::read(&stream).expect("stream"),
+        b"{not valid json}\n",
+        "a failed-closed acquisition must append nothing"
+    );
+}
+
+#[test]
+fn an_expired_capability_is_closed_before_its_successor_is_acquired() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let transport = JsonlTransport::new(dir.path().to_path_buf()).expect("transport");
+    let mut expired = lease("expired", "work-old", "issued");
+    expired.expires_at = "2026-07-16T01:00:00Z".to_string();
+    transport
+        .upsert_worker_lease(expired)
+        .expect("seed expired lease");
+
+    let mut successor = lease("successor", "work-new", "issued");
+    successor.issued_at = "2026-07-16T02:00:00Z".to_string();
+    successor.updated_at = successor.issued_at.clone();
+    successor.expires_at = "2026-07-16T03:00:00Z".to_string();
+    assert!(
+        transport
+            .try_acquire_worker_lease(successor)
+            .expect("acquire after expiry")
+            .is_none(),
+        "an expired holder no longer owns the capability"
+    );
+
+    let view = WorkerStateView::replay(dir.path()).expect("replay");
+    assert_eq!(view.leases["expired"].status, "expired");
+    assert_eq!(view.leases["successor"].status, "issued");
+}
+
+#[test]
 fn worker_state_view_folds_last_record_per_key() {
     let dir = tempfile::tempdir().expect("tempdir");
     let transport = JsonlTransport::new(dir.path().to_path_buf()).expect("transport");

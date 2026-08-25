@@ -1034,6 +1034,8 @@ fn print_help() {
     println!("  workers heartbeat             Register local worker liveness");
     println!("  workers status                Show worker registry");
     println!("  mesh status|enroll            Node identity for this machine (no peers yet)");
+    println!("  work list|create              Durable Work on this installation");
+    println!("  workspace status|prepare      Repository hold for a Work");
     println!("  auto status|create|tick       Manage local background automations");
     println!("  approvals list|show|decide    Manage local approval packets");
     println!("  mail status|accounts          Mail.app metadata-only bridge probe");
@@ -3395,6 +3397,7 @@ fn finish_auxiliary_turn(
         turn_id: Some(context.turn_id.clone()),
         run_id: None,
         call_id: None,
+        work_id: None,
         event_type: heiwa_evidence::OperatorEventType::TurnCompleted,
         occurred_at: heiwa_evidence::now_iso(),
         actor: heiwa_evidence::OperatorActor {

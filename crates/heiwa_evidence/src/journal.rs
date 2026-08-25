@@ -6,6 +6,7 @@
 //! shell, orchestrator — can share one journal without torn lines, and so
 //! compaction can atomically swap the stream without losing racing writes.
 
+use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -14,6 +15,8 @@ use std::sync::Mutex;
 use anyhow::{anyhow, Result};
 use serde::Serialize;
 use serde_json::json;
+use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 
 use crate::records::*;
 use crate::{journal_root, now_ms, EVIDENCE_SCHEMA_VERSION};
@@ -93,7 +96,7 @@ impl JsonlTransport {
         &self.dir
     }
 
-    fn append<T: Serialize>(&self, kind: &str, record: &T) -> Result<()> {
+    fn encoded_record<T: Serialize>(kind: &str, record: &T) -> Result<Vec<u8>> {
         let line = json!({
             "v": EVIDENCE_SCHEMA_VERSION,
             "at_ms": now_ms(),
@@ -103,12 +106,11 @@ impl JsonlTransport {
         .to_string();
         let mut payload = line.into_bytes();
         payload.push(b'\n');
+        Ok(payload)
+    }
 
-        let _guard = self
-            .write_lock
-            .lock()
-            .map_err(|_| anyhow!("evidence write lock poisoned"))?;
-        let _stream_lock = lock_stream(&self.dir, kind)?;
+    fn append_locked<T: Serialize>(&self, kind: &str, record: &T) -> Result<()> {
+        let payload = Self::encoded_record(kind, record)?;
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
@@ -116,6 +118,92 @@ impl JsonlTransport {
         file.write_all(&payload)?;
         file.sync_data()?;
         Ok(())
+    }
+
+    fn append<T: Serialize>(&self, kind: &str, record: &T) -> Result<()> {
+        let _guard = self
+            .write_lock
+            .lock()
+            .map_err(|_| anyhow!("evidence write lock poisoned"))?;
+        let _stream_lock = lock_stream(&self.dir, kind)?;
+        self.append_locked(kind, record)
+    }
+
+    /// Atomically acquire one worker capability.
+    ///
+    /// Returns `Ok(None)` when `lease` was appended. When another live lease
+    /// already owns the same capability, returns that durable holder without
+    /// appending anything. Replay and append share the stream lock, so two
+    /// processes cannot both observe the capability as free.
+    pub fn try_acquire_worker_lease(
+        &self,
+        lease: PersistedWorkerLease,
+    ) -> Result<Option<PersistedWorkerLease>> {
+        if !matches!(lease.status.as_str(), "issued" | "acked") {
+            return Err(anyhow!(
+                "worker lease acquisition requires issued or acked status, got {}",
+                lease.status
+            ));
+        }
+        let acquired_at = OffsetDateTime::parse(&lease.issued_at, &Rfc3339)
+            .map_err(|error| anyhow!("invalid worker lease issued_at: {error}"))?;
+        let candidate_expires_at = OffsetDateTime::parse(&lease.expires_at, &Rfc3339)
+            .map_err(|error| anyhow!("invalid worker lease expires_at: {error}"))?;
+        if candidate_expires_at <= acquired_at {
+            return Err(anyhow!(
+                "worker lease expires_at must be later than issued_at"
+            ));
+        }
+
+        let _guard = self
+            .write_lock
+            .lock()
+            .map_err(|_| anyhow!("evidence write lock poisoned"))?;
+        let _stream_lock = lock_stream(&self.dir, "worker_leases")?;
+
+        let replay = crate::replay::read_stream_unlocked(&self.dir, "worker_leases")?;
+        if replay.skipped_lines > 0 {
+            return Err(anyhow!(
+                "worker lease stream is damaged ({} unreadable line(s)); refusing acquisition",
+                replay.skipped_lines
+            ));
+        }
+        let mut latest = HashMap::<String, PersistedWorkerLease>::new();
+        for event in replay.events {
+            if let Ok(persisted) = serde_json::from_value::<PersistedWorkerLease>(event.record) {
+                latest.insert(persisted.lease_id.clone(), persisted);
+            }
+        }
+
+        let mut expired = Vec::new();
+        for candidate in latest.into_values().filter(|candidate| {
+            candidate.capability == lease.capability
+                && matches!(candidate.status.as_str(), "issued" | "acked")
+        }) {
+            let expires_at =
+                OffsetDateTime::parse(&candidate.expires_at, &Rfc3339).map_err(|error| {
+                    anyhow!(
+                        "invalid expires_at on live worker lease {}: {error}",
+                        candidate.lease_id
+                    )
+                })?;
+            if expires_at > acquired_at {
+                return Ok(Some(candidate));
+            }
+            expired.push(candidate);
+        }
+
+        for mut stale in expired {
+            stale.status = "expired".to_string();
+            stale.updated_at = lease.issued_at.clone();
+            stale.completed_at = Some(lease.issued_at.clone());
+            stale.failure_code = Some("LEASE_EXPIRED".to_string());
+            stale.reason = Some("lease expired before successor acquisition".to_string());
+            self.append_locked("worker_leases", &stale)?;
+        }
+
+        self.append_locked("worker_leases", &lease)?;
+        Ok(None)
     }
 }
 

@@ -578,6 +578,7 @@ impl ModelCallExecutor {
                 turn_id: Some(request.turn_id.clone()),
                 run_id: None,
                 call_id: Some(request.call_id.clone()),
+                work_id: None,
                 event_type,
                 occurred_at: now_iso(),
                 actor: OperatorActor {
@@ -616,6 +617,7 @@ impl ModelCallExecutor {
                 turn_id: Some(request.turn_id.clone()),
                 run_id: None,
                 call_id: None,
+                work_id: None,
                 event_type,
                 occurred_at: now_iso(),
                 actor: OperatorActor {
