@@ -15,6 +15,8 @@
 # Keep the Rust commands in sync with ci.yml and certification.yml.
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
+repo_root="$(pwd -P)"
+source "$repo_root/scripts/lib/resolve_local_python.sh"
 
 FULL=0
 if [[ "${1:-}" == "--full" ]]; then
@@ -27,12 +29,9 @@ fi
 export CARGO_PROFILE_DEV_DEBUG=0
 export CARGO_INCREMENTAL=0
 
-if [[ -n "${HEIWA_PYTHON:-}" ]]; then
-  local_python="$HEIWA_PYTHON"
-elif [[ -x .venv/bin/python ]]; then
-  local_python=".venv/bin/python"
-else
-  local_python="$(command -v python3)"
+if ! local_python="$(resolve_local_python "$repo_root")"; then
+  echo "unable to resolve a local Python interpreter" >&2
+  exit 1
 fi
 local_pytest="${HEIWA_PYTEST:-$local_python -m pytest}"
 
@@ -89,6 +88,7 @@ step "just test-product" env \
 
 echo
 echo "== repo gates =="
+step "local Python resolver" bash scripts/tests/test_local_python_resolution.sh
 step "Justfile Python override" bash scripts/tests/test_just_python_override.sh
 for s in check_agent_baseline check_backend_transition check_model_call_boundary \
          check_release_metadata check_runtime_baseline verify_security check_machine_security \
