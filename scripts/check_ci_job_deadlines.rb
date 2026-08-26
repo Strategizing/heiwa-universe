@@ -34,6 +34,21 @@ jobs = workflow.fetch("jobs")
 
 deadline_violations = []
 runner_violations = []
+trigger_violations = []
+
+if workflow["name"] == "Heiwa CI"
+  # Psych follows YAML 1.1 and parses the unquoted GitHub key `on` as boolean
+  # true, while other parsers retain it as a string. Accept both shapes.
+  triggers = workflow["on"] || workflow[true] || {}
+  pull_request = triggers.is_a?(Hash) ? triggers["pull_request"] : nil
+  branches = pull_request.is_a?(Hash) ? Array(pull_request["branches"]) : []
+  required_targets = %w[dev main]
+  missing_targets = required_targets - branches
+  unless missing_targets.empty?
+    trigger_violations << "Heiwa CI pull_request targets must include dev and main " \
+                          "(missing: #{missing_targets.join(', ')})"
+  end
+end
 
 jobs.each do |job_id, job|
   deadline = job.is_a?(Hash) ? job["timeout-minutes"] : nil
@@ -67,6 +82,11 @@ unless runner_violations.empty?
   warn "every CI job must target a runner label proven to claim jobs in this " \
        "repository (#{PROVEN_RUNNER_LABELS.join(', ')}); unproven: " \
        "#{runner_violations.join(', ')}"
+  failed = true
+end
+
+unless trigger_violations.empty?
+  trigger_violations.each { |violation| warn violation }
   failed = true
 end
 

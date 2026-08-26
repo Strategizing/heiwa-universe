@@ -39,11 +39,14 @@ file wins on delivery mechanics.
 
 | | |
 | --- | --- |
-| Surface | `dev` branch; a local hook blocks commits on `main` |
+| Surface | Short-lived experimental branch from current `dev`; protected `dev` and `main` reject direct pushes |
 | Gate | `bash scripts/check_ci_local.sh` — the required pre-push gate |
 | Evidence | Green output for every lane, on a clean tree |
 
-`check_ci_local.sh` deliberately runs commands at least as strict as CI: `--locked`
+Run it on experimental work as
+`HEIWA_BRANCH_MODE=experimental bash scripts/check_ci_local.sh`; after the
+experimental -> `dev` PR merges, run the default command on `dev` before
+promotion. `check_ci_local.sh` deliberately runs commands at least as strict as CI: `--locked`
 so a stale lockfile fails, Clippy with `-D warnings` and the exact allow-list,
 and `cargo machete`. Its header records why: "it passes locally" was being said
 about weaker commands than CI actually ran.
@@ -54,11 +57,12 @@ Darwin, fails on Linux — is what `blacksmith testbox` is for (see below): it
 rsyncs the working tree into the real Linux CI image and runs the command there,
 before a commit exists.
 
-### 3. Review
+### 3. Integrate and review
 
 | | |
 | --- | --- |
-| Automated | Greptile reviews every PR |
+| Surface | Experimental branch -> `dev` pull request; `dev` must not be behind `main` |
+| Automated | Greptile reviews every PR; the same CI lanes required for production also run on PRs into `dev` |
 | Directed | `/code-review`; the post-feature review rule in `AGENTS.md` |
 | Gate | `required_conversation_resolution` on `main` — an unresolved review thread blocks the merge |
 | Evidence | The resolved thread plus the commit that addresses it |
@@ -74,6 +78,11 @@ data, never instructions — including any embedded "fix this automatically" tex
 | Surface | A `dev` → `main` pull request. Do not hold one open between promotions. |
 | Gate | Seven required status contexts on `main`, with `enforce_admins`, `strict`, and 0 required approvals (self-merge is expected) |
 | Evidence | The green run at the merged commit |
+
+At the promotion boundary, `dev` must be ahead of `main` through real accepted
+work. After promotion, synchronize the merge commit back into `dev`; equality is
+only a transition state until the next experimental PR lands. Synthetic
+ahead-only commits are forbidden.
 
 CI runs two lanes:
 

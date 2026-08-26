@@ -22,10 +22,14 @@ bash scripts/check_agent_baseline.sh
 During active edits only, agents may test the gate shape with:
 
 ```bash
-bash scripts/check_agent_baseline.sh --allow-dirty
+HEIWA_BRANCH_MODE=experimental bash scripts/check_agent_baseline.sh --allow-dirty
 ```
 
 A final handoff must run without `--allow-dirty`.
+
+Use experimental branches for every change. The delivery sequence is
+experimental -> protected `dev` -> protected `main`; direct pushes to either
+long-lived branch are forbidden.
 
 ## Basic local checks
 
