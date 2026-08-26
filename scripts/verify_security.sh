@@ -61,6 +61,20 @@ run_required_async() {
   parallel_pids+=("$!")
 }
 
+run_required() {
+  local label="$1"
+  shift
+  local status=0
+
+  section "$label"
+  "$@" || status=$?
+  if [[ "$status" -eq 0 ]]; then
+    pass "$label"
+  else
+    fail "$label (exit $status)"
+  fi
+}
+
 wait_required_async() {
   local index status
   for index in "${!parallel_pids[@]}"; do

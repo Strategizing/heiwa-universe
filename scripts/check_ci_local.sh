@@ -27,6 +27,15 @@ fi
 export CARGO_PROFILE_DEV_DEBUG=0
 export CARGO_INCREMENTAL=0
 
+if [[ -n "${HEIWA_PYTHON:-}" ]]; then
+  local_python="$HEIWA_PYTHON"
+elif [[ -x .venv/bin/python ]]; then
+  local_python=".venv/bin/python"
+else
+  local_python="$(command -v python3)"
+fi
+local_pytest="${HEIWA_PYTEST:-$local_python -m pytest}"
+
 FAILED=()
 step() {
   local name="$1"; shift
@@ -65,16 +74,22 @@ step "cargo machete" cargo machete
 
 echo
 echo "== web + docs (ci.yml: lint, docs) =="
+step "npm ci" npm ci --ignore-scripts
+step "npm ci (desktop)" npm ci --ignore-scripts --prefix apps/heiwa_app/desktop
 step "npm run typecheck" npm run typecheck
 step "npm run lint" npm run lint
 
 echo
 echo "== python =="
-step "pytest" python3 -m pytest -q
-step "just test-product" just test-product
+step "pytest" "$local_python" -m pytest -q
+step "just test-product" env \
+  HEIWA_PYTHON="$local_python" \
+  HEIWA_PYTEST="$local_pytest" \
+  just test-product
 
 echo
 echo "== repo gates =="
+step "Justfile Python override" bash scripts/tests/test_just_python_override.sh
 for s in check_agent_baseline check_backend_transition check_model_call_boundary \
          check_release_metadata check_runtime_baseline verify_security check_machine_security \
          check_heiwa_core_dockerfile check_workflow_pins check_public_installer; do
