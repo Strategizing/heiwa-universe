@@ -101,6 +101,7 @@ foundation_b_targets=(
   smoke
   telemetry_pane
   work_core
+  work_session
   workspace_core
 )
 

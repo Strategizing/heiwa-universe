@@ -3226,6 +3226,7 @@ async fn execute_routed_model_call(
         request: ModelCallRequest {
             thread_id: thread_id.to_string(),
             turn_id: turn.turn_id,
+            work_id: None,
             call_id,
             intent: route.intent_key.clone(),
             stage: ModelCallStage::Execution,
@@ -3271,6 +3272,7 @@ async fn execute_compression_model_call(
         request: ModelCallRequest {
             thread_id: context.thread_id.clone(),
             turn_id: context.turn_id.clone(),
+            work_id: None,
             call_id: format!("call-compression-{}", uuid::Uuid::new_v4()),
             intent: "compression".to_string(),
             stage: ModelCallStage::Compression,
@@ -3441,6 +3443,7 @@ pub(crate) async fn execute_mail_draft_model_call(
         request: ModelCallRequest {
             thread_id: context.thread_id.clone(),
             turn_id: context.turn_id.clone(),
+            work_id: None,
             call_id: format!("call-drafting-{}", uuid::Uuid::new_v4()),
             intent: "mail_drafting".to_string(),
             stage: ModelCallStage::Drafting,
@@ -4280,6 +4283,7 @@ async fn prepare_operator_turn_work(
                 request: ModelCallRequest {
                     thread_id: String::new(),
                     turn_id: String::new(),
+                    work_id: start_request.work_id.clone(),
                     call_id: format!("call-{}", uuid::Uuid::new_v4()),
                     intent: route.intent_key.clone(),
                     stage: ModelCallStage::Execution,
@@ -5074,6 +5078,7 @@ mod tests {
             &heiwa_core::drex::ModelCallRequest {
                 thread_id: "thread".to_string(),
                 turn_id: "turn".to_string(),
+                work_id: None,
                 call_id: "call".to_string(),
                 intent: "code".to_string(),
                 stage: heiwa_core::drex::ModelCallStage::Execution,
@@ -5215,6 +5220,7 @@ mod tests {
             &heiwa_core::drex::ModelCallRequest {
                 thread_id: "thread".to_string(),
                 turn_id: "turn".to_string(),
+                work_id: None,
                 call_id: "call".to_string(),
                 intent: "chat".to_string(),
                 stage: heiwa_core::drex::ModelCallStage::Execution,

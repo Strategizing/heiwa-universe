@@ -449,6 +449,7 @@ struct OperatorTurnStreamContext<'a> {
     cursor: &'a mut String,
     thread_id: &'a str,
     turn_id: &'a str,
+    work_id: Option<&'a str>,
     direct_frames: &'a mpsc::Sender<OperatorStreamFrame>,
 }
 
@@ -708,11 +709,17 @@ pub struct OperatorTurnRunner {
     submissions: Arc<Mutex<()>>,
     artifact_reconciled: Arc<Mutex<bool>>,
     recoverable_orphans: Arc<Mutex<HashSet<String>>>,
-    active_threads: Arc<Mutex<HashMap<String, String>>>,
+    active_scopes: Arc<Mutex<HashMap<String, ActiveTurnScope>>>,
     frames: broadcast::Sender<OperatorStreamFrame>,
     artifacts: Arc<dyn OperatorArtifactStore>,
     approvals: Arc<dyn OperatorApprovalService>,
     tools: Arc<dyn OperatorToolExecutor>,
+}
+
+#[derive(Clone, Debug)]
+struct ActiveTurnScope {
+    thread_id: String,
+    work_id: Option<String>,
 }
 
 impl OperatorTurnRunner {
@@ -728,7 +735,7 @@ impl OperatorTurnRunner {
             submissions: Arc::new(Mutex::new(())),
             artifact_reconciled: Arc::new(Mutex::new(false)),
             recoverable_orphans: Arc::new(Mutex::new(HashSet::new())),
-            active_threads: Arc::new(Mutex::new(HashMap::new())),
+            active_scopes: Arc::new(Mutex::new(HashMap::new())),
             frames,
             artifacts: Arc::new(LocalArtifactStore::default()),
             approvals: Arc::new(DrexApprovalService),
@@ -802,20 +809,28 @@ impl OperatorTurnRunner {
                     return Err(error.into());
                 }
             };
-            self.active_threads
+            self.active_scopes
                 .lock()
                 .map_err(|_| anyhow!("operator active turn mutex poisoned"))?
-                .insert(submission.turn_id.clone(), thread_id.to_string());
+                .insert(
+                    submission.turn_id.clone(),
+                    ActiveTurnScope {
+                        thread_id: thread_id.to_string(),
+                        work_id: submission.work_id.clone(),
+                    },
+                );
             let (direct_tx, direct_rx) = mpsc::channel(OPERATOR_STREAM_CAPACITY);
             direct_frames = Some(direct_rx);
             let runner = self.clone();
             let thread_id = thread_id.to_string();
             let turn_id = submission.turn_id.clone();
+            let work_id = submission.work_id.clone();
             tokio::spawn(async move {
                 runner
                     .run_and_close(
                         thread_id,
                         turn_id,
+                        work_id,
                         route_policy,
                         preparation,
                         cancel,
@@ -891,8 +906,8 @@ impl OperatorTurnRunner {
     }
 
     pub fn request_cancel(&self, turn_id: &str) -> Result<bool> {
-        let Some(thread_id) = self
-            .active_threads
+        let Some(scope) = self
+            .active_scopes
             .lock()
             .map_err(|_| anyhow!("operator active turn mutex poisoned"))?
             .get(turn_id)
@@ -901,23 +916,24 @@ impl OperatorTurnRunner {
             return Ok(false);
         };
         let row = match self.sessions.append_event(runtime_event(
-            &thread_id,
+            &scope.thread_id,
             turn_id,
             None,
+            scope.work_id.as_deref(),
             OperatorEventType::TurnCancelRequested,
             json!({"reason": "OPERATOR_REQUEST"}),
         )) {
             Ok(row) => row,
             Err(_)
-                if self.sessions.thread(&thread_id).is_ok_and(|thread| {
+                if self.sessions.thread(&scope.thread_id).is_ok_and(|thread| {
                     thread
                         .turns
                         .iter()
                         .any(|turn| turn.turn_id == turn_id && turn.status != "open")
                 }) =>
             {
-                if let Ok(mut active_threads) = self.active_threads.lock() {
-                    active_threads.remove(turn_id);
+                if let Ok(mut active_scopes) = self.active_scopes.lock() {
+                    active_scopes.remove(turn_id);
                 }
                 return Ok(false);
             }
@@ -933,6 +949,7 @@ impl OperatorTurnRunner {
         &self,
         thread_id: String,
         turn_id: String,
+        work_id: Option<String>,
         route_policy: TurnRoutePolicy,
         preparation: OperatorTurnPreparation,
         cancel: watch::Receiver<bool>,
@@ -967,6 +984,7 @@ impl OperatorTurnRunner {
                 self.run_turn(
                     &thread_id,
                     &turn_id,
+                    work_id.as_deref(),
                     &route_policy,
                     work,
                     cancel.clone(),
@@ -987,6 +1005,7 @@ impl OperatorTurnRunner {
                 &thread_id,
                 &turn_id,
                 None,
+                work_id.as_deref(),
                 OperatorEventType::TurnInterrupted,
                 payload,
             )) {
@@ -1011,8 +1030,8 @@ impl OperatorTurnRunner {
             }
         }
         self.active.remove(&turn_id);
-        if let Ok(mut active_threads) = self.active_threads.lock() {
-            active_threads.remove(&turn_id);
+        if let Ok(mut active_scopes) = self.active_scopes.lock() {
+            active_scopes.remove(&turn_id);
         }
     }
 
@@ -1020,6 +1039,7 @@ impl OperatorTurnRunner {
         &self,
         thread_id: &str,
         turn_id: &str,
+        work_id: Option<&str>,
         route_policy: &TurnRoutePolicy,
         work: OperatorTurnWork,
         cancel: watch::Receiver<bool>,
@@ -1031,6 +1051,7 @@ impl OperatorTurnRunner {
                     thread_id,
                     turn_id,
                     None,
+                    work_id,
                     OperatorEventType::AssistantStarted,
                     json!({}),
                 ),
@@ -1052,6 +1073,7 @@ impl OperatorTurnRunner {
                         thread_id,
                         turn_id,
                         Some(&call_id),
+                        work_id,
                         OperatorEventType::RoutePlanned,
                         route.clone(),
                     ),
@@ -1065,6 +1087,7 @@ impl OperatorTurnRunner {
                             thread_id,
                             turn_id,
                             Some(&call_id),
+                            work_id,
                             OperatorEventType::RouteCompleted,
                             route,
                         ),
@@ -1085,6 +1108,7 @@ impl OperatorTurnRunner {
                         cursor: &mut cursor,
                         thread_id,
                         turn_id,
+                        work_id,
                         direct_frames,
                     },
                     OperatorTurnCompletion {
@@ -1101,12 +1125,14 @@ impl OperatorTurnRunner {
                 apply_candidate_policy(&mut model.candidates, route_policy);
                 model.request.thread_id = thread_id.to_string();
                 model.request.turn_id = turn_id.to_string();
+                model.request.work_id = work_id.map(str::to_string);
                 model.remaining_budget_usd =
                     stricter_budget(route_policy.turn_budget_usd, model.remaining_budget_usd);
                 let result = self
                     .execute_model(
                         thread_id,
                         turn_id,
+                        work_id,
                         &mut cursor,
                         *model,
                         cancel,
@@ -1120,6 +1146,7 @@ impl OperatorTurnRunner {
                         cursor: &mut cursor,
                         thread_id,
                         turn_id,
+                        work_id,
                         direct_frames,
                     },
                     OperatorTurnCompletion {
@@ -1139,6 +1166,7 @@ impl OperatorTurnRunner {
         &self,
         thread_id: &str,
         turn_id: &str,
+        work_id: Option<&str>,
         cursor: &mut String,
         model: OperatorModelTurn,
         cancel: watch::Receiver<bool>,
@@ -1154,6 +1182,7 @@ impl OperatorTurnRunner {
             .execute_model_stage(
                 thread_id,
                 turn_id,
+                work_id,
                 cursor,
                 model.request,
                 model.candidates,
@@ -1195,6 +1224,7 @@ impl OperatorTurnRunner {
                         thread_id,
                         turn_id,
                         Some(&call.id),
+                        work_id,
                         OperatorEventType::ToolCallStarted,
                         json!({"name": call.name, "arguments": call.arguments}),
                     ),
@@ -1211,6 +1241,7 @@ impl OperatorTurnRunner {
                 thread_id,
                 turn_id,
                 Some(&call.id),
+                work_id,
                 OperatorEventType::ApprovalRequested,
                 json!({
                     "request_id": request_id,
@@ -1249,6 +1280,7 @@ impl OperatorTurnRunner {
                                     thread_id,
                                     turn_id,
                                     Some(&call.id),
+                                    work_id,
                                     OperatorEventType::ApprovalDecided,
                                     json!({
                                         "request_id": approval.request_id,
@@ -1273,6 +1305,7 @@ impl OperatorTurnRunner {
                 thread_id,
                 turn_id,
                 Some(&call.id),
+                work_id,
                 OperatorEventType::ApprovalDecided,
                 json!({
                     "request_id": approval.request_id,
@@ -1308,6 +1341,7 @@ impl OperatorTurnRunner {
                                 cursor,
                                 thread_id,
                                 turn_id,
+                                work_id,
                                 &call.id,
                                 &call.name,
                                 direct_frames,
@@ -1323,6 +1357,7 @@ impl OperatorTurnRunner {
                     cursor,
                     thread_id,
                     turn_id,
+                    work_id,
                     &call.id,
                     &call.name,
                     direct_frames,
@@ -1336,6 +1371,7 @@ impl OperatorTurnRunner {
                         cursor,
                         thread_id,
                         turn_id,
+                        work_id,
                         direct_frames,
                     },
                     &call.id,
@@ -1349,6 +1385,7 @@ impl OperatorTurnRunner {
                         thread_id,
                         turn_id,
                         Some(&call.id),
+                        work_id,
                         OperatorEventType::ToolCallCompleted,
                         json!({
                             "name": call.name,
@@ -1385,6 +1422,7 @@ impl OperatorTurnRunner {
             .execute_model_stage(
                 thread_id,
                 turn_id,
+                work_id,
                 cursor,
                 follow_up,
                 candidates,
@@ -1408,6 +1446,7 @@ impl OperatorTurnRunner {
         cursor: &mut String,
         thread_id: &str,
         turn_id: &str,
+        work_id: Option<&str>,
         call_id: &str,
         tool_name: &str,
         direct_frames: &mpsc::Sender<OperatorStreamFrame>,
@@ -1418,6 +1457,7 @@ impl OperatorTurnRunner {
                     thread_id,
                     turn_id,
                     Some(call_id),
+                    work_id,
                     OperatorEventType::ToolCallCompleted,
                     json!({
                         "name": tool_name,
@@ -1443,6 +1483,7 @@ impl OperatorTurnRunner {
         &self,
         thread_id: &str,
         turn_id: &str,
+        _work_id: Option<&str>,
         cursor: &mut String,
         request: ModelCallRequest,
         candidates: Vec<ModelCallCandidate>,
@@ -1507,6 +1548,7 @@ impl OperatorTurnRunner {
             cursor,
             thread_id,
             turn_id,
+            work_id,
             direct_frames,
         } = context;
         const MAX_OPERATOR_TOOL_OUTPUT_BYTES: usize = 16 * 1024;
@@ -1540,6 +1582,7 @@ impl OperatorTurnRunner {
                     thread_id,
                     turn_id,
                     Some(call_id),
+                    work_id,
                     OperatorEventType::ArtifactCreated,
                     json!({
                         "artifact_id": committed.artifact_id,
@@ -1580,6 +1623,7 @@ impl OperatorTurnRunner {
             cursor,
             thread_id,
             turn_id,
+            work_id,
             direct_frames,
         } = context;
         let OperatorTurnCompletion {
@@ -1594,6 +1638,7 @@ impl OperatorTurnRunner {
                     thread_id,
                     turn_id,
                     None,
+                    work_id,
                     OperatorEventType::AssistantCompleted,
                     json!({"text": response}),
                 ),
@@ -1605,6 +1650,7 @@ impl OperatorTurnRunner {
             thread_id,
             turn_id,
             None,
+            work_id,
             OperatorEventType::ReceiptLinked,
             json!({
                 "kind": "operator_turn",
@@ -1622,6 +1668,7 @@ impl OperatorTurnRunner {
                     thread_id,
                     turn_id,
                     None,
+                    work_id,
                     OperatorEventType::TurnCompleted,
                     json!({"trace": done}),
                 ),
@@ -1755,6 +1802,7 @@ fn runtime_event(
     thread_id: &str,
     turn_id: &str,
     call_id: Option<&str>,
+    work_id: Option<&str>,
     event_type: OperatorEventType,
     payload: serde_json::Value,
 ) -> OperatorEvent {
@@ -1765,7 +1813,7 @@ fn runtime_event(
         turn_id: Some(turn_id.to_string()),
         run_id: None,
         call_id: call_id.map(str::to_string),
-        work_id: None,
+        work_id: work_id.map(str::to_string),
         event_type,
         occurred_at: now_iso(),
         actor: OperatorActor {
@@ -1816,6 +1864,7 @@ mod tests {
     };
     use heiwa_provider::adapter::{Message, ProviderAdapter, Role, StreamEvent, TokenUsage};
     use heiwa_session::operator::{OperatorSessionService, StartTurnRequest, TurnSubmissionError};
+    use heiwa_work::{work_created_event, WorkId};
     use serde_json::json;
     use tokio::sync::{mpsc, Notify};
 
@@ -2321,6 +2370,7 @@ mod tests {
             request: ModelCallRequest {
                 thread_id: String::new(),
                 turn_id: String::new(),
+                work_id: None,
                 call_id: "call-1".into(),
                 intent: "chat".into(),
                 stage: ModelCallStage::Execution,
@@ -2363,6 +2413,112 @@ mod tests {
             }
             frames.push(frame);
         }
+    }
+
+    fn create_work(sessions: &OperatorSessionService, work_id: &str, thread_id: &str) {
+        sessions.ensure_thread(thread_id).expect("thread");
+        sessions
+            .append_event(work_created_event(
+                &WorkId::parse(work_id).expect("work id"),
+                thread_id,
+                "run a Work-scoped operator turn",
+                "installation-test",
+                "2026-08-25T00:00:00Z",
+                || format!("evt-create-{work_id}"),
+            ))
+            .expect("work created");
+    }
+
+    #[tokio::test]
+    async fn operator_work_scoped_turn_carries_work_through_every_runtime_event() {
+        let dir = tempfile::tempdir().unwrap();
+        let sessions = service(dir.path());
+        create_work(&sessions, "work-abc", "thread-work");
+        let runner =
+            OperatorTurnRunner::new(sessions.clone(), Arc::new(RecordingExecutor::default()));
+        let mut request = StartTurnRequest::auto("work-scoped-runtime", "hello");
+        request.work_id = Some("work-abc".to_string());
+
+        let mut handle = runner
+            .submit(
+                "thread-work",
+                request,
+                OperatorTurnWork::Deterministic {
+                    response: "done".to_string(),
+                    route: json!({"mode": "deterministic"}),
+                    done: json!({"mode": "deterministic"}),
+                },
+            )
+            .unwrap();
+        wait_for_terminal(&mut handle).await;
+
+        let runtime_rows = sessions
+            .events_after("thread-work", None, 64)
+            .unwrap()
+            .events
+            .into_iter()
+            .filter(|row| row.event.turn_id.as_deref() == Some(handle.turn_id.as_str()))
+            .collect::<Vec<_>>();
+        assert!(!runtime_rows.is_empty());
+        assert!(
+            runtime_rows
+                .iter()
+                .all(|row| row.event.work_id.as_deref() == Some("work-abc")),
+            "every admitted/runtime row must preserve Work scope: {runtime_rows:#?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn operator_work_scoped_tool_turn_carries_work_through_action_gate_and_receipt() {
+        let dir = tempfile::tempdir().unwrap();
+        let sessions = service(dir.path());
+        create_work(&sessions, "work-tools", "thread-tools");
+        let executor = Arc::new(SequencedExecutor {
+            calls: AtomicUsize::new(0),
+            responses: vec![
+                r#"{"tool_calls":[{"id":"list-1","name":"fs.list","arguments":{"path":"."}}]}"#
+                    .to_string(),
+                "tool complete".to_string(),
+            ],
+        });
+        let runner = OperatorTurnRunner::new(sessions.clone(), executor);
+        let mut request = StartTurnRequest::auto("work-scoped-tool", "list files");
+        request.work_id = Some("work-tools".to_string());
+        let mut turn = model_turn();
+        turn.tool_scope = Some(ExecutionScope::local_default(dir.path().to_path_buf()));
+
+        let mut handle = runner
+            .submit(
+                "thread-tools",
+                request,
+                OperatorTurnWork::Model(Box::new(turn)),
+            )
+            .unwrap();
+        wait_for_terminal(&mut handle).await;
+
+        let runtime_rows = sessions
+            .events_after("thread-tools", None, 128)
+            .unwrap()
+            .events
+            .into_iter()
+            .filter(|row| row.event.turn_id.as_deref() == Some(handle.turn_id.as_str()))
+            .collect::<Vec<_>>();
+        for required in [
+            OperatorEventType::ApprovalRequested,
+            OperatorEventType::ApprovalDecided,
+            OperatorEventType::ToolCallCompleted,
+            OperatorEventType::ReceiptLinked,
+        ] {
+            assert!(
+                runtime_rows
+                    .iter()
+                    .any(|row| row.event.event_type == required),
+                "missing {required:?}: {runtime_rows:#?}"
+            );
+        }
+        assert!(runtime_rows
+            .iter()
+            .all(|row| row.event.work_id.as_deref() == Some("work-tools")));
     }
 
     #[test]
@@ -2780,6 +2936,7 @@ mod tests {
                 "default",
                 &submission.turn_id,
                 None,
+                None,
                 OperatorEventType::ArtifactCreated,
                 json!({
                     "artifact_id": "artifact-crash-linked",
@@ -3036,6 +3193,7 @@ mod tests {
                     event: super::runtime_event(
                         "default",
                         &turn_id,
+                        None,
                         None,
                         OperatorEventType::TurnCompleted,
                         json!({}),
@@ -3461,11 +3619,13 @@ mod tests {
             .unwrap();
         wait_for_terminal(&mut handle).await;
 
-        runner
-            .active_threads
-            .lock()
-            .unwrap()
-            .insert(handle.turn_id.clone(), handle.thread_id.clone());
+        runner.active_scopes.lock().unwrap().insert(
+            handle.turn_id.clone(),
+            super::ActiveTurnScope {
+                thread_id: handle.thread_id.clone(),
+                work_id: None,
+            },
+        );
 
         assert!(!runner.request_cancel(&handle.turn_id).unwrap());
     }
@@ -3644,6 +3804,7 @@ mod tests {
                     cursor: &mut cursor,
                     thread_id: "default",
                     turn_id: &submission.turn_id,
+                    work_id: None,
                     direct_frames: &direct,
                 },
                 "call-1",
@@ -3682,6 +3843,7 @@ mod tests {
                     cursor: &mut cursor,
                     thread_id: "default",
                     turn_id: &submission.turn_id,
+                    work_id: None,
                     direct_frames: &direct,
                 },
                 "call-1",
@@ -3719,6 +3881,7 @@ mod tests {
                     cursor: &mut cursor,
                     thread_id: "default",
                     turn_id: &submission.turn_id,
+                    work_id: None,
                     direct_frames: &direct,
                 },
                 "call-1",
@@ -3754,6 +3917,7 @@ mod tests {
                     cursor: &mut cursor,
                     thread_id: "default",
                     turn_id: &submission.turn_id,
+                    work_id: None,
                     direct_frames: &direct,
                 },
                 "call-1",

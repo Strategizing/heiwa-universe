@@ -578,7 +578,7 @@ impl ModelCallExecutor {
                 turn_id: Some(request.turn_id.clone()),
                 run_id: None,
                 call_id: Some(request.call_id.clone()),
-                work_id: None,
+                work_id: request.work_id.clone(),
                 event_type,
                 occurred_at: now_iso(),
                 actor: OperatorActor {
@@ -617,7 +617,7 @@ impl ModelCallExecutor {
                 turn_id: Some(request.turn_id.clone()),
                 run_id: None,
                 call_id: None,
-                work_id: None,
+                work_id: request.work_id.clone(),
                 event_type,
                 occurred_at: now_iso(),
                 actor: OperatorActor {
@@ -673,6 +673,7 @@ impl heiwa_loop::LoopModelCaller for ExecutorLoopCaller {
                 request: ModelCallRequest {
                     thread_id: request.thread_id,
                     turn_id: turn.turn_id,
+                    work_id: None,
                     call_id: request.call_id,
                     intent: request.intent,
                     stage: request.stage,

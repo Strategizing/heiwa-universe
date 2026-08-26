@@ -9,6 +9,7 @@ fn request() -> ModelCallRequest {
     ModelCallRequest {
         thread_id: "thread-1".to_string(),
         turn_id: "turn-1".to_string(),
+        work_id: None,
         call_id: "call-1".to_string(),
         intent: "code".to_string(),
         stage: ModelCallStage::Execution,

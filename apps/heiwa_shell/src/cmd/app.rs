@@ -2094,6 +2094,9 @@ async fn operator_http_response(
                     heiwa_session::operator::TurnSubmissionError::SensitiveMaterial { .. },
                 )) => operator_error(400, "sensitive_material"),
                 Err(heiwa_shell::operator::OperatorSubmissionError::Rejected(
+                    heiwa_session::operator::TurnSubmissionError::InvalidWorkScope { .. },
+                )) => operator_error(409, "invalid_work_scope"),
+                Err(heiwa_shell::operator::OperatorSubmissionError::Rejected(
                     heiwa_session::operator::TurnSubmissionError::Runtime(_),
                 ))
                 | Err(heiwa_shell::operator::OperatorSubmissionError::Runtime(_)) => {
@@ -2227,6 +2230,10 @@ fn parse_turn_request(
     }
 
     let mut request = heiwa_session::operator::StartTurnRequest::auto(client_request_id, prompt);
+    if let Some(work_id) = object.get("work_id").filter(|value| !value.is_null()) {
+        let work_id = work_id.as_str().ok_or(())?;
+        request.work_id = Some(validate_operator_identifier(work_id)?);
+    }
     if let Some(policy) = object.get("route_policy").filter(|value| !value.is_null()) {
         request.route_policy = parse_route_policy(policy)?;
     }
