@@ -5,11 +5,11 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 python_value="$(
   HEIWA_PYTHON=/tmp/heiwa-python \
-    just --justfile "$repo_root/Justfile" --evaluate python
+    just --justfile "$repo_root/justfile" --evaluate python
 )"
 pytest_value="$(
   HEIWA_PYTEST='/tmp/heiwa-python -m pytest' \
-    just --justfile "$repo_root/Justfile" --evaluate pytest
+    just --justfile "$repo_root/justfile" --evaluate pytest
 )"
 
 if [[ "$python_value" != "/tmp/heiwa-python" ]]; then
