@@ -483,6 +483,19 @@ jobs:
           generate_release_notes: true
           files: release-artifacts/*
 
+  # A release is not done when the assets exist; it is done when a stranger can
+  # install it. v0.1.0 shipped an update path that reported `"implemented":
+  # false` and stranded every install; v0.2.0 shipped a binary that reported
+  # `heiwa 0.1.0`. The smoke workflow catches both classes, but it was
+  # dispatch-only, so it only ran when someone remembered. Run it against the
+  # version that was just published.
+  verify-install:
+    name: Verify Public Install
+    needs: [metadata, publish]
+    uses: ./.github/workflows/public-install-smoke.yml
+    with:
+      version: ${{ needs.metadata.outputs.version }}
+
   container:
     name: Build and Push Container Image
     needs: [metadata, publish]
