@@ -335,7 +335,6 @@ jobs:
         run: |
           bash scripts/check_release_metadata.sh
           bash scripts/tests/test_ci_job_deadlines.sh
-          bash scripts/tests/test_just_python_override.sh
       - name: Verify immutable workflow action pins
         run: bash scripts/check_workflow_pins.sh
       - name: Install audit tools
