@@ -190,6 +190,7 @@ pub fn plan_route_for_call(
     let request = ModelCallRequest {
         thread_id: identity.thread_id.clone(),
         turn_id: identity.turn_id.clone(),
+        work_id: None,
         call_id: identity.call_id.clone(),
         intent: ingress.intent.clone(),
         stage: ModelCallStage::LegacyRoute,

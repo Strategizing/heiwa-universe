@@ -264,6 +264,9 @@ pub struct StartTurnRequest {
     pub client_request_id: String,
     pub prompt: String,
     pub route_policy: TurnRoutePolicy,
+    /// Durable Work scope for this turn. Omitted for legacy/system turns.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_id: Option<String>,
 }
 
 impl StartTurnRequest {
@@ -285,6 +288,7 @@ impl StartTurnRequest {
                 turn_budget_usd: None,
                 privacy: "standard".to_string(),
             },
+            work_id: None,
         }
     }
 }
@@ -303,6 +307,7 @@ impl StartTurnRequest {
 pub struct TurnSubmission {
     pub thread_id: String,
     pub turn_id: String,
+    pub work_id: Option<String>,
     pub cursor: String,
     pub duplicate: bool,
 }
@@ -320,6 +325,10 @@ pub enum TurnSubmissionError {
     },
     #[error("refused to start turn: {context} contains sensitive material")]
     SensitiveMaterial { context: &'static str },
+    #[error(
+        "refused to start turn: Work {work_id} is unknown or is not linked to thread {thread_id}"
+    )]
+    InvalidWorkScope { work_id: String, thread_id: String },
     #[error(transparent)]
     Runtime(#[from] anyhow::Error),
 }
@@ -329,6 +338,8 @@ pub enum TurnSubmissionError {
 pub struct OperatorTurnView {
     pub turn_id: String,
     pub client_request_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_id: Option<String>,
     /// One of `"open"`, `"completed"`, `"interrupted"`, `"blocked"`. The
     /// latter three are terminal (see [`is_turn_terminal`]).
     pub status: String,
@@ -480,11 +491,17 @@ impl OperatorSessionService {
             if let Some(turn) = folded.turns.iter().find(|turn| {
                 turn.client_request_id.as_deref() == Some(request.client_request_id.as_str())
             }) {
-                validate_retry_binding(turn, &prompt_fingerprint, &normalized_route_policy)?;
+                validate_retry_binding(
+                    turn,
+                    &prompt_fingerprint,
+                    &normalized_route_policy,
+                    request.work_id.as_deref(),
+                )?;
                 if let Some(cursor) = &turn.user_message_cursor {
                     return Ok(TurnSubmission {
                         thread_id: thread_id.to_string(),
                         turn_id: turn.turn_id.clone(),
+                        work_id: turn.work_id.clone(),
                         cursor: cursor.clone(),
                         duplicate: true,
                     });
@@ -500,7 +517,7 @@ impl OperatorSessionService {
                 // A prior crash/error after `turn_started` but before the
                 // user message is recoverable only after the safe prompt
                 // fingerprint check above. Append just the missing record.
-                let recovered = new_event(
+                let mut recovered = new_event(
                     thread_id,
                     Some(turn.turn_id.clone()),
                     None,
@@ -512,12 +529,27 @@ impl OperatorSessionService {
                     },
                     user_message_payload,
                 );
+                recovered.work_id = turn.work_id.clone();
                 let appended = self.journal.append(&recovered)?;
                 return Ok(TurnSubmission {
                     thread_id: thread_id.to_string(),
                     turn_id: turn.turn_id.clone(),
+                    work_id: turn.work_id.clone(),
                     cursor: appended.cursor,
                     duplicate: true,
+                });
+            }
+        }
+
+        if let Some(work_id) = request.work_id.as_deref() {
+            let linked = projection
+                .work_threads
+                .get(work_id)
+                .is_some_and(|threads| threads.contains(thread_id));
+            if !linked {
+                return Err(TurnSubmissionError::InvalidWorkScope {
+                    work_id: work_id.to_string(),
+                    thread_id: thread_id.to_string(),
                 });
             }
         }
@@ -544,7 +576,7 @@ impl OperatorSessionService {
 
         let turn_id = deterministic_turn_id(thread_id, &request.client_request_id);
 
-        let turn_started = new_event(
+        let mut turn_started = new_event(
             thread_id,
             Some(turn_id.clone()),
             None,
@@ -553,9 +585,10 @@ impl OperatorSessionService {
             operator_actor.clone(),
             turn_started_payload,
         );
+        turn_started.work_id = request.work_id.clone();
         self.journal.append(&turn_started)?;
 
-        let user_message = new_event(
+        let mut user_message = new_event(
             thread_id,
             Some(turn_id.clone()),
             None,
@@ -564,11 +597,13 @@ impl OperatorSessionService {
             operator_actor,
             user_message_payload,
         );
+        user_message.work_id = request.work_id.clone();
         let appended = self.journal.append(&user_message)?;
 
         Ok(TurnSubmission {
             thread_id: thread_id.to_string(),
             turn_id,
+            work_id: request.work_id,
             cursor: appended.cursor,
             duplicate: false,
         })
@@ -580,7 +615,7 @@ impl OperatorSessionService {
     pub fn append_event(&self, event: OperatorEvent) -> Result<CursorEvent> {
         let _write_transaction = self.lock_writer_transaction()?;
         let projection = self.materialized()?;
-        validate_event(&projection.threads, &event)?;
+        validate_event(&projection.threads, &projection.work_threads, &event)?;
         self.journal.append(&event)
     }
 
@@ -969,6 +1004,7 @@ fn validate_retry_binding(
     turn: &FoldedTurn,
     retry_fingerprint: &str,
     retry_route_policy: &TurnRoutePolicy,
+    retry_work_id: Option<&str>,
 ) -> std::result::Result<(), TurnSubmissionError> {
     let stored_fingerprint = turn
         .prompt_fingerprint
@@ -998,6 +1034,12 @@ fn validate_retry_binding(
             reason: "client_request_id was previously submitted with a different route policy",
         });
     }
+    if turn.work_id.as_deref() != retry_work_id {
+        return Err(TurnSubmissionError::IdempotencyConflict {
+            turn_id: turn.turn_id.clone(),
+            reason: "client_request_id was previously submitted for a different Work",
+        });
+    }
     Ok(())
 }
 
@@ -1021,7 +1063,11 @@ fn operator_turn_namespace() -> Uuid {
 /// there beyond what the type system already guarantees; this function
 /// covers schema version, required identifiers, and terminal-state
 /// transitions.
-fn validate_event(threads: &HashMap<String, FoldedThread>, event: &OperatorEvent) -> Result<()> {
+fn validate_event(
+    threads: &HashMap<String, FoldedThread>,
+    work_threads: &HashMap<String, HashSet<String>>,
+    event: &OperatorEvent,
+) -> Result<()> {
     if event.schema_version != OPERATOR_EVENT_SCHEMA_VERSION {
         bail!(
             "rejected operator event {}: unsupported schema_version {} (expected {OPERATOR_EVENT_SCHEMA_VERSION})",
@@ -1055,6 +1101,18 @@ fn validate_event(threads: &HashMap<String, FoldedThread>, event: &OperatorEvent
     }
 
     if event.event_type == OperatorEventType::TurnStarted {
+        if let Some(work_id) = event.work_id.as_deref() {
+            let linked = work_threads
+                .get(work_id)
+                .is_some_and(|linked_threads| linked_threads.contains(&event.thread_id));
+            if !linked {
+                bail!(
+                    "rejected operator event {}: Work scope {work_id} is unknown or not linked to thread {}",
+                    event.event_id,
+                    event.thread_id
+                );
+            }
+        }
         validate_turn_started(threads, event)?;
     } else if let Some(turn_id) = &event.turn_id {
         let turn = threads
@@ -1067,6 +1125,15 @@ fn validate_event(threads: &HashMap<String, FoldedThread>, event: &OperatorEvent
                     event.thread_id
                 )
             })?;
+
+        if event.work_id != turn.work_id {
+            bail!(
+                "rejected operator event {}: Work scope {:?} does not match turn {turn_id} scope {:?}",
+                event.event_id,
+                event.work_id,
+                turn.work_id
+            );
+        }
 
         if is_turn_terminal(&turn.status) {
             bail!(
@@ -1287,6 +1354,7 @@ fn is_cancellation_approval_audit(turn: &FoldedTurn, event: &OperatorEvent) -> b
 struct FoldedTurn {
     turn_id: String,
     client_request_id: Option<String>,
+    work_id: Option<String>,
     prompt_fingerprint: Option<String>,
     status: String,
     cancel_requested: bool,
@@ -1347,6 +1415,7 @@ impl FoldedThread {
                 .map(|turn| OperatorTurnView {
                     turn_id: turn.turn_id.clone(),
                     client_request_id: turn.client_request_id.clone(),
+                    work_id: turn.work_id.clone(),
                     status: turn.status.clone(),
                     prompt: turn.prompt.clone(),
                     user_message_cursor: turn.user_message_cursor.clone(),
@@ -1374,6 +1443,9 @@ impl FoldedThread {
 #[derive(Debug, Default)]
 struct MaterializedJournal {
     threads: HashMap<String, FoldedThread>,
+    /// Durable Work-to-thread relationships derived from accepted Work
+    /// lifecycle events. Used only for scoped turn admission.
+    work_threads: HashMap<String, HashSet<String>>,
     /// Parsed but unsupported-schema events, tracked by their declared
     /// thread without creating a valid thread projection or affecting
     /// recency. `thread()` may surface this diagnostic count.
@@ -1454,6 +1526,7 @@ fn sync_materialized(
             projection.applied_event_rows = projection.applied_event_rows.saturating_add(1);
             apply_event(
                 &mut projection.threads,
+                &mut projection.work_threads,
                 &mut projection.unsupported_schema_events,
                 &mut projection.rejected_current_schema_events,
                 &mut projection.seen_event_ids,
@@ -1471,6 +1544,7 @@ fn sync_materialized(
 
 fn apply_event(
     threads: &mut HashMap<String, FoldedThread>,
+    work_threads: &mut HashMap<String, HashSet<String>>,
     unsupported_schema_events: &mut HashMap<String, usize>,
     rejected_current_schema_events: &mut HashMap<String, usize>,
     seen_event_ids: &mut HashSet<String>,
@@ -1492,6 +1566,7 @@ fn apply_event(
     if let Some(entry) = threads.get_mut(&event.thread_id) {
         if apply_to_existing_thread(entry, event, row) {
             entry.last_order = order;
+            apply_work_membership(work_threads, event);
         } else {
             entry.skipped_events += 1;
         }
@@ -1509,10 +1584,49 @@ fn apply_event(
     if accepted {
         candidate.last_order = order;
         threads.insert(event.thread_id.clone(), candidate);
+        apply_work_membership(work_threads, event);
     } else {
         *rejected_current_schema_events
             .entry(event.thread_id.clone())
             .or_default() += 1;
+    }
+}
+
+fn apply_work_membership(
+    work_threads: &mut HashMap<String, HashSet<String>>,
+    event: &OperatorEvent,
+) {
+    let Some(work_id) = event.work_id.as_deref() else {
+        return;
+    };
+    match event.event_type {
+        OperatorEventType::WorkCreated
+            if event
+                .payload
+                .get("primary_thread_id")
+                .and_then(|value| value.as_str())
+                == Some(event.thread_id.as_str())
+                && !work_threads.contains_key(work_id) =>
+        {
+            work_threads.insert(
+                work_id.to_string(),
+                HashSet::from([event.thread_id.clone()]),
+            );
+        }
+        OperatorEventType::WorkLinked
+            if work_threads.contains_key(work_id)
+                && event
+                    .payload
+                    .get("thread_id")
+                    .and_then(|value| value.as_str())
+                    == Some(event.thread_id.as_str()) =>
+        {
+            work_threads
+                .get_mut(work_id)
+                .expect("contains_key checked")
+                .insert(event.thread_id.clone());
+        }
+        _ => {}
     }
 }
 
@@ -1586,6 +1700,7 @@ fn apply_turn_started(entry: &mut FoldedThread, event: &OperatorEvent) -> bool {
     entry.turns.push(FoldedTurn {
         turn_id,
         client_request_id,
+        work_id: event.work_id.clone(),
         prompt_fingerprint,
         status: "open".to_string(),
         cancel_requested: false,
@@ -2182,13 +2297,14 @@ mod tests {
             payload: json!({}),
         };
 
-        let error = validate_event(&threads, &event).expect_err("work events must be scoped");
+        let error = validate_event(&threads, &HashMap::new(), &event)
+            .expect_err("work events must be scoped");
         assert!(
             error.to_string().contains("requires work_id"),
             "the refusal must name the missing field: {error}"
         );
 
         event.work_id = Some("work-abc".to_string());
-        validate_event(&threads, &event).expect("a scoped work event is accepted");
+        validate_event(&threads, &HashMap::new(), &event).expect("a scoped work event is accepted");
     }
 }

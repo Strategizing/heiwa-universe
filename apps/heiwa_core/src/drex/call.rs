@@ -163,6 +163,9 @@ pub enum CostTruth {
 pub struct ModelCallRequest {
     pub thread_id: String,
     pub turn_id: String,
+    /// Durable Work scope for operator-owned calls; absent for system and
+    /// legacy calls that are intentionally not attached to a Work.
+    pub work_id: Option<String>,
     pub call_id: String,
     pub intent: String,
     pub stage: ModelCallStage,

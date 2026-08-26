@@ -65,6 +65,10 @@ pub struct WorkSessionSnapshotV1 {
     pub operator_cursor: Option<String>,
     pub source_watermarks: BTreeMap<String, String>,
     pub collections: BTreeMap<String, CollectionRows>,
+    /// Unique rows omitted at the configured collection bound. Absence means
+    /// the collection is complete at `operator_cursor`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub truncated_collections: BTreeMap<String, usize>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -254,6 +258,7 @@ mod tests {
             operator_cursor: Some("cursor-9".to_string()),
             source_watermarks: Default::default(),
             collections: Default::default(),
+            truncated_collections: Default::default(),
         };
         let resumed = ClientProjection::from_snapshot(&snapshot);
         assert_eq!(

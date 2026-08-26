@@ -244,6 +244,7 @@ mod model_call {
         ModelCallRequest {
             thread_id: thread_id.to_string(),
             turn_id: turn_id.to_string(),
+            work_id: None,
             call_id: "call-1".to_string(),
             intent: "code".to_string(),
             stage: ModelCallStage::Execution,

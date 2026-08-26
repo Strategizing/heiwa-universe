@@ -3,6 +3,7 @@
 use heiwa_core::auth::{sign_local_request, LocalRequestParts, LocalRequestSignature};
 use heiwa_evidence::OperatorJournal;
 use heiwa_session::operator::{OperatorSessionService, StartTurnRequest};
+use heiwa_work::{work_created_event, WorkId};
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::io::{Read, Write};
@@ -710,6 +711,70 @@ fn operator_maps_typed_intake_rejections_without_appending_or_reexecuting() {
         assert_eq!(rejected.body["error"]["code"], "sensitive_material");
     }
     assert_eq!(operator_event_count(&runtime, "sensitive"), 0);
+}
+
+#[test]
+fn operator_http_accepts_work_id_syntax_and_rejects_unknown_scope_without_rows() {
+    let runtime = TestRuntime::start_without_providers();
+    let before = operator_event_count(&runtime, "thread-work");
+
+    let rejected = runtime.request(
+        "POST",
+        "/api/v1/operator/threads/thread-work/turns",
+        Some(TOKEN),
+        json!({
+            "client_request_id": "work-http-1",
+            "prompt": "ship it",
+            "work_id": "work-missing"
+        }),
+    );
+
+    assert_eq!(rejected.status, 409, "{}", rejected.body);
+    assert_eq!(rejected.body["error"]["code"], "invalid_work_scope");
+    assert_eq!(operator_event_count(&runtime, "thread-work"), before);
+}
+
+#[test]
+fn operator_http_propagates_known_work_scope_through_terminal_execution() {
+    let runtime = TestRuntime::start_without_providers();
+    let external = runtime.external_sessions();
+    external.ensure_thread("thread-work-known").unwrap();
+    external
+        .append_event(work_created_event(
+            &WorkId::parse("work-known").unwrap(),
+            "thread-work-known",
+            "exercise HTTP Work scope",
+            "installation-test",
+            "2026-08-25T00:00:00Z",
+            || "evt-work-known".to_string(),
+        ))
+        .unwrap();
+
+    let accepted = runtime.request(
+        "POST",
+        "/api/v1/operator/threads/thread-work-known/turns",
+        Some(TOKEN),
+        json!({
+            "client_request_id": "work-http-known",
+            "prompt": "hi",
+            "work_id": "work-known"
+        }),
+    );
+    assert_eq!(accepted.status, 202, "{}", accepted.body);
+    let turn_id = accepted.body["data"]["turn_id"].as_str().unwrap();
+    wait_for_terminal_event(&runtime, "thread-work-known", turn_id);
+
+    let turn_rows = external
+        .events_after("thread-work-known", None, 128)
+        .unwrap()
+        .events
+        .into_iter()
+        .filter(|row| row.event.turn_id.as_deref() == Some(turn_id))
+        .collect::<Vec<_>>();
+    assert!(!turn_rows.is_empty());
+    assert!(turn_rows
+        .iter()
+        .all(|row| row.event.work_id.as_deref() == Some("work-known")));
 }
 
 #[test]
