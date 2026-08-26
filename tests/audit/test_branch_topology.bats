@@ -80,9 +80,21 @@ run_check() {
 }
 
 @test "agent baseline accepts an explicitly declared experimental checkout" {
+    # check_agent_baseline.sh audits its own checkout and is local-only by
+    # design: it needs an attached branch, cached origin/dev and origin/main,
+    # and a worktree that owns dev. A pull_request checkout is detached and a
+    # workflow_dispatch checkout is attached but single-branch, so assert the
+    # live gate only where every precondition actually holds.
     if ! git -C "$REPO_ROOT" symbolic-ref --quiet --short HEAD >/dev/null; then
         skip "live baseline integration requires a named experimental checkout"
     fi
+    git -C "$REPO_ROOT" show-ref --verify --quiet refs/remotes/origin/dev \
+        || skip "live baseline integration requires a cached origin/dev"
+    git -C "$REPO_ROOT" show-ref --verify --quiet refs/remotes/origin/main \
+        || skip "live baseline integration requires a cached origin/main"
+    git -C "$REPO_ROOT" worktree list --porcelain \
+        | grep -qx "branch refs/heads/dev" \
+        || skip "live baseline integration requires a worktree on dev"
 
     run env HEIWA_BRANCH_MODE=experimental \
         "$REPO_ROOT/scripts/check_agent_baseline.sh" --allow-dirty
