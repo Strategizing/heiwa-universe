@@ -80,6 +80,10 @@ run_check() {
 }
 
 @test "agent baseline accepts an explicitly declared experimental checkout" {
+    if ! git -C "$REPO_ROOT" symbolic-ref --quiet --short HEAD >/dev/null; then
+        skip "live baseline integration requires a named experimental checkout"
+    fi
+
     run env HEIWA_BRANCH_MODE=experimental \
         "$REPO_ROOT/scripts/check_agent_baseline.sh" --allow-dirty
 
