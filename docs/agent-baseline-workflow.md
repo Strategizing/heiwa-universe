@@ -7,7 +7,7 @@ Plane: Evidence — this workflow keeps repo truth inspectable before Execution 
 ## Non-negotiables
 
 1. **Repo truth first.** Read `HEIWA.md`, `AGENTS.md`, and `docs/local-self-operation.md` before architecture, runtime, promotion, or remote work.
-2. **`dev` is the integration branch; `main` is production.** Agents commit on `dev` and local `main` only mirrors `origin/main` (updated via `dev` -> `main` pull requests). Use temporary worktrees under `.worktrees/` or `.claude/worktrees/` for risky or broad edits; merge back to `dev` only after real evidence.
+2. **Experimental branches feed `dev`; `dev` feeds `main`.** Agents create a short-lived branch from current `dev` in a temporary worktree under `.worktrees/` or `.claude/worktrees/`, commit there, and merge it into protected `dev` only through a reviewed, green pull request. `dev` is integration; `main` is production. Direct commits or pushes to either protected branch are forbidden.
 3. **No remote operations by drift.** `git fetch`, `git pull`, `git push`, `gh run`, `gh release`, `spacetime publish`, `wrangler deploy`, and equivalent network-promotion commands require an explicit assignment for that remote operation.
 4. **Value-bearing execution.** Every work item must classify as Intake, Execution, Evidence, or out-of-scope. Size it by delivered value, not artificial smallness; split only where each part can ship independent value without leaving the product incomplete.
 5. **Runtime split-brain is a blocker.** Port `7474` is installed product runtime. Checkout verification uses `7475` or another temporary port and the agent stops what it starts.
@@ -22,9 +22,27 @@ Run this before closing a repo-health slice, before local promotion, and before 
 bash scripts/check_agent_baseline.sh
 ```
 
+On an experimental branch, declare the topology explicitly so the same full
+local gate proves the branch descends from current `dev`:
+
+```bash
+HEIWA_BRANCH_MODE=experimental bash scripts/check_agent_baseline.sh
+```
+
+`dev` must never be behind cached `origin/main`. At integration and promotion
+handoffs it must also be ahead by at least one value-bearing commit. Immediately
+after a `dev` -> `main` promotion, synchronize the merge commit and use the
+bounded transition mode until the next experimental PR restores the lead:
+
+```bash
+HEIWA_BRANCH_MODE=post-promotion bash scripts/check_agent_baseline.sh
+```
+
+Do not add empty or sentinel commits merely to make `dev` appear ahead.
+
 The gate is intentionally local-only. It does not fetch, push, call GitHub, or verify remote CI. It checks:
 
-- branch is the expected integration branch (`dev` by default; `--branch main` for post-merge checks)
+- branch topology matches the declared mode (`dev` ahead for integration, a branch descended from `dev` for experimental work, or synchronized `dev` during post-promotion handoff)
 - cached `origin/main` ref exists and local ahead/behind can be reported
 - tracked tree is clean
 - untracked files are absent except ignored or explicit `vendor/` quarantine entries
@@ -34,7 +52,7 @@ The gate is intentionally local-only. It does not fetch, push, call GitHub, or v
 During active edits, agents may smoke-test the gate logic without claiming a clean baseline:
 
 ```bash
-bash scripts/check_agent_baseline.sh --allow-dirty
+HEIWA_BRANCH_MODE=experimental bash scripts/check_agent_baseline.sh --allow-dirty
 ```
 
 `--allow-dirty` is for development only. A final baseline handoff must run without it.

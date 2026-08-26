@@ -1,6 +1,7 @@
 name: Heiwa CI
 
-# CI is the promotion gate for `main`. It has two lanes:
+# CI is the integration gate for experimental PRs into `dev` and the promotion
+# gate for `dev` PRs into `main`. It has two lanes:
 #
 #   * the sub-minute feedback lane (everything except the Rust jobs), bounded at
 #     one minute per job by scripts/check_ci_job_deadlines.rb
@@ -19,7 +20,7 @@ name: Heiwa CI
 # to be proven before it may be used.
 on:
   pull_request:
-    branches: ["main"]
+    branches: ["dev", "main"]
   push:
     branches: ["main"]
   workflow_dispatch:

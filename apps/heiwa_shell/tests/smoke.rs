@@ -533,10 +533,19 @@ fn test_app_update_checkout_dry_run_json_reports_promotion_contract() {
             .and_then(serde_json::Value::as_str),
         Some("prompt-before-restart")
     );
-    assert!(payload
-        .get("source")
-        .and_then(serde_json::Value::as_str)
-        .is_some_and(|source| source.ends_with("heiwa-universe")));
+    let expected_source = Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+        .expect("resolve checkout root for update-plan assertion");
+    assert!(expected_source.status.success());
+    let expected_source = String::from_utf8(expected_source.stdout)
+        .expect("checkout root is UTF-8")
+        .trim()
+        .to_string();
+    assert_eq!(
+        payload.get("source").and_then(serde_json::Value::as_str),
+        Some(expected_source.as_str())
+    );
     assert!(payload
         .get("source_branch")
         .and_then(serde_json::Value::as_str)

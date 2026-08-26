@@ -35,6 +35,14 @@ expect_accept() {
 # The live workflow must satisfy its own gate.
 expect_accept "$repo_root/.github/workflows/ci.yml"
 
+# CI must run before experimental work can enter `dev`; protecting `dev` with
+# contexts from a workflow that only targets `main` would deadlock every PR.
+missing_dev_target="$workdir/missing-dev-target.yml"
+sed 's/branches: \["dev", "main"\]/branches: ["main"]/' \
+  "$repo_root/.github/workflows/ci.yml" >"$missing_dev_target"
+expect_reject "$missing_dev_target" \
+  'Heiwa CI pull_request targets must include dev and main'
+
 # A job with no deadline at all is unbounded and must be rejected. Appending to
 # the real workflow also proves the checker parses the shipped file.
 missing="$workdir/missing-deadline.yml"
