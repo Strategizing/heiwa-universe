@@ -3641,6 +3641,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "heiwa_worker"
+version = "0.1.0"
+dependencies = [
+ "heiwa_evidence",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "heiwa_workspace"
 version = "0.1.0"
 dependencies = [
