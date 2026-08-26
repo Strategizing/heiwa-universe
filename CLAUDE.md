@@ -63,16 +63,46 @@ Use corrected peer framing before architecture or parity work:
 - Biggest current gap: connector/tool breadth and compression/learning loop.
   Do not imply parity until code proves it.
 
-## Active Build: Roadmap L0/L1 (autonomous)
+## Active Build: Work Fabric A1 (autonomous)
 
-Contract: `docs/superpowers/specs/2026-08-14-heiwa-app-product-roadmap-design.md`.
+Contract: `docs/superpowers/specs/2026-08-22-heiwa-work-fabric-design.md`. It is
+the product-sequencing authority after L3 and supersedes the roadmap's post-L3
+sequencing; it does not erase accepted layers.
+
 Ledger (repo truth, update in the same commit as the work):
-`docs/superpowers/ledgers/2026-08-14-L0-L1-task-ledger.md`.
-Acceptance: `scripts/check_l0_acceptance.sh`, `scripts/check_l1_acceptance.sh` —
-a layer is complete only when its script passes at HEAD (a Stop hook enforces
-this against the ledger). Escalate to Devon only for product-policy changes,
-irreversible/destructive actions, or credentials. D1 (sync transport) blocks
-L5 only — do not raise it during L0-L4.
+`docs/superpowers/ledgers/2026-08-22-work-fabric-task-ledger.md`. Status is what
+is true at HEAD, not what is intended.
+
+Acceptance: a release is complete only when its acceptance script passes at
+HEAD and writes its stamp. `scripts/hooks/stop_ledger_gate.sh` enforces this
+against every ledger and blocks a stop on an unverified completion claim. The
+stamp is deliberately refused on a dirty tree.
+
+| Release | Ledger section | Acceptance | State |
+| --- | --- | --- | --- |
+| L0-L2 | `2026-08-14-L0-L1-task-ledger.md` | `scripts/check_l{0,1,2}_acceptance.sh` | accepted prerequisites |
+| L3 | `2026-08-18-L3-calendar-mail-connectors` spec + its ledger | connector spec | Apple Calendar lane complete; Google blocked on account setup |
+| Work Fabric A1 | `2026-08-22-work-fabric-task-ledger.md` | `scripts/check_work_fabric_a1_acceptance.sh` (lands in A1-c3) | **active** |
+
+Escalate to Devon only for product-policy changes, irreversible/destructive
+actions, or credentials.
+
+## Branch Topology
+
+```
+experimental/* → protected dev → dev-to-main promotion PR → sync merge back to dev
+```
+
+`AGENTS.md` → "Promotion rule" is authoritative for the full invariants; do not
+restate them here. What matters at the keyboard:
+
+- Never commit on `main` or `dev` directly; branch first, as a separate step.
+- Claude's experimental prefix is `experimental/*` (Codex uses `codex/*`).
+- Verify with `HEIWA_BRANCH_MODE=experimental bash scripts/check_ci_local.sh`
+  before opening the PR to `dev`.
+- Another agent session may push to `dev` too — fetch before fixing, and take
+  theirs when it landed first.
+- `gh pr merge` is gated: drive a PR to CLEAN, then hand off to Devon.
 
 ## Commands
 
