@@ -1795,3 +1795,52 @@ git commit -m "chore(work): group the worker crate and record A1-c2 in the ledge
 - **Type consistency.** `worker_id`, `work_id`, `pane_id`, `lease_id`,
   `executable_sha256`, `fold_runs`, `RunRow`, `PaneTail` are spelled the same in
   every task that touches them.
+
+---
+
+## What actually shipped
+
+Implemented at `fb5f56b3`. Where the tree diverged from the plan above, the
+tree is right and this section is the record.
+
+1. **Worker identity is minted at `prepare`, not at `run`.** The plan had Task 6
+   generate a throwaway id and Task 7 "replace that generation with one shared
+   identity" without saying how. The realization: one prepared workspace serves
+   one worker, so `heiwa workspace prepare` mints the id, binds the lease to it,
+   and records it on `workspace_prepared`; `heiwa work run` adopts it. This
+   required two additive optional payload fields — `worker_id` and `lease_id` —
+   on `WorkspacePreparedPayload`, both `#[serde(default)]` so A1-b events
+   already on disk keep deserializing. A Work prepared before this change is
+   refused with an instruction to re-prepare, rather than run under an invented
+   identity no lease knows.
+2. **`heiwa_worker` does not depend on `sha2`.** The digest is computed in the
+   shell, which is the only place that opens a file. The crate stays I/O-free.
+3. **Integration tests live inline in `apps/heiwa_shell/src/cmd/worker.rs`, not
+   in `apps/heiwa_shell/tests/worker_in_worktree.rs`.** `cmd::workspace` keeps
+   its integration tests inline in the same file, `run_in_prepared_workspace`
+   is `pub(crate)`, and a second harness would have duplicated the repo helper.
+4. **Task 1 needed a second edit the plan did not name.** The operator fold in
+   `crates/heiwa_session/src/operator.rs` matches `OperatorEventType`
+   exhaustively with no `_` arm, so the five new variants were a compile error
+   until classified. They are nonterminal thread touches: a worker exiting does
+   not end its thread, because another worker can run against the same Work.
+   The exhaustive match is the reason this was caught rather than silently
+   ignored.
+5. **Task 1's test file is `operator_journal.rs`**, not `operator.rs`.
+6. **Task 10 also needed `runs` in `foundation_b_targets`.**
+   `ci_rust_test_group.sh` validates integration-test targets as well as
+   package membership.
+7. **Two extra tests were added beyond the plan**: a failing worker records a
+   nonzero exit rather than vanishing, and a worker does not inherit the
+   operator environment. The second asserts `[absent]` from inside the child,
+   so removing `env_clear()` becomes a test failure rather than a credential
+   leak.
+
+Still open for A1-c3, and deliberately not decided here:
+
+- Whether launching a worker belongs *inside* an operator turn (gaining route,
+  approval, and receipt events) or stays a peer of one. A1-c2 emits no
+  `turn_id` on worker events.
+- Whether worker launch must pass the Action Gate. Today `heiwa work run`
+  spawns whatever it is given. The spec calls raw terminal commands an explicit
+  advanced capability, which implies a gate this slice does not have.
