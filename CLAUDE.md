@@ -78,6 +78,13 @@ HEAD and writes its stamp. `scripts/hooks/stop_ledger_gate.sh` enforces this
 against every ledger and blocks a stop on an unverified completion claim. The
 stamp is deliberately refused on a dirty tree.
 
+Stamps are written at an exact HEAD but read with scope. Each acceptance script
+declares an `# acceptance-scope:` line; an older stamp still counts when it is
+an ancestor of HEAD and nothing under that scope changed between the two
+commits. So a docs- or ops-only commit does not force a full re-run, while any
+change under `apps/` or `crates/` does. A script with no declared scope falls
+back to exact HEAD.
+
 | Release | Ledger section | Acceptance | State |
 | --- | --- | --- | --- |
 | L0-L2 | `2026-08-14-L0-L1-task-ledger.md` | `scripts/check_l{0,1,2}_acceptance.sh` | accepted prerequisites |
