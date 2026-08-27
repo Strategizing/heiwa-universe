@@ -22,6 +22,10 @@ const LIVE: [&str; 2] = ["issued", "acked"];
 pub struct WriterLease {
     pub lease_id: String,
     pub work_id: String,
+    /// The worker session this lease was issued for. A1-b had none and
+    /// repeated `work_id` here; A1-c2 gives the lease a real worker, so a
+    /// reader can tell which run held the repository.
+    pub worker_id: String,
     /// `workspace.write:<canonical repository root>` — the resource the lease
     /// is exclusive over. Exclusivity is decided on this string.
     pub capability: String,
@@ -49,6 +53,7 @@ pub fn acquire_writer_lease(
     work_id: &str,
     repo_root: &str,
     installation_id: &str,
+    worker_id: &str,
     issued_at: &str,
     expires_at: &str,
     new_lease_id: impl FnOnce() -> String,
@@ -66,9 +71,7 @@ pub fn acquire_writer_lease(
     let persisted = PersistedWorkerLease {
         lease_id: lease_id.clone(),
         task_id: work_id.to_string(),
-        // A1-b has no separate worker session yet; A1-c introduces one and
-        // will carry it here. Naming the Work is honest in the meantime.
-        session_id: work_id.to_string(),
+        session_id: worker_id.to_string(),
         // No mesh node identity is required for local Work, exactly as
         // `Work.origin_node` stays `None` until enrolment.
         node_id: installation_id.to_string(),
@@ -97,6 +100,7 @@ pub fn acquire_writer_lease(
     Ok(WriterLease {
         lease_id,
         work_id: work_id.to_string(),
+        worker_id: worker_id.to_string(),
         capability,
         node_id: installation_id.to_string(),
         issued_at: issued_at.to_string(),
@@ -116,7 +120,9 @@ fn finish_writer_lease<T: EvidenceTransport>(
         .upsert_worker_lease(PersistedWorkerLease {
             lease_id: lease.lease_id.clone(),
             task_id: lease.work_id.clone(),
-            session_id: lease.work_id.clone(),
+            // Replay keeps only the last record per lease_id, so anything not
+            // repeated here is destroyed. Carry the worker forward.
+            session_id: lease.worker_id.clone(),
             node_id: lease.node_id.clone(),
             capability: lease.capability.clone(),
             status: status.to_string(),
@@ -185,6 +191,7 @@ mod tests {
             "work-abc",
             "/repo",
             "install-1",
+            "worker-1",
             "2026-08-24T00:00:00Z",
             "2026-08-24T01:00:00Z",
             || "lease-1".to_string(),
@@ -205,6 +212,7 @@ mod tests {
             "work-abc",
             "/repo",
             "install-1",
+            "worker-1",
             "2026-08-24T00:00:00Z",
             "2026-08-24T01:00:00Z",
             || "lease-1".to_string(),
@@ -217,6 +225,7 @@ mod tests {
             "work-def",
             "/repo",
             "install-1",
+            "worker-1",
             "2026-08-24T00:00:00Z",
             "2026-08-24T01:00:00Z",
             || "lease-2".to_string(),
@@ -238,6 +247,7 @@ mod tests {
             "work-abc",
             "/repo-one",
             "install-1",
+            "worker-1",
             "2026-08-24T00:00:00Z",
             "2026-08-24T01:00:00Z",
             || "lease-1".to_string(),
@@ -250,6 +260,7 @@ mod tests {
             "work-def",
             "/repo-two",
             "install-1",
+            "worker-1",
             "2026-08-24T00:00:00Z",
             "2026-08-24T01:00:00Z",
             || "lease-2".to_string(),
@@ -266,6 +277,7 @@ mod tests {
             "work-abc",
             "/repo",
             "install-1",
+            "worker-1",
             "2026-08-24T00:00:00Z",
             "2026-08-24T01:00:00Z",
             || "lease-1".to_string(),
@@ -280,6 +292,7 @@ mod tests {
             "work-def",
             "/repo",
             "install-1",
+            "worker-1",
             "2026-08-24T00:31:00Z",
             "2026-08-24T01:31:00Z",
             || "lease-2".to_string(),
@@ -298,6 +311,7 @@ mod tests {
             "work-abc",
             "/repo",
             "install-1",
+            "worker-1",
             "2026-08-24T00:00:00Z",
             "2026-08-24T01:00:00Z",
             || "lease-1".to_string(),
@@ -331,6 +345,7 @@ mod tests {
             "work-abc",
             "/repo",
             "install-1",
+            "worker-1",
             "2026-08-24T00:00:00Z",
             "2026-08-24T01:00:00Z",
             || "lease-1".to_string(),
@@ -346,6 +361,7 @@ mod tests {
             "work-def",
             "/repo",
             "install-1",
+            "worker-1",
             "2026-08-24T02:00:00Z",
             "2026-08-24T03:00:00Z",
             || "lease-2".to_string(),

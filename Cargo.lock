@@ -3433,6 +3433,7 @@ dependencies = [
  "heiwa_receipts",
  "heiwa_vault",
  "heiwa_work",
+ "heiwa_worker",
  "heiwa_workspace",
  "hostname",
  "libc",
@@ -3633,6 +3634,7 @@ version = "0.1.0"
 dependencies = [
  "heiwa-session",
  "heiwa_evidence",
+ "heiwa_worker",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -3647,7 +3649,6 @@ dependencies = [
  "heiwa_evidence",
  "serde",
  "serde_json",
- "tempfile",
  "thiserror 2.0.18",
 ]
 

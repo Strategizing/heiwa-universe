@@ -22,6 +22,7 @@ pub fn run(args: &[String]) -> Result<()> {
         Some("list") | Some("status") | None => list(args),
         Some("create") => create_command(&args[1..]),
         Some("show") => show_command(&args[1..]),
+        Some("run") => crate::cmd::worker::run(&args[1..]),
         Some("--help") | Some("-h") => {
             print_help();
             Ok(())
@@ -36,6 +37,7 @@ fn print_help() {
     println!("  heiwa work list [--json]              what Work exists and where it stands");
     println!("  heiwa work create <intent> [--json]   open a new Work and its primary thread");
     println!("  heiwa work show <work-id> [--json]    bounded session truth for one Work");
+    println!("  heiwa work run <work-id> -- <cmd>     run a provider-owned worker in its worktree");
 }
 
 fn service(root: &Path) -> Result<OperatorSessionService> {
@@ -126,9 +128,34 @@ fn show_command(args: &[String]) -> Result<()> {
         println!("  {}", work["intent"].as_str().unwrap_or(""));
         println!("  status: {}", work["status"].as_str().unwrap_or("unknown"));
     }
+    // Runs get their own block rather than a count: what ran, as what
+    // identity, and how it ended is the question `heiwa work show` exists to
+    // answer once a worker has touched the Work.
+    if let Some(runs) = snapshot.collections.get("runs") {
+        for (worker_id, run) in runs {
+            println!(
+                "  run {worker_id}  {}  {}",
+                run["worker_state"].as_str().unwrap_or("unknown"),
+                run["provider"].as_str().unwrap_or("-")
+            );
+            println!("    cwd  {}", run["cwd"].as_str().unwrap_or("?"));
+            match run["exit_code"].as_i64() {
+                Some(code) => println!("    exit {code}"),
+                None if run["ended_at"].is_null() => println!("    exit (still running)"),
+                None => println!("    exit (signalled)"),
+            }
+            if let Some(pane) = run["pane_id"].as_str() {
+                println!(
+                    "    pane {pane}  {}",
+                    run["pane_state"].as_str().unwrap_or("unknown")
+                );
+            }
+        }
+    }
     for name in [
         "threads",
         "workspace",
+        "runs",
         "approvals",
         "actions",
         "artifacts",

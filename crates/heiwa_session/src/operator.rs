@@ -1662,7 +1662,16 @@ fn apply_to_existing_thread(
         | OperatorEventType::WorkCreated
         | OperatorEventType::WorkLinked
         | OperatorEventType::WorkspacePrepared
-        | OperatorEventType::WorkspaceReleased => apply_nonterminal_touch(entry, event),
+        | OperatorEventType::WorkspaceReleased
+        // Worker and pane lifecycle is the same shape: a worker starting or
+        // exiting keeps its thread active without opening or closing a turn.
+        // A worker exiting is deliberately NOT terminal for the thread — the
+        // operator can launch another worker against the same Work.
+        | OperatorEventType::WorkerLaunched
+        | OperatorEventType::WorkerHeartbeat
+        | OperatorEventType::WorkerExited
+        | OperatorEventType::PaneOpened
+        | OperatorEventType::PaneClosed => apply_nonterminal_touch(entry, event),
     }
 }
 
