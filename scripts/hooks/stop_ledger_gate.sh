@@ -33,9 +33,49 @@ section_claims_complete() {
   [[ "$done_rows" -gt 0 && "$open_rows" -eq 0 ]]
 }
 
+# A stamp is fresh when the tree the gate certified is still, in every way that
+# gate can see, the tree in front of you.
+#
+# Exact HEAD always qualifies. Beyond that, a stamp survives commits that
+# cannot have invalidated it: the acceptance scripts write only at a clean
+# exact HEAD, but the *reading* of an older stamp may be scoped, because a
+# docs-only commit does not change whether the desktop build passes.
+#
+# This is not a softening. A gate that fires on every commit regardless of
+# relevance is one that gets silenced, and the cheapest way to silence this one
+# is to edit the ledger — the exact dishonesty it exists to prevent.
+#
+# Fresh requires all of:
+#   1. the stamp exists;
+#   2. it is HEAD, or an ancestor of HEAD (a stamp from a diverged branch is
+#      not evidence about this one);
+#   3. nothing under the script's declared `# acceptance-scope:` differs
+#      between the stamped commit and HEAD.
+#
+# Deliberately commit-to-commit, not working-tree: this repository's rule is
+# that a ledger states what is true at HEAD, not what is intended, so the stamp
+# certifies HEAD and uncommitted work is not yet a claim. Comparing against the
+# working tree would start blocking stops over work nobody has asserted.
+#
+# A script that declares no scope falls back to exact HEAD, so this is never
+# weaker than before for a gate that has not opted in.
 stamp_fresh() {
-  local stamp_file="$1"
-  [[ -f "$stamp_file" ]] && [[ "$(cat "$stamp_file")" == "$head_sha" ]]
+  local stamp_file="$1" script="$2"
+  [[ -f "$stamp_file" ]] || return 1
+  local stamped
+  stamped="$(cat "$stamp_file")"
+  [[ -n "$stamped" ]] || return 1
+  [[ "$stamped" == "$head_sha" ]] && return 0
+
+  local scope
+  scope="$(sed -n 's/^# acceptance-scope: *//p' "$script" 2>/dev/null | head -1)"
+  [[ -n "$scope" ]] || return 1
+
+  git merge-base --is-ancestor "$stamped" "$head_sha" 2>/dev/null || return 1
+
+  # Word-split deliberately: the scope line is a list of pathspecs.
+  # shellcheck disable=SC2086
+  git diff --quiet "$stamped" "$head_sha" -- $scope 2>/dev/null
 }
 
 block() {
@@ -52,7 +92,7 @@ check_release() {
   local label="$1" ledger="$2" start="$3" end="$4" stamp="$5" script="$6"
   [[ -f "$ledger" ]] || return 0
   section_claims_complete "$ledger" "$start" "$end" || return 0
-  stamp_fresh "$stamp" && return 0
+  stamp_fresh "$stamp" "$script" && return 0
   if [[ ! -f "$script" ]]; then
     block "Ledger $ledger declares $label complete but its acceptance gate $script does not exist. Write and pass it, or set the rows back to their honest status."
   fi

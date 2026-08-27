@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# acceptance-scope: apps crates Cargo.toml Cargo.lock scripts/check_l0_acceptance.sh
+#
+# Broad on purpose. Checks 1-4 only read apps/heiwa_app/desktop, but check 5
+# scans every runtime source under apps/ and crates/ for home-path resolution
+# outside the ConfigRoot resolver, and check 6 scans desktop and cockpit
+# sources for raw hex. Narrowing this to the desktop would let a ConfigRoot
+# violation land in a crate while the stamp still read fresh.
+
 # L0 acceptance gate — roadmap 2026-08-14, layer L0 (UI foundation + N-user config root).
 #
 # Deterministic checks:
