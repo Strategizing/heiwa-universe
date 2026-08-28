@@ -1,0 +1,14 @@
+{
+  "claim_id": "heiwa.evidence.no-stdb-dependency",
+  "verifier_id": "text-absent",
+  "verifier_version": "1",
+  "result": "pass",
+  "commit": "055e9af25dda8f91c85e6e9d931f726300a0d66d",
+  "scope_digest": "432db3e7632671292af35e233eddb263ddfb59f3345aea97d18bd22bf5330975",
+  "verified_at": 1787881845,
+  "environment": {
+    "os": "macos",
+    "arch": "aarch64"
+  },
+  "detail": "2 pattern(s) absent across 3 file(s)"
+}

@@ -1,0 +1,14 @@
+{
+  "claim_id": "heiwa.claims.verifier-allowlist",
+  "verifier_id": "symbols-present",
+  "verifier_version": "1",
+  "result": "pass",
+  "commit": "055e9af25dda8f91c85e6e9d931f726300a0d66d",
+  "scope_digest": "d7188d827e8dd26e08465ac0b5b88e879aca92083219e022cdf70db438a2a559",
+  "verified_at": 1787881845,
+  "environment": {
+    "os": "macos",
+    "arch": "aarch64"
+  },
+  "detail": "4 symbol(s) present"
+}

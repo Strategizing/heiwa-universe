@@ -314,15 +314,39 @@ fn run_command(repo_root: &Path, program: &str, args: &[&str]) -> Result<(Verify
         .current_dir(repo_root)
         .output()
         .map_err(|e| ClaimError::Io(format!("{program}: {e}")))?;
-    let result = if out.status.success() {
-        VerifyResult::Pass
-    } else {
-        VerifyResult::Fail
-    };
-    // Tails, not heads: a failing build says why at the end.
-    let mut detail = String::from_utf8_lossy(&out.stderr).trim().to_string();
-    if detail.is_empty() {
-        detail = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+
+    if out.status.success() {
+        // A passing run needs a summary, not a transcript. Cargo puts the
+        // harness result on stdout and its own progress on stderr.
+        let summary = last_meaningful_line(&stdout)
+            .or_else(|| last_meaningful_line(&stderr))
+            .unwrap_or_else(|| "ok".to_string());
+        return Ok((VerifyResult::Pass, summary));
     }
-    Ok((result, detail))
+
+    // A failing run needs both halves. Cargo announces the failure on stderr
+    // and prints which assertion broke on stdout, so preferring either one
+    // alone stores the less useful side of every real failure.
+    let mut detail = String::new();
+    for (label, stream) in [("stderr", &stderr), ("stdout", &stdout)] {
+        let tail = tail_lines(stream, 20);
+        if !tail.is_empty() {
+            detail.push_str(&format!("--- {label} ---\n{tail}\n"));
+        }
+    }
+    Ok((VerifyResult::Fail, detail.trim_end().to_string()))
+}
+
+fn last_meaningful_line(text: &str) -> Option<String> {
+    text.lines()
+        .map(str::trim)
+        .rfind(|l| !l.is_empty())
+        .map(str::to_string)
+}
+
+fn tail_lines(text: &str, count: usize) -> String {
+    let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+    lines[lines.len().saturating_sub(count)..].join("\n")
 }
