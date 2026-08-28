@@ -288,9 +288,26 @@ fn run_verifier(
                 .package
                 .as_deref()
                 .ok_or_else(|| ClaimError::Params("cargo-test requires a package".into()))?;
-            run_command(repo_root, "cargo", &["test", "-p", package, "--quiet"])
+            let (result, detail) =
+                run_command(repo_root, "cargo", &["test", "-p", package, "--quiet"])?;
+            // A cargo run emits one result block per target. The generic
+            // runner's last-line summary would report whichever block came
+            // last -- usually doc-tests, usually zero -- which reads as
+            // "nothing was tested" on evidence for a suite that passed.
+            Ok(match result {
+                VerifyResult::Pass => (result, summarize_cargo_run(&detail)),
+                VerifyResult::Fail => (result, detail),
+            })
         }
-        VerifierKind::Script { program, args } => run_command(repo_root, program, args),
+        VerifierKind::Script { program, args } => {
+            let (result, detail) = run_command(repo_root, program, args)?;
+            // A repository gate script's own output is its summary; keep the
+            // tail rather than the whole run so evidence stays bounded.
+            Ok(match result {
+                VerifyResult::Pass => (result, tail_lines(&detail, 3)),
+                VerifyResult::Fail => (result, detail),
+            })
+        }
     }
 }
 
@@ -318,11 +335,14 @@ fn run_command(repo_root: &Path, program: &str, args: &[&str]) -> Result<(Verify
     let stderr = String::from_utf8_lossy(&out.stderr);
 
     if out.status.success() {
-        // A passing run needs a summary, not a transcript. Cargo puts the
-        // harness result on stdout and its own progress on stderr.
-        let summary = last_meaningful_line(&stdout)
-            .or_else(|| last_meaningful_line(&stderr))
-            .unwrap_or_else(|| "ok".to_string());
+        // Hand back the whole stream. A verifier that knows how to read its own
+        // tool's output folds it; one that does not gets the last meaningful
+        // line, which is the best a generic runner can honestly say.
+        let summary = if stdout.trim().is_empty() {
+            last_meaningful_line(&stderr).unwrap_or_else(|| "ok".to_string())
+        } else {
+            stdout.trim().to_string()
+        };
         return Ok((VerifyResult::Pass, summary));
     }
 
@@ -339,6 +359,44 @@ fn run_command(repo_root: &Path, program: &str, args: &[&str]) -> Result<(Verify
     Ok((VerifyResult::Fail, detail.trim_end().to_string()))
 }
 
+/// Fold cargo's per-target result blocks into one honest line.
+///
+/// Falls back to the raw text when the shape is not recognized rather than
+/// inventing a count: evidence that guesses is worse than evidence that quotes.
+fn summarize_cargo_run(detail: &str) -> String {
+    let mut passed = 0u32;
+    let mut failed = 0u32;
+    let mut ignored = 0u32;
+    let mut blocks = 0u32;
+
+    for line in detail.lines() {
+        let Some(rest) = line.trim().strip_prefix("test result:") else {
+            continue;
+        };
+        blocks += 1;
+        // Scan every adjacent word pair rather than the first two: the first
+        // segment reads `ok. 16 passed`, so a fixed offset silently drops the
+        // pass count of every block and reports a green suite as empty.
+        let words: Vec<&str> = rest.split_whitespace().collect();
+        for pair in words.windows(2) {
+            let Ok(count) = pair[0].parse::<u32>() else {
+                continue;
+            };
+            match pair[1].trim_end_matches(';') {
+                "passed" => passed += count,
+                "failed" => failed += count,
+                "ignored" => ignored += count,
+                _ => {}
+            }
+        }
+    }
+
+    if blocks == 0 {
+        return detail.to_string();
+    }
+    format!("{passed} passed, {failed} failed, {ignored} ignored across {blocks} target(s)")
+}
+
 fn last_meaningful_line(text: &str) -> Option<String> {
     text.lines()
         .map(str::trim)
@@ -349,4 +407,56 @@ fn last_meaningful_line(text: &str) -> Option<String> {
 fn tail_lines(text: &str, count: usize) -> String {
     let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
     lines[lines.len().saturating_sub(count)..].join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_cargo_summary_folds_every_target_block() {
+        // The failure this guards: reporting the last block (doc-tests, almost
+        // always zero) as if it were the whole run, so evidence for a passing
+        // suite reads "0 passed".
+        let raw = "\
+running 16 tests
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running 9 tests
+test result: ok. 9 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s";
+        assert_eq!(
+            summarize_cargo_run(raw),
+            "25 passed, 0 failed, 1 ignored across 3 target(s)"
+        );
+    }
+
+    #[test]
+    fn an_unrecognized_cargo_shape_is_quoted_not_guessed() {
+        let raw = "some future cargo output nobody parsed";
+        assert_eq!(summarize_cargo_run(raw), raw);
+    }
+
+    #[test]
+    fn tails_are_bounded_and_drop_blank_lines() {
+        let raw = "a\n\nb\n\n\nc\nd";
+        assert_eq!(tail_lines(raw, 2), "c\nd");
+        assert_eq!(tail_lines(raw, 99), "a\nb\nc\nd");
+        assert_eq!(tail_lines("", 3), "");
+    }
+
+    #[test]
+    fn the_workspace_declares_this_crate() {
+        // `cargo-test`'s injection defence is only as good as this lookup, so a
+        // lookup that silently returned nothing would disarm it.
+        let root = repo_root().expect("inside the repository");
+        let packages = workspace_packages(&root).expect("workspace parses");
+        assert!(
+            packages.contains_key("heiwa_claims"),
+            "workspace_packages found {} package(s) but not this one",
+            packages.len()
+        );
+    }
 }

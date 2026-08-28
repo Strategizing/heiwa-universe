@@ -182,3 +182,52 @@ fn oversized_verifier_output_is_truncated_before_it_reaches_git() {
     let short = EvidenceRecord::truncate_detail("fine".into());
     assert_eq!(short, "fine");
 }
+
+#[test]
+fn a_scope_covering_the_evidence_store_is_refused() {
+    // Recording proof would invalidate the proof. Such a claim can never reach
+    // verified, and a permanently degraded claim with no true cause is how a
+    // gate earns the reputation that gets it muted.
+    for bad in [
+        "claims",
+        "claims/",
+        "claims/evidence",
+        "claims/evidence/x.json",
+    ] {
+        let dir = scaffold(&format!(
+            r#"
+[[claim]]
+claim_id = "demo.one"
+subject = "x"
+claim = "x"
+required_state = "verified"
+scope = ["{bad}"]
+verifier_id = "cargo-test"
+params = {{ package = "demo" }}
+"#
+        ));
+        let err = Registry::load(dir.path())
+            .expect_err(&format!("scope `{bad}` should be refused"))
+            .to_string();
+        assert!(err.contains("converge"), "{err}");
+    }
+}
+
+#[test]
+fn a_scope_naming_a_claim_manifest_is_still_allowed() {
+    // Manifests are fair game: editing what a claim says should invalidate its
+    // proof. Only the evidence store is off limits.
+    let dir = scaffold(
+        r#"
+[[claim]]
+claim_id = "demo.one"
+subject = "x"
+claim = "x"
+required_state = "verified"
+scope = ["claims/test.toml"]
+verifier_id = "cargo-test"
+params = { package = "demo" }
+"#,
+    );
+    assert!(Registry::load(dir.path()).is_ok());
+}

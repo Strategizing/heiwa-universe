@@ -138,6 +138,20 @@ impl Registry {
                     )));
                 }
             }
+            // Evidence must stay outside every scope. A claim that watched
+            // `claims/evidence/` would be invalidated by the act of recording
+            // its own proof, so verification could never converge and the
+            // claim would sit permanently degraded for no true reason.
+            for path in &claim.scope {
+                let normalized = path.trim_end_matches('/');
+                if normalized == "claims" || normalized.starts_with("claims/evidence") {
+                    return Err(ClaimError::Manifest(format!(
+                        "claim `{}` scope `{path}` covers the evidence store; \
+                         verification could never converge",
+                        claim.claim_id
+                    )));
+                }
+            }
             let def = claim.verifier()?;
             claim.params.validate(def, &workspace_packages)?;
         }
