@@ -83,12 +83,18 @@ from_event!(PaneClosedPayload, OperatorEventType::PaneClosed);
 
 /// One worker-authored event, scoped to its Work and thread.
 ///
-/// `run_id` carries the worker, so ownership is readable from the envelope
-/// without parsing a payload — the same rule A1-c1 established for `work_id`.
+/// `run_id` identifies one process invocation, while `worker_id` identifies
+/// the prepared worker that owns the lease. Both are readable without
+/// confusing execution history with worker ownership.
+struct WorkerScope<'a> {
+    work_id: &'a str,
+    thread_id: &'a str,
+    run_id: &'a str,
+    worker_id: &'a str,
+}
+
 fn worker_scoped(
-    work_id: &str,
-    thread_id: &str,
-    worker_id: &str,
+    scope: WorkerScope<'_>,
     event_type: OperatorEventType,
     occurred_at: &str,
     payload: serde_json::Value,
@@ -97,16 +103,16 @@ fn worker_scoped(
     OperatorEvent {
         schema_version: OPERATOR_EVENT_SCHEMA_VERSION,
         event_id: new_event_id(),
-        thread_id: thread_id.to_string(),
+        thread_id: scope.thread_id.to_string(),
         turn_id: None,
-        run_id: Some(worker_id.to_string()),
+        run_id: Some(scope.run_id.to_string()),
         call_id: None,
-        work_id: Some(work_id.to_string()),
+        work_id: Some(scope.work_id.to_string()),
         event_type,
         occurred_at: occurred_at.to_string(),
         actor: OperatorActor {
             kind: "worker".to_string(),
-            id: worker_id.to_string(),
+            id: scope.worker_id.to_string(),
         },
         risk_class: OperatorRisk::Low,
         sensitivity: OperatorSensitivity::LocalPrivate,
@@ -120,6 +126,7 @@ fn worker_scoped(
 
 pub fn worker_launched_event(
     identity: &WorkerIdentity,
+    run_id: &str,
     occurred_at: &str,
     new_event_id: impl FnOnce() -> String,
 ) -> OperatorEvent {
@@ -139,9 +146,12 @@ pub fn worker_launched_event(
     })
     .expect("worker launch payload is plain data");
     worker_scoped(
-        &identity.work_id,
-        &identity.thread_id,
-        &identity.worker_id,
+        WorkerScope {
+            work_id: &identity.work_id,
+            thread_id: &identity.thread_id,
+            run_id,
+            worker_id: &identity.worker_id,
+        },
         OperatorEventType::WorkerLaunched,
         occurred_at,
         payload,
@@ -151,6 +161,7 @@ pub fn worker_launched_event(
 
 pub fn worker_heartbeat_event(
     identity: &WorkerIdentity,
+    run_id: &str,
     pid: u32,
     occurred_at: &str,
     new_event_id: impl FnOnce() -> String,
@@ -161,9 +172,12 @@ pub fn worker_heartbeat_event(
     })
     .expect("worker heartbeat payload is plain data");
     worker_scoped(
-        &identity.work_id,
-        &identity.thread_id,
-        &identity.worker_id,
+        WorkerScope {
+            work_id: &identity.work_id,
+            thread_id: &identity.thread_id,
+            run_id,
+            worker_id: &identity.worker_id,
+        },
         OperatorEventType::WorkerHeartbeat,
         occurred_at,
         payload,
@@ -173,6 +187,7 @@ pub fn worker_heartbeat_event(
 
 pub fn worker_exited_event(
     identity: &WorkerIdentity,
+    run_id: &str,
     exit_code: Option<i32>,
     failure_code: Option<String>,
     occurred_at: &str,
@@ -185,9 +200,12 @@ pub fn worker_exited_event(
     })
     .expect("worker exit payload is plain data");
     worker_scoped(
-        &identity.work_id,
-        &identity.thread_id,
-        &identity.worker_id,
+        WorkerScope {
+            work_id: &identity.work_id,
+            thread_id: &identity.thread_id,
+            run_id,
+            worker_id: &identity.worker_id,
+        },
         OperatorEventType::WorkerExited,
         occurred_at,
         payload,
@@ -197,6 +215,7 @@ pub fn worker_exited_event(
 
 pub fn pane_opened_event(
     pane: &PaneIdentity,
+    run_id: &str,
     thread_id: &str,
     occurred_at: &str,
     new_event_id: impl FnOnce() -> String,
@@ -211,9 +230,12 @@ pub fn pane_opened_event(
     })
     .expect("pane open payload is plain data");
     worker_scoped(
-        &pane.work_id,
-        thread_id,
-        &pane.worker_id,
+        WorkerScope {
+            work_id: &pane.work_id,
+            thread_id,
+            run_id,
+            worker_id: &pane.worker_id,
+        },
         OperatorEventType::PaneOpened,
         occurred_at,
         payload,
@@ -223,6 +245,7 @@ pub fn pane_opened_event(
 
 pub fn pane_closed_event(
     pane: &PaneIdentity,
+    run_id: &str,
     thread_id: &str,
     tail: Vec<String>,
     dropped_lines: usize,
@@ -237,9 +260,12 @@ pub fn pane_closed_event(
     })
     .expect("pane close payload is plain data");
     worker_scoped(
-        &pane.work_id,
-        thread_id,
-        &pane.worker_id,
+        WorkerScope {
+            work_id: &pane.work_id,
+            thread_id,
+            run_id,
+            worker_id: &pane.worker_id,
+        },
         OperatorEventType::PaneClosed,
         occurred_at,
         payload,
@@ -273,9 +299,10 @@ mod tests {
 
     #[test]
     fn launch_event_carries_work_scope_on_the_envelope() {
-        let event = worker_launched_event(&identity(), "2026-08-26T00:00:00Z", || "e1".into());
+        let event =
+            worker_launched_event(&identity(), "run-1", "2026-08-26T00:00:00Z", || "e1".into());
         assert_eq!(event.work_id.as_deref(), Some("work-1"));
-        assert_eq!(event.run_id.as_deref(), Some("worker-1"));
+        assert_eq!(event.run_id.as_deref(), Some("run-1"));
         assert_eq!(event.thread_id, "thread-1");
         assert_eq!(event.event_type, OperatorEventType::WorkerLaunched);
         assert_eq!(
@@ -288,14 +315,16 @@ mod tests {
 
     #[test]
     fn the_actor_is_the_worker_not_the_human() {
-        let event = worker_launched_event(&identity(), "2026-08-26T00:00:00Z", || "e1".into());
+        let event =
+            worker_launched_event(&identity(), "run-1", "2026-08-26T00:00:00Z", || "e1".into());
         assert_eq!(event.actor.kind, "worker");
         assert_eq!(event.actor.id, "worker-1");
     }
 
     #[test]
     fn payload_readers_refuse_the_wrong_event_type() {
-        let event = worker_launched_event(&identity(), "2026-08-26T00:00:00Z", || "e1".into());
+        let event =
+            worker_launched_event(&identity(), "run-1", "2026-08-26T00:00:00Z", || "e1".into());
         assert!(WorkerExitedPayload::from_event(&event).is_none());
     }
 }

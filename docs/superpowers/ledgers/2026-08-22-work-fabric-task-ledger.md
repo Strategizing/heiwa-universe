@@ -79,6 +79,15 @@ pane bound to it. Neither claims tri-surface or restart-recovery completion.
 | 9 | Restart recovery exposes stale/closed worker and pane truth without repeating effects | pending | A1-c3 |
 | 10 | Additive exact-HEAD `scripts/check_work_fabric_a1_acceptance.sh` | pending | A1-c3 |
 
+### A1-c2 review repair — 2026-08-28
+
+| # | Repaired invariant | Status | Verification |
+|---|---|---|---|
+| 1 | Prepared worker ownership and per-process run identity are distinct | done | `cargo test -p heiwa-shell --bin heiwa cmd::worker` |
+| 2 | Repeated runs survive both the run fold and canonical Work-session projection | done | `cargo test -p heiwa-shell --bin heiwa cmd::worker` |
+| 3 | `heiwa work run --json` emits one JSON document while retaining both child streams in bounded pane evidence | done | `cargo test -p heiwa-shell --test work_run` |
+| 4 | Reader-thread panics reach the caller instead of becoming clean worker results | done | `cargo test -p heiwa-shell --bin heiwa cmd::worker` |
+
 ## Deferred with reason
 
 - `work_node_bound` and `prior_history_digest` (WF-R15) need an enrolled mesh

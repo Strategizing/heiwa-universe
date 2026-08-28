@@ -1,6 +1,6 @@
 //! Pure fold from the operator stream to the `runs` read model.
 //!
-//! Append order is authority. A row is keyed by `worker_id` and only ever
+//! Append order is authority. A row is keyed by per-invocation `run_id` and only ever
 //! created by a `worker_launched` envelope scoped to the requested Work — a
 //! pane alone never mints one, because the spec forbids treating a terminal
 //! pane as a verified worker merely because it exists.
@@ -18,6 +18,7 @@ use crate::model::{PaneState, WorkerState};
 /// One worker run inside one Work, with the pane bound to it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunRow {
+    pub run_id: String,
     pub worker_id: String,
     pub work_id: String,
     pub worker_state: WorkerState,
@@ -41,9 +42,10 @@ pub struct RunRow {
 }
 
 impl RunRow {
-    fn new(worker_id: String, work_id: String) -> Self {
+    fn new(run_id: String, worker_id: String, work_id: String) -> Self {
         Self {
             worker_id,
+            run_id,
             work_id,
             worker_state: WorkerState::Starting,
             provider: None,
@@ -79,22 +81,24 @@ pub fn fold_runs(events: &[OperatorEvent], work_id: &str) -> Vec<RunRow> {
         }
         match event.event_type {
             OperatorEventType::WorkerLaunched => {
-                // The envelope's run_id is the worker; the payload only
-                // enriches. A payload that no longer deserializes must not
+                // The envelope's run_id is one execution; the payload carries
+                // the stable worker that owns the prepared lease. A payload
+                // that no longer deserializes must not
                 // make the run vanish — the envelope already said it exists.
-                let Some(worker_id) = event.run_id.clone() else {
+                let Some(run_id) = event.run_id.clone() else {
                     continue;
                 };
-                if !rows.contains_key(&worker_id) {
-                    order.push(worker_id.clone());
+                if !rows.contains_key(&run_id) {
+                    order.push(run_id.clone());
                     rows.insert(
-                        worker_id.clone(),
-                        RunRow::new(worker_id.clone(), work_id.to_string()),
+                        run_id.clone(),
+                        RunRow::new(run_id.clone(), event.actor.id.clone(), work_id.to_string()),
                     );
                 }
-                let row = rows.get_mut(&worker_id).expect("just inserted");
+                let row = rows.get_mut(&run_id).expect("just inserted");
                 row.started_at = Some(event.occurred_at.clone());
                 if let Some(payload) = WorkerLaunchedPayload::from_event(event) {
+                    row.worker_id = payload.worker_id;
                     row.provider = Some(payload.provider);
                     row.provider_session_ref = payload.provider_session_ref;
                     row.executable_path = Some(payload.executable_path);
@@ -143,7 +147,10 @@ pub fn fold_runs(events: &[OperatorEvent], work_id: &str) -> Vec<RunRow> {
                     continue;
                 };
                 // A pane never mints a run: an unlaunched worker stays unknown.
-                let Some(row) = rows.get_mut(&payload.worker_id) else {
+                let Some(run_id) = event.run_id.as_deref() else {
+                    continue;
+                };
+                let Some(row) = rows.get_mut(run_id) else {
                     continue;
                 };
                 row.pane_id = Some(payload.pane_id);
@@ -153,7 +160,10 @@ pub fn fold_runs(events: &[OperatorEvent], work_id: &str) -> Vec<RunRow> {
                 let Some(payload) = PaneClosedPayload::from_event(event) else {
                     continue;
                 };
-                let Some(row) = rows.get_mut(&payload.worker_id) else {
+                let Some(run_id) = event.run_id.as_deref() else {
+                    continue;
+                };
+                let Some(row) = rows.get_mut(run_id) else {
                     continue;
                 };
                 row.pane_tail = payload.tail;

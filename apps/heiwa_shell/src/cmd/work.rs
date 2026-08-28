@@ -132,9 +132,9 @@ fn show_command(args: &[String]) -> Result<()> {
     // identity, and how it ended is the question `heiwa work show` exists to
     // answer once a worker has touched the Work.
     if let Some(runs) = snapshot.collections.get("runs") {
-        for (worker_id, run) in runs {
+        for (run_id, run) in runs {
             println!(
-                "  run {worker_id}  {}  {}",
+                "  run {run_id}  {}  {}",
                 run["worker_state"].as_str().unwrap_or("unknown"),
                 run["provider"].as_str().unwrap_or("-")
             );

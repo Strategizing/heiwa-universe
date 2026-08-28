@@ -97,13 +97,13 @@ pub fn build_work_session(
     // (launch, heartbeat, exit, pane open/close) rather than upserted per
     // event. `projection_revision` still counts events, not rows.
     for row in heiwa_worker::fold_runs(&events, work_id) {
-        let worker_id = row.worker_id.clone();
+        let run_id = row.run_id.clone();
         let value = serde_json::to_value(&row).expect("run row is plain data");
         bounded_upsert(
             &mut collections,
             &mut truncated,
             "runs",
-            &worker_id,
+            &run_id,
             value,
             options.collection_limit,
         );

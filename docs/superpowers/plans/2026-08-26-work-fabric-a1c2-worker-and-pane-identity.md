@@ -1835,6 +1835,12 @@ tree is right and this section is the record.
    operator environment. The second asserts `[absent]` from inside the child,
    so removing `env_clear()` becomes a test failure rather than a credential
    leak.
+8. **Post-implementation review split worker ownership from execution
+   identity.** `worker_id` remains the prepared lease owner; every process
+   invocation now gets a distinct envelope `run_id`, and `runs` collections
+   are keyed by that value. This preserves repeated history without inventing
+   a second lease owner. The same repair keeps `--json` stdout to one document
+   and propagates reader-thread panics rather than recording a clean run.
 
 Still open for A1-c3, and deliberately not decided here:
 

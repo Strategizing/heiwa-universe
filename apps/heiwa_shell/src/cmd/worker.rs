@@ -53,6 +53,12 @@ pub fn new_worker_id(new_uuid: impl FnOnce() -> String) -> String {
     format!("worker-{}", safe_suffix(new_uuid()))
 }
 
+/// Every process invocation gets its own durable run identity. The prepared
+/// worker remains stable because it owns the workspace lease.
+pub fn new_run_id(new_uuid: impl FnOnce() -> String) -> String {
+    format!("run-{}", safe_suffix(new_uuid()))
+}
+
 /// Pane IDs share the worker's constraints for the same reason.
 pub fn new_pane_id(new_uuid: impl FnOnce() -> String) -> String {
     format!("pane-{}", safe_suffix(new_uuid()))
@@ -109,12 +115,13 @@ pub fn run(args: &[String]) -> Result<()> {
         .map_err(|error| anyhow!("{error}"))?
         .ok_or_else(|| anyhow!("no local identity on this installation; run first-run setup"))?;
 
-    let outcome = run_in_prepared_workspace(
+    let outcome = run_in_prepared_workspace_with_output(
         &paths.evidence_dir,
         work_id,
         &identity.installation_id,
         &provider,
         command,
+        !json_output,
     )?;
 
     if json_output {
@@ -145,12 +152,31 @@ fn flag_value(args: &[String], flag: &str) -> Option<String> {
 
 /// The whole run: adopt the prepared workspace, append identity, spawn, stream,
 /// reap, and record the ending.
+#[cfg(test)]
 pub(crate) fn run_in_prepared_workspace(
     evidence_root: &Path,
     work_id: &str,
     installation_id: &str,
     provider: &str,
     command: &[String],
+) -> Result<Value> {
+    run_in_prepared_workspace_with_output(
+        evidence_root,
+        work_id,
+        installation_id,
+        provider,
+        command,
+        true,
+    )
+}
+
+fn run_in_prepared_workspace_with_output(
+    evidence_root: &Path,
+    work_id: &str,
+    installation_id: &str,
+    provider: &str,
+    command: &[String],
+    echo_live_output: bool,
 ) -> Result<Value> {
     let work = crate::cmd::work::find(evidence_root, work_id)?
         .ok_or_else(|| anyhow!("Work {work_id} does not exist on this installation"))?;
@@ -188,6 +214,7 @@ pub(crate) fn run_in_prepared_workspace(
     }
 
     let now = chrono::Utc::now().to_rfc3339();
+    let run_id = new_run_id(|| uuid::Uuid::new_v4().to_string());
     let worker = WorkerIdentity {
         schema_version: SCHEMA_VERSION,
         worker_id: worker_id.clone(),
@@ -211,7 +238,7 @@ pub(crate) fn run_in_prepared_workspace(
     // Identity first. A spawn that then fails still has a record; the reverse
     // order would leave a running process no replay knows about.
     service
-        .append_event(worker_launched_event(&worker, &now, new_event_id))
+        .append_event(worker_launched_event(&worker, &run_id, &now, new_event_id))
         .map_err(|error| anyhow!("{error}"))?;
 
     let pane = PaneIdentity {
@@ -227,6 +254,7 @@ pub(crate) fn run_in_prepared_workspace(
     service
         .append_event(pane_opened_event(
             &pane,
+            &run_id,
             &worker.thread_id,
             &now,
             new_event_id,
@@ -254,6 +282,7 @@ pub(crate) fn run_in_prepared_workspace(
             service
                 .append_event(worker_exited_event(
                     &worker,
+                    &run_id,
                     None,
                     Some("spawn_failed".to_string()),
                     &failed_at,
@@ -269,18 +298,20 @@ pub(crate) fn run_in_prepared_workspace(
     service
         .append_event(worker_heartbeat_event(
             &worker,
+            &run_id,
             pid,
             &chrono::Utc::now().to_rfc3339(),
             new_event_id,
         ))
         .map_err(|error| anyhow!("{error}"))?;
 
-    let (tail, status) = stream_and_reap(child)?;
+    let (tail, status) = stream_and_reap(child, echo_live_output)?;
 
     let closed_at = chrono::Utc::now().to_rfc3339();
     service
         .append_event(pane_closed_event(
             &pane,
+            &run_id,
             &worker.thread_id,
             tail.lines(),
             tail.dropped_lines(),
@@ -298,6 +329,7 @@ pub(crate) fn run_in_prepared_workspace(
     service
         .append_event(worker_exited_event(
             &worker,
+            &run_id,
             exit_code,
             failure_code.clone(),
             &closed_at,
@@ -307,6 +339,7 @@ pub(crate) fn run_in_prepared_workspace(
 
     Ok(json!({
         "work_id": work_id,
+        "run_id": run_id,
         "worker_id": worker.worker_id,
         "pane_id": pane.pane_id,
         "provider": worker.provider,
@@ -329,7 +362,10 @@ pub(crate) fn run_in_prepared_workspace(
 ///
 /// Reading them in sequence deadlocks as soon as the child fills the pipe we
 /// are not reading, which any real provider CLI will do.
-fn stream_and_reap(mut child: Child) -> Result<(PaneTail, std::process::ExitStatus)> {
+fn stream_and_reap(
+    mut child: Child,
+    echo_live_output: bool,
+) -> Result<(PaneTail, std::process::ExitStatus)> {
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
     let (tx, rx) = mpsc::channel::<String>();
@@ -340,15 +376,30 @@ fn stream_and_reap(mut child: Child) -> Result<(PaneTail, std::process::ExitStat
 
     let mut tail = PaneTail::default();
     for line in rx {
-        // Echo, so the pane is live for the operator and not merely recorded.
-        println!("{line}");
+        // Human mode stays live. Machine-readable mode keeps stdout as one
+        // JSON document while retaining the same bounded pane evidence.
+        if echo_live_output {
+            println!("{line}");
+        }
         tail.push(&line);
     }
 
-    let _ = out_thread.join();
-    let _ = err_thread.join();
-    let status = child.wait()?;
+    // Join both readers and reap the child before returning any failure. This
+    // prevents a capture failure from becoming a clean run without leaving a
+    // second reader or child unreaped on the error path.
+    let stdout_result = join_reader(out_thread, "stdout");
+    let stderr_result = join_reader(err_thread, "stderr");
+    let status_result = child.wait();
+    stdout_result?;
+    stderr_result?;
+    let status = status_result?;
     Ok((tail, status))
+}
+
+fn join_reader(reader: std::thread::JoinHandle<()>, stream: &str) -> Result<()> {
+    reader
+        .join()
+        .map_err(|_| anyhow!("{stream} reader thread panicked"))
 }
 
 fn forward_lines<R: Read + Send + 'static>(source: Option<R>, tx: mpsc::Sender<String>) {
@@ -634,6 +685,45 @@ mod tests {
     }
 
     #[test]
+    fn two_invocations_in_one_prepared_workspace_remain_two_run_history_rows() {
+        let source = repo();
+        let runtime = tempfile::tempdir().expect("runtime");
+        let (evidence, work_id) = prepared_work(runtime.path(), source.path());
+
+        for output in ["first", "second"] {
+            run_in_prepared_workspace(
+                &evidence,
+                &work_id,
+                "install-1",
+                "local",
+                &[
+                    "/bin/sh".to_string(),
+                    "-c".to_string(),
+                    format!("echo {output}"),
+                ],
+            )
+            .expect("run");
+        }
+
+        let runs = heiwa_worker::fold_runs(&replay(&evidence, &work_id), &work_id);
+        assert_eq!(
+            runs.len(),
+            2,
+            "each process invocation must remain independently inspectable"
+        );
+        assert_eq!(runs[0].pane_tail, vec!["first".to_string()]);
+        assert_eq!(runs[1].pane_tail, vec!["second".to_string()]);
+
+        let snapshot =
+            crate::cmd::work::session(&evidence, &work_id, "test-epoch").expect("Work session");
+        assert_eq!(
+            snapshot.collections["runs"].len(),
+            2,
+            "canonical Work projection must preserve both run rows too"
+        );
+    }
+
+    #[test]
     fn a_work_with_no_prepared_workspace_is_refused_before_any_spawn() {
         let runtime = tempfile::tempdir().expect("runtime");
         let evidence = runtime.path().join("evidence");
@@ -725,5 +815,12 @@ mod tests {
             assert!(!id.contains(".."), "{id}");
             assert!(id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'));
         }
+    }
+
+    #[test]
+    fn a_reader_thread_panic_is_reported_instead_of_becoming_a_clean_run() {
+        let reader = std::thread::spawn(|| panic!("injected reader failure"));
+        let error = join_reader(reader, "stdout").expect_err("panic must propagate");
+        assert_eq!(error.to_string(), "stdout reader thread panicked");
     }
 }

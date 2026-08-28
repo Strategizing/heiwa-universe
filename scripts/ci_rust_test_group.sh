@@ -56,6 +56,7 @@ shell_ops_targets=(
   mail_triage
   schedule
   smoke
+  work_run
 )
 
 runtime_a_targets=(

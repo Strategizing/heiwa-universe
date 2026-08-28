@@ -49,6 +49,7 @@ fn a_launched_worker_that_has_not_reported_is_starting() {
     let mut next = ids();
     let events = vec![worker_launched_event(
         &identity("work-1", "worker-1"),
+        "run-1",
         "2026-08-26T00:00:00Z",
         &mut next,
     )];
@@ -63,8 +64,8 @@ fn a_heartbeat_promotes_starting_to_live() {
     let mut next = ids();
     let id = identity("work-1", "worker-1");
     let events = vec![
-        worker_launched_event(&id, "2026-08-26T00:00:00Z", &mut next),
-        worker_heartbeat_event(&id, 4242, "2026-08-26T00:00:01Z", &mut next),
+        worker_launched_event(&id, "run-1", "2026-08-26T00:00:00Z", &mut next),
+        worker_heartbeat_event(&id, "run-1", 4242, "2026-08-26T00:00:01Z", &mut next),
     ];
     let runs = fold_runs(&events, "work-1");
     assert_eq!(runs[0].worker_state, WorkerState::Live);
@@ -76,8 +77,15 @@ fn a_clean_exit_is_exited_and_a_failure_code_is_failed() {
 
     let mut next = ids();
     let clean = vec![
-        worker_launched_event(&id, "2026-08-26T00:00:00Z", &mut next),
-        worker_exited_event(&id, Some(0), None, "2026-08-26T00:00:01Z", &mut next),
+        worker_launched_event(&id, "run-1", "2026-08-26T00:00:00Z", &mut next),
+        worker_exited_event(
+            &id,
+            "run-1",
+            Some(0),
+            None,
+            "2026-08-26T00:00:01Z",
+            &mut next,
+        ),
     ];
     assert_eq!(
         fold_runs(&clean, "work-1")[0].worker_state,
@@ -86,9 +94,10 @@ fn a_clean_exit_is_exited_and_a_failure_code_is_failed() {
 
     let mut next = ids();
     let broken = vec![
-        worker_launched_event(&id, "2026-08-26T00:00:00Z", &mut next),
+        worker_launched_event(&id, "run-1", "2026-08-26T00:00:00Z", &mut next),
         worker_exited_event(
             &id,
+            "run-1",
             None,
             Some("spawn_failed".into()),
             "2026-08-26T00:00:01Z",
@@ -106,9 +115,10 @@ fn a_pane_bound_to_a_worker_that_never_went_live_is_unverified() {
     let mut next = ids();
     let id = identity("work-1", "worker-1");
     let events = vec![
-        worker_launched_event(&id, "2026-08-26T00:00:00Z", &mut next),
+        worker_launched_event(&id, "run-1", "2026-08-26T00:00:00Z", &mut next),
         pane_opened_event(
             &pane("work-1", "worker-1", "pane-1"),
+            "run-1",
             "thread-1",
             "2026-08-26T00:00:00Z",
             &mut next,
@@ -124,6 +134,7 @@ fn a_pane_for_an_unknown_worker_is_not_promoted_to_a_run() {
     let mut next = ids();
     let events = vec![pane_opened_event(
         &pane("work-1", "ghost", "pane-1"),
+        "run-ghost",
         "thread-1",
         "2026-08-26T00:00:00Z",
         &mut next,
@@ -139,11 +150,13 @@ fn runs_from_another_work_are_excluded() {
     let events = vec![
         worker_launched_event(
             &identity("work-1", "worker-1"),
+            "run-1",
             "2026-08-26T00:00:00Z",
             &mut next,
         ),
         worker_launched_event(
             &identity("work-2", "worker-2"),
+            "run-2",
             "2026-08-26T00:00:01Z",
             &mut next,
         ),
@@ -159,11 +172,19 @@ fn a_closed_pane_reports_its_tail_and_dropped_count() {
     let id = identity("work-1", "worker-1");
     let p = pane("work-1", "worker-1", "pane-1");
     let events = vec![
-        worker_launched_event(&id, "2026-08-26T00:00:00Z", &mut next),
-        pane_opened_event(&p, "thread-1", "2026-08-26T00:00:00Z", &mut next),
-        worker_exited_event(&id, Some(0), None, "2026-08-26T00:00:02Z", &mut next),
+        worker_launched_event(&id, "run-1", "2026-08-26T00:00:00Z", &mut next),
+        pane_opened_event(&p, "run-1", "thread-1", "2026-08-26T00:00:00Z", &mut next),
+        worker_exited_event(
+            &id,
+            "run-1",
+            Some(0),
+            None,
+            "2026-08-26T00:00:02Z",
+            &mut next,
+        ),
         pane_closed_event(
             &p,
+            "run-1",
             "thread-1",
             vec!["last".into()],
             7,
@@ -182,6 +203,7 @@ fn an_event_whose_envelope_names_a_work_is_not_second_guessed_from_payload() {
     let mut next = ids();
     let mut event = worker_launched_event(
         &identity("work-1", "worker-1"),
+        "run-1",
         "2026-08-26T00:00:00Z",
         &mut next,
     );
