@@ -30,30 +30,37 @@ pub fn resolve(repo_root: &Path, scope: &[String]) -> Result<Vec<ScopeEntry>, Cl
     let mut cmd = Command::new("git");
     cmd.arg("-C")
         .arg(repo_root)
-        .arg("ls-files")
-        .arg("-s")
+        .arg("ls-tree")
+        .arg("-r")
+        .arg("-z")
+        .arg("--full-tree")
+        .arg("HEAD")
         .arg("--");
     for path in scope {
         cmd.arg(path);
     }
     let out = cmd
         .output()
-        .map_err(|e| ClaimError::Io(format!("git ls-files: {e}")))?;
+        .map_err(|e| ClaimError::Io(format!("git ls-tree: {e}")))?;
     if !out.status.success() {
         return Err(ClaimError::Io(format!(
-            "git ls-files failed: {}",
+            "git ls-tree HEAD failed: {}",
             String::from_utf8_lossy(&out.stderr).trim()
         )));
     }
 
     let mut entries = Vec::new();
-    for line in String::from_utf8_lossy(&out.stdout).lines() {
-        // `<mode> <blob> <stage>\t<path>`
-        let (meta, path) = match line.split_once('\t') {
+    for record in out.stdout.split(|byte| *byte == b'\0') {
+        if record.is_empty() {
+            continue;
+        }
+        // `<mode> <type> <object>\t<path>\0`
+        let record = String::from_utf8_lossy(record);
+        let (meta, path) = match record.split_once('\t') {
             Some(parts) => parts,
             None => continue,
         };
-        let blob = match meta.split_whitespace().nth(1) {
+        let blob = match meta.split_whitespace().nth(2) {
             Some(blob) => blob,
             None => continue,
         };

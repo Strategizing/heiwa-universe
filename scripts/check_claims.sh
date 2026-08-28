@@ -21,12 +21,21 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
-if ! cargo build -q -p heiwa_claims --bin heiwa-claims 2>/tmp/heiwa_claims_build.log; then
-  printf 'FAIL: heiwa-claims did not build (see /tmp/heiwa_claims_build.log)\n' >&2
+build_log="$(mktemp "${TMPDIR:-/tmp}/heiwa-claims-build.XXXXXX")"
+trap 'rm -f -- "$build_log"' EXIT
+
+if ! cargo build -q -p heiwa_claims --bin heiwa-claims 2>"$build_log"; then
+  printf 'FAIL: heiwa-claims did not build\n' >&2
+  cat "$build_log" >&2
   exit 1
 fi
 
-bin="target/debug/heiwa-claims"
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*) exe_suffix=".exe" ;;
+  *) exe_suffix="" ;;
+esac
+target_dir="${CARGO_TARGET_DIR:-target}"
+bin="$target_dir/debug/heiwa-claims$exe_suffix"
 if [[ ! -x "$bin" ]]; then
   printf 'FAIL: %s missing after build\n' "$bin" >&2
   exit 1
@@ -43,7 +52,7 @@ Every claim above marked MISS is one of:
 
   planned      the subject does not exist yet — build it or drop the claim
   implemented  the subject exists but nothing proves the claim — run:
-                 target/debug/heiwa-claims verify <claim_id>
+                 cargo run -q -p heiwa_claims --bin heiwa-claims -- verify <claim_id>
   degraded     the proof no longer holds — read the reason, fix, then reverify
   retired      the subject is gone — retire the claim in claims/*.toml
 
