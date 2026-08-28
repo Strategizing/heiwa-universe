@@ -3,9 +3,9 @@
   "verifier_id": "symbols-present",
   "verifier_version": "1",
   "result": "pass",
-  "commit": "c9cfcdb6e500cf9d66eab18503a278882cf8ecb1",
-  "scope_digest": "3863d2ab788f3593a8a74367d4f3358fe33cf5aefb409b296f4c3876f53b386c",
-  "verified_at": 1787882416,
+  "commit": "bf2cc701a73858ec9648494cfd4e3bd5cc5e90d9",
+  "scope_digest": "b5431cbe278782b8499f3b3cd0ace5faad87cbc09730ec80026efb41d1a1395b",
+  "verified_at": 1787936612,
   "environment": {
     "os": "macos",
     "arch": "aarch64"
