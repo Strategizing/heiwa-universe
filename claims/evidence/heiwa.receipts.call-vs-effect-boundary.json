@@ -1,14 +1,14 @@
 {
-  "claim_id": "heiwa.claims.computed-state",
+  "claim_id": "heiwa.receipts.call-vs-effect-boundary",
   "verifier_id": "cargo-test",
   "verifier_version": "1",
   "result": "pass",
   "commit": "c9cfcdb6e500cf9d66eab18503a278882cf8ecb1",
-  "scope_digest": "655391bd321a71d690f630234991c9982ec633a12fe32747e1298aa980224ea6",
+  "scope_digest": "4050fd760a34eaa23a2245edfb60abe630ba951b6b1013b0b98a91ce5c8c9ca9",
   "verified_at": 1787882416,
   "environment": {
     "os": "macos",
     "arch": "aarch64"
   },
-  "detail": "31 passed, 0 failed, 0 ignored across 5 target(s)"
+  "detail": "24 passed, 0 failed, 0 ignored across 4 target(s)"
 }

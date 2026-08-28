@@ -3,12 +3,12 @@
   "verifier_id": "cargo-test",
   "verifier_version": "1",
   "result": "pass",
-  "commit": "055e9af25dda8f91c85e6e9d931f726300a0d66d",
+  "commit": "c9cfcdb6e500cf9d66eab18503a278882cf8ecb1",
   "scope_digest": "b9594e3c957850b1dac98a622906a2a4e9438af77b8254da97c3c68bde19910e",
-  "verified_at": 1787881847,
+  "verified_at": 1787882417,
   "environment": {
     "os": "macos",
     "arch": "aarch64"
   },
-  "detail": "running 28 tests\n............................\ntest result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 3 tests\n...\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s\n\n\nrunning 4 tests\n....\ntest result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+  "detail": "35 passed, 0 failed, 0 ignored across 4 target(s)"
 }
