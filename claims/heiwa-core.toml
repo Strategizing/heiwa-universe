@@ -74,3 +74,46 @@ scope = [
 ]
 verifier_id = "text-absent"
 params = { patterns = ["spacetimedb", "spacetime-sdk"] }
+
+[[claim]]
+claim_id = "heiwa.receipts.call-vs-effect-boundary"
+subject = "crates/heiwa_receipts"
+claim = "The call-accounting row carries no external-effect field, and the former `Receipt` name still resolves for consumers mid-migration."
+required_state = "verified"
+scope = ["crates/heiwa_receipts", "Cargo.lock"]
+verifier_id = "cargo-test"
+params = { package = "heiwa_receipts" }
+# Publication gate 1 of the continuity design. The test asserts the ABSENCE of
+# target, idempotency, verification, and compensation fields, because a
+# semantic boundary can only be defended by making its collapse loud.
+compatibility = ["wce/x-continuity/call-receipt@0"]
+
+[[claim]]
+claim_id = "heiwa.receipts.boundary-states-what-it-is-not"
+subject = "crates/heiwa_receipts/src/lib.rs"
+claim = "The receipt crate documents that a call receipt is not proof of an external effect, and names the Effect Receipt gap instead of implying a partial one exists."
+required_state = "verified"
+scope = ["crates/heiwa_receipts/src/lib.rs"]
+verifier_id = "symbols-present"
+params = { symbols = [
+  "pub struct CallReceipt",
+  "What a call receipt is not",
+  "Effect Receipt",
+  "Effect receipts: **not implemented**",
+] }
+
+[[claim]]
+claim_id = "heiwa.docs.receipts-mirror-retired"
+subject = "docs/architecture/receipts.md"
+claim = "The canonical receipts document carries no live SpacetimeDB mirror vocabulary; the retired backend is described as retired, not as wired."
+required_state = "verified"
+scope = ["docs/architecture/receipts.md"]
+verifier_id = "text-absent"
+params = { patterns = [
+  "STDB mirror is wired",
+  "What lands in STDB",
+  "What never lands in STDB",
+  "STDB reducers",
+  "STDB cloud",
+  "STDB catches up",
+] }

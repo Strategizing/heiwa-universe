@@ -2,9 +2,25 @@
 
 > Tokens are operator-truth. Currency is a presentation overlay. Receipts are the authority that connects them.
 
-## Status (2026-05-25)
+## Status (2026-08-27)
 
-Spec status: **partial**. The cost-attribution ledger on [`heiwa.ltd`](https://heiwa.ltd) mocks this schema for demonstration. The runtime stub at `crates/heiwa_receipts/` (planned) will write receipts to `~/.heiwa/receipts.db`. STDB mirror is wired for receipt headers only. `counterfactual_cost_cad` is not yet computed automatically — operators see actual cost in the operator app, counterfactual on the marketing surface as a hand-curated demo. See [`HEIWA.md`](https://github.com/Heiwa-Limited/heiwa-universe/blob/main/HEIWA.md) for the current-vs-target capability matrix.
+Spec status: **partial**.
+
+Implemented in `crates/heiwa_receipts/`: schema and migrations, insert and query, env/agent/model rollups, rate-table loading, actual and counterfactual cost computation, and a tamper-evident SHA-256 hash chain with `verify_chain`.
+
+Not implemented: prompt bodies, write-ahead catch-up, and a `heiwa receipts` command. `heiwa cost` is the shipped read surface. `counterfactual_cost_cad` is stored but not yet computed automatically.
+
+Retired: the hosted mirror. The backend pivot of 2026-07-15 removed SpacetimeDB; there is no remote authority plane and no receipt mirror. `header()` still returns the redacted subset a future export path may carry, and nothing consumes it. Any replacement export must clear the redaction policy before it ships.
+
+See [`HEIWA.md`](https://github.com/Heiwa-Limited/heiwa-universe/blob/main/HEIWA.md) for the current-vs-target capability matrix.
+
+## What a receipt here does not prove
+
+This document specifies **call receipts**: evidence that Heiwa spent something on a model or tool call. A call receipt is not evidence that anything happened outside Heiwa.
+
+A successful model call can produce no effect at all. An effect can occur even when the caller loses the response and records an error. Proof that a file was written, a branch published, a message sent, or a payment made is a separate noun — an **Effect Receipt** — with its own target, idempotency posture, verification, uncertainty, and compensation semantics.
+
+The Effect Receipt does not exist yet. It is named here so the gap is visible rather than papered over, and separating the two is publication gate 1 of the [Work Continuity Triple design](https://github.com/Heiwa-Limited/heiwa-universe/blob/main/docs/superpowers/specs/2026-08-27-heiwa-work-continuity-triple-design.md). Until it exists, no surface may present a call receipt as proof of an external effect.
 
 ## Why this schema
 
@@ -45,27 +61,29 @@ Removing any one dimension collapses a question the operator can already ask tod
 
 CAD is the operator's local currency. Storing the value in the operator's locale keeps the schema rate-table-independent — currency conversion is presentation. Changing the displayed currency does not migrate data.
 
-The `_cad` suffix in the field name makes the base unit explicit. STDB reducers validate the suffix matches the column type so a "renamed to USD" mistake fails at the schema gate.
+The `_cad` suffix in the field name makes the base unit explicit, so a "renamed to USD" mistake is visible at the column rather than inferred from a rate table.
 
 ## Storage
 
 - **Primary**: SQLite at `~/.heiwa/receipts.db`. Written synchronously at the end of every cost-bearing call. The runtime never blocks completing a call on a receipt write failing — receipts have a write-ahead log that catches up on next start.
 - **Prompt bodies**: `~/.heiwa/prompts/<id>.txt` (gzip). Stored alongside receipts so drill-down can show the actual prompt without piping it through the network. Optional to record completions (`--record-output`).
-- **STDB mirror**: receipt **headers only** mirrored asynchronously when online. No prompt content. Ever. Mirroring is best-effort — receipts always land locally first, and STDB catches up later.
+- **Remote mirror**: none. Local SQLite is the durable truth. The hosted plane that once received receipt headers was retired 2026-07-15.
 
-### What lands in STDB
+### The exportable subset
+
+`CallReceipt::header()` returns the redacted subset that a sharing boundary may carry. Nothing consumes it today; it exists so that future fields cannot leak by default.
 
 ```
 {
   id, at, env, provider, model,
-  agent,        // optional per-receipt redaction flag — operator can hide agent in STDB while keeping local
+  agent,        // optional — operators may redact agent attribution before export
   tokens_in, tokens_out, latency_ms,
   actual_cost_cad, counterfactual_cost_cad,
   schema_version
 }
 ```
 
-### What never lands in STDB
+### What never crosses a sharing boundary
 
 - Prompt content
 - Completion text
@@ -73,7 +91,7 @@ The `_cad` suffix in the field name makes the base unit explicit. STDB reducers 
 - Local model weights
 - Operator filesystem paths
 
-Boundary enforced in `crates/heiwa_stdb` reducer signatures. A reducer that accepts richer payloads fails the public/runtime gate review.
+Enforced by construction: `CallReceipt::header()` builds the exportable subset field by field, so a new field on the row does not reach a sharing boundary unless someone adds it there deliberately. `crates/heiwa_stdb` no longer exists — the reducer signatures this paragraph once named went with the backend pivot, and the boundary moved into the type.
 
 ## Cost calculation
 
@@ -182,19 +200,19 @@ Default presentation reads the operator's locale; `~/.heiwa/config.toml` sets a 
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Local SQLite (`~/.heiwa/receipts.db`)       | full record                                                                                           |
 | Local prompts (`~/.heiwa/prompts/<id>.txt`) | prompt body (gzip)                                                                                    |
-| STDB cloud (receipt headers)                | id, at, env, provider, model, optional-redacted agent, tokens, latency, both cost columns             |
-| `heiwa receipts export` (default)           | full record minus prompt body                                                                         |
-| `heiwa receipts export --redact`            | tokens + cost only; no agent, no model, no provider — useful for audit attestation without disclosure |
+| `CallReceipt::header()` (exportable subset) | id, at, env, provider, model, optional-redacted agent, tokens, latency, both cost columns             |
+| `heiwa receipts export` (planned)           | full record minus prompt body                                                                         |
+| `heiwa receipts export --redact` (planned)  | tokens + cost only; no agent, no model, no provider — useful for audit attestation without disclosure |
 
 ## Schema versioning
 
-The schema is versioned in `~/.heiwa/receipts.db`'s `schema_version` row. Migrations land in `crates/heiwa_receipts/migrations/`. STDB reducers are versioned independently — receipt headers always include `schema_version` so older operators do not silently drop new fields.
+The schema is versioned in `~/.heiwa/receipts.db`'s `schema_version` row. Migrations land in `crates/heiwa_receipts/migrations/`. The exportable subset always includes `schema_version` so a consumer on an older version does not silently drop new fields.
 
 ### Compatibility rules
 
 - **Additive changes** (new optional columns): minor bump. Older readers see `NULL`.
 - **Type changes** or **renames**: major bump. Both reader and writer must upgrade.
-- **Removals**: major bump. The removed column is tombstoned in the migration, not dropped, so older STDB headers still parse.
+- **Removals**: major bump. The removed column is tombstoned in the migration, not dropped, so an older exported header still parses.
 
 ## Open questions
 
@@ -203,10 +221,10 @@ These are deliberately not resolved in this spec — they will land as separate 
 - **Multi-currency receipts** — operators with mixed-locale billing (Canadian operator on a US-billed Anthropic sub) may want a `billed_in` enum alongside `_cad`. Current answer: store in CAD, let the operator's accounting layer reconcile.
 - **Token-class refinement** — `tokens_in` does not distinguish cached vs. uncached input tokens (relevant for prompt-caching pricing). Either subdivide the field or add `tokens_cached_in`.
 - **Receipt tags** — free-form operator labels (`tag=#post-mortem-2026-04-21`) would let the operator group receipts across agents without changing the schema. Likely a sidecar table.
-- **Cross-device session continuity** — when an operator continues a session on a second device, do receipts share `session_id` (requires STDB write) or use a `continuation_of` field?
+- **Cross-device session continuity** — when an operator continues a session on a second device, do receipts share `session_id` or use a `continuation_of` field? With no remote authority plane, this now depends on the Continuation contract in the Work Continuity design rather than on a shared write path.
 
 ## Where to next
 
-- [Publishing Pipeline](../publishing.md) — how the runtime, docs, and receipt mirror reach operators
+- [Publishing Pipeline](../publishing.md) — how the runtime and docs reach operators
 - [Security](../security.md) — disclosure policy and runtime threat model around receipt content
 - [Operator Runbook](../operator-runbook.md) — day-to-day operation including receipt querying

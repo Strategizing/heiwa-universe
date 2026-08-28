@@ -51,10 +51,29 @@ distinct types exist today and none of them means "an external effect happened":
 
 | # | Step | Status | Verification |
 |---|---|---|---|
-| 1 | `CallReceipt` naming with a compatibility alias | pending | `cargo test -p heiwa_receipts` |
-| 2 | Retire STDB mirror vocabulary from the receipt boundary | pending | `heiwa-claims verify heiwa.receipts.no-stdb-vocabulary` |
-| 3 | `EffectReceiptV1` design fixtures, no effect claims yet | pending | `cargo test -p heiwa_evidence` |
-| 4 | Registry claim distinguishing call accounting from effect proof | pending | `bash scripts/check_claims.sh` |
+| 1 | `CallReceipt` naming with a deprecated `Receipt` alias | done | `cargo test -p heiwa_receipts` |
+| 2 | Retire STDB mirror vocabulary from the crate boundary | done | `heiwa-claims verify heiwa.receipts.boundary-states-what-it-is-not` |
+| 3 | Retire STDB mirror vocabulary from the canonical document | done | `heiwa-claims verify heiwa.docs.receipts-mirror-retired` |
+| 4 | Registry claims separating call accounting from effect proof | done | `bash scripts/check_claims.sh` |
+| 5 | `EffectReceiptV1` fixtures and serialization tests | pending | `cargo test -p heiwa_evidence` |
+
+Step 5 is open, not blocked. It is the first place Program 0 stops being about
+truth-keeping and starts defining a new schema, which is Program 1's boundary.
+
+### What the canonical document was claiming
+
+`docs/architecture/receipts.md` is published on the docs site. Before this
+release it stated that an STDB mirror was wired for receipt headers, that STDB
+reducers validated the currency suffix, that `crates/heiwa_stdb` enforced the
+privacy boundary, and that `heiwa receipts export` existed. None of that has
+been true since the backend pivot of 2026-07-15, and `crates/heiwa_stdb` is not
+in the tree.
+
+This is the exact failure the claim registry exists to prevent, found while
+building the registry. `heiwa.docs.receipts-mirror-retired` now fails if the
+vocabulary returns. The retirement itself is described in the document rather
+than deleted, because a reader arriving from an older link needs to know the
+mirror went away, not merely that nobody mentions it.
 
 ## Decisions
 

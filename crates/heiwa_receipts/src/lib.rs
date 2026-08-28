@@ -1,20 +1,37 @@
-//! Local SQLite receipt store for Heiwa.
+//! Local SQLite store for **call receipts**.
 //!
-//! One row per cost-bearing call. Every operator view — by lane, by agent, by
-//! model, by day — is a `SUM(...) GROUP BY ...` rollup over this table. CAD is
-//! the storage base unit; presentation in other currencies is a divide-at-read
-//! overlay handled at the UI layer.
+//! One row per cost-bearing model or tool call. Every operator view — by lane,
+//! by agent, by model, by day — is a `SUM(...) GROUP BY ...` rollup over this
+//! table. CAD is the storage base unit; presentation in other currencies is a
+//! divide-at-read overlay handled at the UI layer.
 //!
-//! See `docs/architecture/receipts.md` for the canonical spec.
+//! ## What a call receipt is not
 //!
-//! ## Status (stub)
+//! A [`CallReceipt`] is evidence that Heiwa **spent something**, never evidence
+//! that anything **happened** outside Heiwa. A successful model call can produce
+//! no effect at all, and an effect can occur even when the caller loses the
+//! response and records an error. Proof that a file was written, a branch
+//! published, a message sent, or a payment made is a separate noun — an Effect
+//! Receipt — and it does not exist in this crate yet.
+//!
+//! Keeping the two apart is publication gate 1 of the Work Continuity design.
+//! Until an Effect Receipt exists, no surface may present a call receipt as
+//! proof of an external effect.
+//!
+//! See `docs/architecture/receipts.md` and
+//! `docs/superpowers/specs/2026-08-27-heiwa-work-continuity-triple-design.md`.
+//!
+//! ## Status
 //!
 //! - Schema, insert, query, env/agent/model rollups: implemented.
 //! - Rate-table loading + cost computation (actual + counterfactual): implemented.
 //! - Tamper-evident SHA-256 hash chain (`prev_hash`/`entry_hash`) + `verify_chain`: implemented.
-//! - STDB header mirror: **not implemented** — `header()` returns the redactable
-//!   subset for whatever layer wires the mirror.
+//! - `header()` returns the redacted subset a future export path may carry.
+//!   No remote mirror is wired; the hosted authority plane was retired
+//!   2026-07-15 and durable truth is local.
 //! - Prompt bodies, WAL catch-up, CLI surface: **not implemented**.
+//! - Effect receipts: **not implemented**. Named here so the gap is visible,
+//!   not to imply a partial one exists.
 //! - `id` is currently `uuid v4`; spec calls for ULID. Ordering is by `at`, not
 //!   by id, so switching id type later requires no schema migration.
 
@@ -104,9 +121,14 @@ impl Env {
     }
 }
 
-/// Full local-side receipt. One per cost-bearing call.
+/// Full local-side accounting row. One per cost-bearing model or tool call.
+///
+/// Records economics and execution telemetry — provider, model, tokens,
+/// latency, attempts, cost. It carries no target, no idempotency key, and no
+/// verification, because it makes no claim about the world outside this
+/// process.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct Receipt {
+pub struct CallReceipt {
     pub id: String,
     pub at: i64,
     pub env: Env,
@@ -130,7 +152,7 @@ pub struct Receipt {
     pub parent_id: Option<String>,
 }
 
-impl Receipt {
+impl CallReceipt {
     /// Build a new receipt with a fresh `id` and the given fields.
     /// `at` is unix seconds UTC; caller supplies it so this remains pure.
     #[allow(clippy::too_many_arguments)]
@@ -148,7 +170,7 @@ impl Receipt {
         session_id: impl Into<String>,
         parent_id: Option<String>,
     ) -> Self {
-        Receipt {
+        CallReceipt {
             id: Uuid::new_v4().to_string(),
             at,
             env,
@@ -169,9 +191,13 @@ impl Receipt {
         }
     }
 
-    /// Strip prompt-shaped fields for STDB mirror. Currently the receipt has no
-    /// prompt body in-row, but the boundary helper is here so future fields
-    /// (prompt hash, completion summary) cannot accidentally leak across.
+    /// The redacted subset safe to carry across a sharing boundary.
+    ///
+    /// The row has no prompt body today, but the boundary helper exists so that
+    /// future fields (prompt hash, completion summary) cannot leak by default.
+    /// Nothing consumes this yet: the hosted mirror this once served was
+    /// retired with the backend pivot, and any replacement export must clear
+    /// the redaction policy before it ships.
     pub fn header(&self) -> ReceiptHeader {
         ReceiptHeader {
             id: self.id.clone(),
@@ -190,7 +216,17 @@ impl Receipt {
     }
 }
 
-/// What lands in STDB. Never contains prompt content or completions.
+/// Former name of [`CallReceipt`].
+///
+/// Kept so the rename is not a breaking change mid-migration. The old name says
+/// only "receipt", which is the ambiguity the Work Continuity design requires
+/// removing before either noun can be published: a reader could not tell
+/// whether it meant "we paid for a call" or "something happened out there".
+#[deprecated(since = "0.1.0", note = "use CallReceipt; an Effect Receipt is a different noun")]
+pub type Receipt = CallReceipt;
+
+/// The exportable subset of a call receipt. Never contains prompt content or
+/// completions.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ReceiptHeader {
     pub id: String,
@@ -198,7 +234,7 @@ pub struct ReceiptHeader {
     pub env: Env,
     pub provider: String,
     pub model: String,
-    /// Optional — operators may redact agent attribution before mirroring.
+    /// Optional — operators may redact agent attribution before export.
     pub agent: Option<String>,
     pub tokens_in: i64,
     pub tokens_out: i64,
@@ -257,11 +293,11 @@ enum ReceiptHashVersion {
 /// (`key=<len>:<value>`) so no value can borrow bytes from its neighbour. The
 /// `heiwa.receipt.chain.v3` is the current domain separator. Schema-v2
 /// migration verification uses its legacy preimage explicitly.
-pub fn entry_hash(r: &Receipt, prev_hash: &str) -> String {
+pub fn entry_hash(r: &CallReceipt, prev_hash: &str) -> String {
     entry_hash_for_version(r, prev_hash, ReceiptHashVersion::V3)
 }
 
-fn entry_hash_for_version(r: &Receipt, prev_hash: &str, version: ReceiptHashVersion) -> String {
+fn entry_hash_for_version(r: &CallReceipt, prev_hash: &str, version: ReceiptHashVersion) -> String {
     use std::fmt::Write as _;
 
     fn lp(buf: &mut String, key: &str, val: &str) {
@@ -523,7 +559,7 @@ impl ReceiptStore {
     /// The store is the sole writer, so reading the current tip and appending
     /// the next link happen under one lock and one transaction — `seq` and
     /// `prev_hash` cannot race even under concurrent callers.
-    pub fn insert(&self, r: &Receipt) -> Result<()> {
+    pub fn insert(&self, r: &CallReceipt) -> Result<()> {
         let mut conn = self.lock()?;
         let tx = conn.transaction()?;
 
@@ -583,7 +619,7 @@ impl ReceiptStore {
         Ok(())
     }
 
-    pub fn get(&self, id: &str) -> Result<Option<Receipt>> {
+    pub fn get(&self, id: &str) -> Result<Option<CallReceipt>> {
         let conn = self.lock()?;
         let row = conn
             .query_row(
@@ -596,7 +632,7 @@ impl ReceiptStore {
     }
 
     /// List receipts in `[since_unix, until_unix)`, most recent first.
-    pub fn list(&self, since_unix: i64, until_unix: i64) -> Result<Vec<Receipt>> {
+    pub fn list(&self, since_unix: i64, until_unix: i64) -> Result<Vec<CallReceipt>> {
         let conn = self.lock()?;
         let mut stmt = conn.prepare(
             "SELECT id, at, env, provider, model, agent,
@@ -856,7 +892,7 @@ fn read_schema_version(conn: &Connection) -> Result<i64> {
 fn migrate_v2_hash_chain(conn: &Connection) -> Result<()> {
     conn.execute_batch(MIGRATION_0002_SQL)?;
 
-    let rows: Vec<Receipt> = {
+    let rows: Vec<CallReceipt> = {
         let mut stmt = conn.prepare(
             "SELECT id, at, env, provider, model, agent,
                     tokens_in, tokens_out, latency_ms,
@@ -903,7 +939,7 @@ fn migrate_v3_model_call_accounting(conn: &Connection) -> Result<()> {
 
     tx.execute_batch(MIGRATION_0003_SQL)?;
 
-    let rows: Vec<Receipt> = {
+    let rows: Vec<CallReceipt> = {
         let mut stmt = tx.prepare("SELECT * FROM receipts ORDER BY seq ASC")?;
         let collected = stmt
             .query_map([], row_to_receipt)?
@@ -941,9 +977,9 @@ fn optional_column<T: rusqlite::types::FromSql>(
     }
 }
 
-fn row_to_receipt(row: &rusqlite::Row<'_>) -> rusqlite::Result<Receipt> {
+fn row_to_receipt(row: &rusqlite::Row<'_>) -> rusqlite::Result<CallReceipt> {
     let env: String = row.get("env")?;
-    Ok(Receipt {
+    Ok(CallReceipt {
         id: row.get("id")?,
         at: row.get("at")?,
         env: match env.as_str() {
@@ -1183,8 +1219,8 @@ mod tests {
 
     // ---- tamper-evident hash chain ----
 
-    fn chain_sample(i: i64) -> Receipt {
-        Receipt::new(
+    fn chain_sample(i: i64) -> CallReceipt {
+        CallReceipt::new(
             1_716_640_000 + i,
             Env::Local,
             "ollama",
