@@ -222,7 +222,10 @@ impl CallReceipt {
 /// only "receipt", which is the ambiguity the Work Continuity design requires
 /// removing before either noun can be published: a reader could not tell
 /// whether it meant "we paid for a call" or "something happened out there".
-#[deprecated(since = "0.1.0", note = "use CallReceipt; an Effect Receipt is a different noun")]
+#[deprecated(
+    since = "0.1.0",
+    note = "use CallReceipt; an Effect Receipt is a different noun"
+)]
 pub type Receipt = CallReceipt;
 
 /// The exportable subset of a call receipt. Never contains prompt content or
