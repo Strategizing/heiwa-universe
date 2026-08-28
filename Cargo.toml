@@ -6,6 +6,7 @@ members = [
     "apps/heiwa_app/desktop/src-tauri",
     "crates/heiwa_a2a",
     "crates/heiwa_automations",
+    "crates/heiwa_claims",
     "crates/heiwa_config",
     "crates/heiwa_drex",
     "crates/heiwa_embed",

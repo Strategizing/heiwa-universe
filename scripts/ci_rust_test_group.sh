@@ -20,6 +20,7 @@ foundation_packages=(
   heiwa-resource
   heiwa-tui
   heiwa_automations
+  heiwa_claims
   heiwa_config
   heiwa_embed
   heiwa_evidence
@@ -83,6 +84,8 @@ runtime_b_targets=(
 )
 
 foundation_a_targets=(
+  claim_manifest
+  claim_state
   cockpit_contract
   drex_golden
   full_flow

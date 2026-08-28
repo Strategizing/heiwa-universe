@@ -1,0 +1,22 @@
+[package]
+name = "heiwa_claims"
+version = "0.1.0"
+edition = "2021"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Executable claim registry — computes whether a Heiwa capability claim is proven at the exact current source state."
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+toml = "0.8"
+
+[dev-dependencies]
+tempfile = "3"

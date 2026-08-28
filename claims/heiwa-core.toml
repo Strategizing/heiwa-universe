@@ -1,0 +1,76 @@
+# Executable claim registry — core runtime claims.
+#
+# Each entry states one falsifiable thing Heiwa asserts today, names an
+# allowlisted verifier, and declares the source whose change invalidates the
+# proof. Nothing here may declare its own observed state; run
+# `heiwa-claims list` to compute it.
+#
+# Scope is the honest question, not the convenient one: it must include the
+# source a verifier actually reads, dependencies included. A scope narrower than
+# that produces confident lies the first time a dependency moves.
+
+[[claim]]
+claim_id = "heiwa.claims.computed-state"
+subject = "crates/heiwa_claims"
+claim = "Claim state is computed from evidence bound to source; a manifest cannot declare a claim verified."
+required_state = "verified"
+scope = ["crates/heiwa_claims", "Cargo.toml", "Cargo.lock"]
+verifier_id = "cargo-test"
+params = { package = "heiwa_claims" }
+compatibility = ["wce/x-continuity/claim-registry@1"]
+
+[[claim]]
+claim_id = "heiwa.claims.verifier-allowlist"
+subject = "crates/heiwa_claims/src/verifier.rs"
+claim = "Verifiers are declared in tracked Rust and selected by id, so a claim manifest cannot introduce a command to run."
+required_state = "verified"
+scope = ["crates/heiwa_claims/src/verifier.rs"]
+verifier_id = "symbols-present"
+params = { symbols = [
+  "pub const VERIFIERS",
+  "pub fn lookup",
+  "pub fn validate",
+  "is not a member of this workspace",
+] }
+compatibility = ["wce/x-continuity/claim-registry@1"]
+
+[[claim]]
+claim_id = "heiwa.work.durable-aggregate"
+subject = "crates/heiwa_work"
+claim = "Work has a stable identity with revisioned events, migration, and a read-model projection that survives its own test corpus."
+required_state = "verified"
+scope = [
+  "crates/heiwa_work",
+  "crates/heiwa_evidence",
+  "crates/heiwa_session",
+  "Cargo.lock",
+]
+verifier_id = "cargo-test"
+params = { package = "heiwa_work" }
+compatibility = ["wce/x-continuity/work@1"]
+
+[[claim]]
+claim_id = "heiwa.receipts.tamper-evident-chain"
+subject = "crates/heiwa_receipts"
+claim = "The local receipt store links entries in a SHA-256 hash chain and can detect a break in it."
+required_state = "verified"
+scope = ["crates/heiwa_receipts", "Cargo.lock"]
+verifier_id = "cargo-test"
+params = { package = "heiwa_receipts" }
+# This claim is about call accounting only. It is deliberately NOT a claim about
+# external effects — the continuity design requires that split before either
+# noun can be published, and asserting it here would pre-announce it.
+compatibility = ["wce/x-continuity/call-receipt@0"]
+
+[[claim]]
+claim_id = "heiwa.evidence.no-stdb-dependency"
+subject = "evidence and receipt plane dependencies"
+claim = "The evidence and receipt planes carry no SpacetimeDB dependency; local JSONL and SQLite are the durable truth."
+required_state = "verified"
+scope = [
+  "crates/heiwa_evidence/Cargo.toml",
+  "crates/heiwa_receipts/Cargo.toml",
+  "crates/heiwa_protocol/Cargo.toml",
+]
+verifier_id = "text-absent"
+params = { patterns = ["spacetimedb", "spacetime-sdk"] }
