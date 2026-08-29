@@ -24,8 +24,10 @@ COMPILE_LANE_DEADLINE_MINUTES = 20
 # desktop-app compiles the shipped app crate and its release build, so it
 # belongs in the compile lane rather than the sub-minute feedback lane.
 COMPILE_LANES = %w[rust-tests rust-static desktop-app].freeze
-# `blacksmith-4vcpu-ubuntu-2404` is proven: every job in CI run 31914594311
-# (PR #68) was claimed by a Blacksmith runner within ~10s of being queued.
+# Both labels have claim evidence. `blacksmith-4vcpu-ubuntu-2404` claimed every
+# job in CI run 31914594311 (PR #68) within ~10s. Required PR CI moved back to
+# `ubuntu-latest` on 2026-08-29 after Blacksmith stopped adopting jobs across
+# independent PRs; keep the old label allowlisted only for a deliberate canary.
 PROVEN_RUNNER_LABELS = %w[ubuntu-latest blacksmith-4vcpu-ubuntu-2404].freeze
 
 path = ARGV.fetch(0, ".github/workflows/ci.yml")
