@@ -304,7 +304,7 @@ fn run_in_prepared_workspace_with_output(
         ))
         .map_err(|error| anyhow!("{error}"))?;
 
-    let (tail, status) = stream_and_reap(child, echo_live_output)?;
+    let (tail, status, capture_failure) = stream_and_reap(child, echo_live_output)?;
 
     let closed_at = chrono::Utc::now().to_rfc3339();
     service
@@ -320,10 +320,11 @@ fn run_in_prepared_workspace_with_output(
         .map_err(|error| anyhow!("{error}"))?;
 
     let exit_code = status.code();
-    let failure_code = match exit_code {
-        Some(0) => None,
-        Some(_) => Some("nonzero_exit".to_string()),
-        None => Some("signalled".to_string()),
+    let failure_code = match (&capture_failure, exit_code) {
+        (Some(_), _) => Some("capture_failed".to_string()),
+        (None, Some(0)) => None,
+        (None, Some(_)) => Some("nonzero_exit".to_string()),
+        (None, None) => Some("signalled".to_string()),
     };
     service
         .append_event(worker_exited_event(
@@ -335,6 +336,10 @@ fn run_in_prepared_workspace_with_output(
             new_event_id,
         ))
         .map_err(|error| anyhow!("{error}"))?;
+
+    if let Some(error) = capture_failure {
+        return Err(anyhow!(error));
+    }
 
     Ok(json!({
         "work_id": work_id,
@@ -364,7 +369,7 @@ fn run_in_prepared_workspace_with_output(
 fn stream_and_reap(
     mut child: Child,
     echo_live_output: bool,
-) -> Result<(PaneTail, std::process::ExitStatus)> {
+) -> Result<(PaneTail, std::process::ExitStatus, Option<String>)> {
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
     let (tx, rx) = mpsc::channel::<String>();
@@ -389,33 +394,36 @@ fn stream_and_reap(
     let stdout_result = join_reader(out_thread, "stdout");
     let stderr_result = join_reader(err_thread, "stderr");
     let status_result = child.wait();
-    stdout_result?;
-    stderr_result?;
     let status = status_result?;
-    Ok((tail, status))
+    let capture_failure = [stdout_result.err(), stderr_result.err()]
+        .into_iter()
+        .flatten()
+        .map(|error| error.to_string())
+        .reduce(|left, right| format!("{left}; {right}"));
+    Ok((tail, status, capture_failure))
 }
 
-fn join_reader(reader: std::thread::JoinHandle<()>, stream: &str) -> Result<()> {
+fn join_reader(reader: std::thread::JoinHandle<std::io::Result<()>>, stream: &str) -> Result<()> {
     reader
         .join()
-        .map_err(|_| anyhow!("{stream} reader thread panicked"))
+        .map_err(|_| anyhow!("{stream} reader thread panicked"))?
+        .map_err(|error| anyhow!("{stream} reader failed: {error}"))
 }
 
-fn forward_lines<R: Read + Send + 'static>(source: Option<R>, tx: mpsc::Sender<String>) {
+fn forward_lines<R: Read + Send + 'static>(
+    source: Option<R>,
+    tx: mpsc::Sender<String>,
+) -> std::io::Result<()> {
     let Some(source) = source else {
-        return;
+        return Ok(());
     };
     for line in BufReader::new(source).lines() {
-        match line {
-            Ok(line) => {
-                if tx.send(line).is_err() {
-                    return;
-                }
-            }
-            // A worker emitting invalid UTF-8 must not take the recorder down.
-            Err(_) => return,
+        let line = line?;
+        if tx.send(line).is_err() {
+            return Ok(());
         }
     }
+    Ok(())
 }
 
 fn service(root: &Path) -> Result<OperatorSessionService> {
@@ -773,6 +781,35 @@ mod tests {
         let runs = heiwa_worker::fold_runs(&replay(&evidence, &work_id), &work_id);
         assert_eq!(runs[0].worker_state, heiwa_worker::WorkerState::Failed);
         assert_eq!(runs[0].failure_code.as_deref(), Some("nonzero_exit"));
+    }
+
+    #[test]
+    fn invalid_utf8_output_marks_the_run_failed_instead_of_truncating_cleanly() {
+        let source = repo();
+        let runtime = tempfile::tempdir().expect("runtime");
+        let (evidence, work_id) = prepared_work(runtime.path(), source.path());
+
+        let error = run_in_prepared_workspace(
+            &evidence,
+            &work_id,
+            "install-1",
+            "local",
+            &[
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "printf '\\377\\n'".to_string(),
+            ],
+        )
+        .expect_err("capture corruption must fail the run");
+
+        assert!(
+            error.to_string().contains("stdout reader failed"),
+            "got: {error}"
+        );
+        let runs = heiwa_worker::fold_runs(&replay(&evidence, &work_id), &work_id);
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].worker_state, heiwa_worker::WorkerState::Failed);
+        assert_eq!(runs[0].failure_code.as_deref(), Some("capture_failed"));
     }
 
     #[test]
