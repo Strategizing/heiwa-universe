@@ -124,6 +124,11 @@ pub enum OperatorEventType {
     WorkLinked,
     WorkspacePrepared,
     WorkspaceReleased,
+    WorkerLaunched,
+    WorkerHeartbeat,
+    WorkerExited,
+    PaneOpened,
+    PaneClosed,
 }
 
 /// One operator-facing runtime event: the durable record type appended to

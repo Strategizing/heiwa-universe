@@ -1,6 +1,6 @@
 id: heiwa-builder
 name: Heiwa Builder
-description: Implementation specialist for Heiwa Python code, agents, and features. Expert in BaseAgent patterns, local-bus transport, and test-driven development.
+description: Implementation specialist for the Heiwa Rust runtime and its companion surfaces. Expert in the Work/workspace/session/evidence crates, branch topology, and test-driven development.
 status: active
 prompt_file: prompt.md
 tags: [implementation, refactoring, testing]

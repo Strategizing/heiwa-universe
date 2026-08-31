@@ -28,6 +28,7 @@ heiwa_config = { path = "../../crates/heiwa_config" }
 heiwa_identity = { path = "../../crates/heiwa_identity" }
 heiwa_mesh = { path = "../../crates/heiwa_mesh" }
 heiwa_work = { path = "../../crates/heiwa_work" }
+heiwa_worker = { path = "../../crates/heiwa_worker" }
 heiwa_workspace = { path = "../../crates/heiwa_workspace" }
 anyhow = "1.0"
 async-trait = "0.1"

@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# acceptance-scope: apps crates Cargo.toml Cargo.lock scripts/check_l1_acceptance.sh
+#
+# Wider than the files this reads directly: it builds heiwa-shell and tests
+# heiwa-provider, both of which compile most of the workspace, so a change in
+# any crate can invalidate the result.
+
 # L1 acceptance gate — roadmap 2026-08-14, layer L1 (BYOK provider tier).
 #
 # Deterministic checks:

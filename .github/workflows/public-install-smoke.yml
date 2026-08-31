@@ -8,6 +8,16 @@ on:
         required: true
         default: 0.1.0
         type: string
+  # Called by release.yml immediately after the release publishes, so a release
+  # proves it is installable instead of waiting for someone to remember to
+  # dispatch this. Both v0.1.0 and v0.2.0 shipped broken install paths that this
+  # workflow would have caught at publish time.
+  workflow_call:
+    inputs:
+      version:
+        description: Stable Heiwa release version to install
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -16,6 +26,7 @@ jobs:
   install:
     name: Public install (${{ matrix.name }})
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:

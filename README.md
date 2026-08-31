@@ -43,7 +43,58 @@ Maturity is uneven across planes today; see [`HEIWA.md`](HEIWA.md#the-three-plan
 
 > Rust proposes and executes, local text truth records, Lance recalls, `heiwa` presents.
 
-## Quick Start
+## Install
+
+```bash
+curl -fsSL https://heiwa.ltd/install | sh
+```
+
+The installer verifies a SHA-256 checksum from the release's `checksums.txt`
+before it moves anything into place, and refuses an archive containing links or
+unsupported entry types. It installs under `~/.heiwa` — set `HEIWA_HOME` to an
+absolute path to change that — and prints the exact binary, cockpit, and app
+paths it wrote.
+
+```bash
+export PATH="$HOME/.heiwa/bin:$PATH"
+heiwa doctor
+heiwa app start --no-open
+```
+
+Pin a version with `HEIWA_VERSION=0.2.0`. To read the script before running it,
+fetch it first: `curl -fsSL https://heiwa.ltd/install -o heiwa-install.sh`.
+
+What each platform gets today:
+
+| Platform | CLI | Desktop app | Source |
+| --- | --- | --- | --- |
+| macOS aarch64 | yes | yes, placed in `/Applications` (or `~/Applications`) | installer or [Releases](https://github.com/Heiwa-Limited/heiwa-universe/releases) |
+| Linux x86_64 | yes | not yet | installer or Releases |
+| Windows x86_64 | yes | not yet | [Releases](https://github.com/Heiwa-Limited/heiwa-universe/releases) archive |
+| Container | yes | not applicable | `ghcr.io/heiwa-limited/heiwa` |
+
+The macOS app ships as the updater's own signed tarball rather than a `.dmg`: a
+browser download sets `com.apple.quarantine` and Gatekeeper blocks an unsigned
+app, so a `.dmg` on the releases page would be a broken artifact behind the most
+obvious download button. `curl` and the in-app updater set no quarantine bit.
+
+Release archives carry build provenance attestations; the container image also
+carries an SBOM. Every published release is installed end-to-end on Linux and
+macOS by
+[`public-install-smoke.yml`](.github/workflows/public-install-smoke.yml) before
+the release workflow finishes.
+
+Updating:
+
+```bash
+heiwa app update --dry-run --json   # show the plan
+heiwa app update                    # apply it
+```
+
+## Build from Source
+
+For contributors. Requires the Rust toolchain in
+[`BUILD_MATRIX.md`](BUILD_MATRIX.md); this is not the install path.
 
 ```bash
 # Verify the local toolchain baseline

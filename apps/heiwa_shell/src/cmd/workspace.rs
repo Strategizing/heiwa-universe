@@ -98,12 +98,18 @@ fn prepare(args: &[String]) -> Result<()> {
         .ok_or_else(|| anyhow!("no local identity on this installation; run first-run setup"))?;
     let cwd = std::env::current_dir()?;
 
+    // One prepared workspace serves one worker: the lease it takes is
+    // exclusive, so minting the identity here and recording it on
+    // `workspace_prepared` lets `heiwa work run` adopt it instead of inventing
+    // a second, conflicting one.
+    let worker_id = crate::cmd::worker::new_worker_id(|| uuid::Uuid::new_v4().to_string());
     let prepared = prepare_for(
         &paths.runtime_root,
         &paths.evidence_dir,
         &cwd,
         work_id,
         &identity.installation_id,
+        &worker_id,
     )?;
     if has_flag(args, "--json") {
         println!("{prepared}");
@@ -134,6 +140,7 @@ pub(crate) fn prepare_for(
     repo_root: &Path,
     work_id: &str,
     installation_id: &str,
+    worker_id: &str,
 ) -> Result<Value> {
     let work = crate::cmd::work::find(evidence_root, work_id)?
         .ok_or_else(|| anyhow!("Work {work_id} does not exist on this installation"))?;
@@ -158,6 +165,7 @@ pub(crate) fn prepare_for(
         work_id,
         &snapshot.root,
         installation_id,
+        worker_id,
         &now.to_rfc3339(),
         &expires.to_rfc3339(),
         || uuid::Uuid::new_v4().to_string(),
@@ -201,6 +209,8 @@ pub(crate) fn prepare_for(
         &work.primary_thread_id,
         &snapshot.root,
         &handle,
+        worker_id,
+        &lease.lease_id,
         &occurred_at,
         || uuid::Uuid::new_v4().to_string(),
     )) {
@@ -219,6 +229,8 @@ pub(crate) fn prepare_for(
         "worktree_path": handle.path,
         "branch": handle.branch,
         "base_commit": handle.base_commit,
+        "worker_id": worker_id,
+        "lease_id": lease.lease_id,
         "source_dirty": snapshot.dirty,
         "source_dirty_paths": snapshot.dirty_paths,
         "changed_files": diff.total_files,
@@ -288,7 +300,14 @@ mod tests {
     }
 
     fn prepare_test(runtime: &Path, repo: &Path, work_id: &str) -> Result<Value> {
-        prepare_for(runtime, &evidence(runtime), repo, work_id, "install-1")
+        prepare_for(
+            runtime,
+            &evidence(runtime),
+            repo,
+            work_id,
+            "install-1",
+            "worker-1",
+        )
     }
 
     #[test]

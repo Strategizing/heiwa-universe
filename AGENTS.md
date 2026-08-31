@@ -91,6 +91,15 @@ Agent baseline gate: before closing repo-health work, local promotion, or peer-a
 
 Vendor quarantine: root `vendor/` is ignored local research quarantine. `vendor/oss-lifts` is not part of the production remote checkpoint. Do not add, remove, import from, or cite `vendor/` as product evidence unless Devon assigns a tracked-vendor slice with license/provenance and `PRODUCT_SURFACE.md` updates.
 
+## Active Build
+
+Work Fabric A1 — durable `Work` and the one-repository loop.
+
+- Contract: `docs/superpowers/specs/2026-08-22-heiwa-work-fabric-design.md`. It is the product-sequencing authority after L3; it supersedes the roadmap's post-L3 sequencing without erasing accepted layers.
+- Ledger (repo truth, update in the same commit as the work): `docs/superpowers/ledgers/2026-08-22-work-fabric-task-ledger.md`. A row is `done` only when its verification actually runs at HEAD.
+- Accepted prerequisites: L0-L2 with their acceptance scripts and SHA stamps; L3's Apple Calendar lane. Google Calendar remains blocked on external account setup.
+- `scripts/hooks/stop_ledger_gate.sh` blocks a session stop while any ledger declares a release complete whose acceptance script has not passed at HEAD. The stamp is refused on a dirty tree by design.
+
 ## Working Priorities
 
 Every work item must classify as Intake, Execution, Evidence, or out-of-scope (see [Three Planes in `HEIWA.md`](HEIWA.md#the-three-planes)). If it does not advance a plane, defer or reject.
