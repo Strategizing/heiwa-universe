@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 fn git(root: &Path, args: &[&str]) {
@@ -37,8 +37,14 @@ fn successful(output: Output, command: &str) -> Output {
     output
 }
 
-#[test]
-fn work_run_json_stdout_is_exactly_one_json_document_even_when_child_writes_both_streams() {
+struct PreparedWork {
+    _fixture: tempfile::TempDir,
+    runtime_root: PathBuf,
+    repo: PathBuf,
+    work_id: String,
+}
+
+fn prepared_work(intent: &str) -> PreparedWork {
     let fixture = tempfile::tempdir().expect("fixture");
     let runtime_root = fixture.path().join("runtime");
     let repo = fixture.path().join("repo");
@@ -59,32 +65,40 @@ fn work_run_json_stdout_is_exactly_one_json_document_even_when_child_writes_both
     .expect("identity");
 
     let created = successful(
-        heiwa(
-            &runtime_root,
-            &repo,
-            &["work", "create", "json output", "--json"],
-        ),
+        heiwa(&runtime_root, &repo, &["work", "create", intent, "--json"]),
         "work create",
     );
     let created: serde_json::Value = serde_json::from_slice(&created.stdout).expect("create JSON");
-    let work_id = created["work_id"].as_str().expect("work id");
+    let work_id = created["work_id"].as_str().expect("work id").to_string();
 
     successful(
         heiwa(
             &runtime_root,
             &repo,
-            &["workspace", "prepare", work_id, "--json"],
+            &["workspace", "prepare", &work_id, "--json"],
         ),
         "workspace prepare",
     );
+
+    PreparedWork {
+        _fixture: fixture,
+        runtime_root,
+        repo,
+        work_id,
+    }
+}
+
+#[test]
+fn work_run_json_stdout_is_exactly_one_json_document_even_when_child_writes_both_streams() {
+    let fixture = prepared_work("json output");
     let run = successful(
         heiwa(
-            &runtime_root,
-            &repo,
+            &fixture.runtime_root,
+            &fixture.repo,
             &[
                 "work",
                 "run",
-                work_id,
+                &fixture.work_id,
                 "--json",
                 "--",
                 "/bin/sh",
@@ -106,4 +120,41 @@ fn work_run_json_stdout_is_exactly_one_json_document_even_when_child_writes_both
     assert_eq!(tail.len(), 2);
     assert!(tail.contains(&serde_json::json!("child-out")));
     assert!(tail.contains(&serde_json::json!("child-err")));
+}
+
+#[test]
+fn child_json_flag_after_separator_does_not_change_wrapper_output_mode() {
+    let fixture = prepared_work("child flag boundary");
+    let run = successful(
+        heiwa(
+            &fixture.runtime_root,
+            &fixture.repo,
+            &[
+                "work",
+                "run",
+                &fixture.work_id,
+                "--",
+                "/bin/sh",
+                "-c",
+                "printf 'child-json-flag\\n'",
+                "child",
+                "--json",
+            ],
+        ),
+        "work run with child --json",
+    );
+
+    let stdout = String::from_utf8(run.stdout).expect("UTF-8 stdout");
+    assert!(
+        stdout.starts_with("child-json-flag\n"),
+        "human mode must echo child output: {stdout:?}"
+    );
+    assert!(
+        stdout.contains(" ran "),
+        "human mode must retain the wrapper summary: {stdout:?}"
+    );
+    assert!(
+        serde_json::from_str::<serde_json::Value>(&stdout).is_err(),
+        "child flags must not switch the wrapper to JSON mode"
+    );
 }

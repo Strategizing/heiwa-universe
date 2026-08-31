@@ -91,13 +91,12 @@ fn resolve_on_path(name: &str) -> Option<PathBuf> {
 const WORKER_ENV_ALLOWLIST: [&str; 4] = ["PATH", "HOME", "LANG", "TERM"];
 
 pub fn run(args: &[String]) -> Result<()> {
-    let json_output = args.iter().any(|arg| arg == "--json");
-
     let separator = args.iter().position(|arg| arg == "--");
     let (head, command) = match separator {
         Some(index) => (&args[..index], &args[index + 1..]),
         None => (args, &[] as &[String]),
     };
+    let json_output = head.iter().any(|arg| arg == "--json");
     if command.is_empty() {
         return Err(anyhow!(
             "usage: heiwa work run <work-id> [--provider <name>] [--json] -- <command> [args...]"
