@@ -1,11 +1,4 @@
 {
-  "permissions": {
-    "allow": [
-      "Write",
-      "Bash"
-    ],
-    "defaultMode": "dontAsk"
-  },
   "enableAllProjectMcpServers": true,
   "hooks": {
     "Stop": [
@@ -13,9 +6,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/hooks/stop_l0l1_gate.sh",
+            "command": "bash scripts/hooks/stop_ledger_gate.sh",
             "timeout": 15,
-            "statusMessage": "Checking L0/L1 completion claims against acceptance stamps"
+            "statusMessage": "Checking release-ledger completion claims against acceptance stamps"
           }
         ]
       }

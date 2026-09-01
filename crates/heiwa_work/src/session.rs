@@ -11,10 +11,11 @@ use serde_json::{json, Value};
 
 use crate::{fold, CollectionRows, ProjectionEpoch, WorkSessionSnapshotV1};
 
-const COLLECTIONS: [&str; 9] = [
+const COLLECTIONS: [&str; 10] = [
     "work",
     "threads",
     "workspace",
+    "runs",
     "approvals",
     "actions",
     "artifacts",
@@ -88,6 +89,22 @@ pub fn build_work_session(
             &mut collections,
             &mut truncated,
             event,
+            options.collection_limit,
+        );
+    }
+
+    // Runs fold separately because a run row is assembled from several events
+    // (launch, heartbeat, exit, pane open/close) rather than upserted per
+    // event. `projection_revision` still counts events, not rows.
+    for row in heiwa_worker::fold_runs(&events, work_id) {
+        let run_id = row.run_id.clone();
+        let value = serde_json::to_value(&row).expect("run row is plain data");
+        bounded_upsert(
+            &mut collections,
+            &mut truncated,
+            "runs",
+            &run_id,
+            value,
             options.collection_limit,
         );
     }

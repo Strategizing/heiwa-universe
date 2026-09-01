@@ -19,6 +19,13 @@ pub struct WorkspacePreparedPayload {
     pub worktree_path: String,
     pub branch: String,
     pub base_commit: String,
+    /// The worker session this preparation reserved the repository for, and
+    /// the lease it took. Optional because A1-b wrote neither, and events
+    /// already on disk must keep deserializing unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worker_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lease_id: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -81,6 +88,8 @@ pub fn workspace_prepared_event(
     thread_id: &str,
     repo_root: &str,
     handle: &WorktreeHandle,
+    worker_id: &str,
+    lease_id: &str,
     occurred_at: &str,
     new_event_id: impl FnOnce() -> String,
 ) -> OperatorEvent {
@@ -89,6 +98,8 @@ pub fn workspace_prepared_event(
         "worktree_path": handle.path,
         "branch": handle.branch,
         "base_commit": handle.base_commit,
+        "worker_id": worker_id,
+        "lease_id": lease_id,
     });
     scoped(
         work_id,
@@ -138,6 +149,8 @@ mod tests {
             "thread-1",
             "/repo",
             &handle(),
+            "worker-1",
+            "lease-1",
             "2026-08-24T00:00:00Z",
             || "evt-1".to_string(),
         );
@@ -173,6 +186,8 @@ mod tests {
             "thread-1",
             "/repo",
             &handle(),
+            "worker-1",
+            "lease-1",
             "2026-08-24T00:00:00Z",
             || "evt-1".to_string(),
         );

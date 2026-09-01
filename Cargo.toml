@@ -28,6 +28,7 @@ members = [
     "crates/heiwa_tui",
     "crates/heiwa_vault",
     "crates/heiwa_work",
+    "crates/heiwa_worker",
     "crates/heiwa_workspace",
 ]
 resolver = "2"

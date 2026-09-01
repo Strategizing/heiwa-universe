@@ -1,6 +1,6 @@
 id: heiwa-security
 name: Heiwa Security Auditor
-description: Security auditor for Heiwa auth, credential protection, and secret redaction. Expert in SecurityService validation and E2B sandbox enforcement.
+description: Security auditor for Heiwa auth, credential protection, and secret redaction. Expert in vault/keychain boundaries, the evidence redaction screen, and worker/approval authority limits.
 status: active
 prompt_file: prompt.md
 tags: [security, auth, redaction]

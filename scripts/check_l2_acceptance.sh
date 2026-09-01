@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# acceptance-scope: apps crates Cargo.toml Cargo.lock scripts/check_l2_acceptance.sh
+#
+# Same reason as L1, plus the readiness-decider scan, which walks all of
+# apps/ and crates/ looking for a second place that decides onboarding.
+
 # L2 acceptance gate — roadmap 2026-08-14, layer L2 (onboarding and per-user
 # identity).
 #

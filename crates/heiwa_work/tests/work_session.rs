@@ -309,3 +309,139 @@ fn work_session_does_not_render_cancel_audit_as_running() {
         "cancelling"
     );
 }
+
+/// One launched-and-exited worker with a pane, appended after the base rows.
+fn rows_with_a_run() -> Vec<CursorEvent> {
+    let mut base = rows();
+    let mut next = base.len();
+    let mut push = |event_type: OperatorEventType, payload: serde_json::Value| {
+        let mut built = event(
+            &format!("evt-run-{next}"),
+            "work-abc",
+            "thread-1",
+            None,
+            None,
+            event_type,
+            payload,
+        );
+        // Worker ownership rides on the envelope, exactly as work_id does.
+        built.run_id = Some("worker-1".to_string());
+        let row = CursorEvent {
+            cursor: format!("cursor-run-{next}"),
+            event: built,
+        };
+        next += 1;
+        row
+    };
+
+    base.push(push(
+        OperatorEventType::WorkerLaunched,
+        json!({
+            "worker_id": "worker-1",
+            "provider": "claude",
+            "provider_session_ref": null,
+            "executable_path": "/usr/local/bin/claude",
+            "executable_sha256": "a".repeat(64),
+            "cwd": "/repo/.worktrees/work-abc",
+            "repo_root": "/repo",
+            "branch": "heiwa/work-abc",
+            "base_commit": "abc123",
+            "lease_id": "lease-1",
+            "installation_id": "installation-1"
+        }),
+    ));
+    base.push(push(
+        OperatorEventType::PaneOpened,
+        json!({
+            "pane_id": "pane-1",
+            "worker_id": "worker-1",
+            "cwd": "/repo/.worktrees/work-abc",
+            "repo_root": "/repo",
+            "branch": "heiwa/work-abc"
+        }),
+    ));
+    base.push(push(
+        OperatorEventType::WorkerHeartbeat,
+        json!({"worker_id": "worker-1", "pid": 4242}),
+    ));
+    base.push(push(
+        OperatorEventType::PaneClosed,
+        json!({
+            "pane_id": "pane-1",
+            "worker_id": "worker-1",
+            "tail": ["done"],
+            "dropped_lines": 3
+        }),
+    ));
+    base.push(push(
+        OperatorEventType::WorkerExited,
+        json!({"worker_id": "worker-1", "exit_code": 0, "failure_code": null}),
+    ));
+    base
+}
+
+#[test]
+fn the_session_snapshot_carries_a_runs_collection() {
+    let snapshot = build_work_session(
+        &rows_with_a_run(),
+        "work-abc",
+        WorkSessionBuildOptions::new("seed", 50),
+    )
+    .expect("snapshot");
+
+    let runs = snapshot.collections.get("runs").expect("runs collection");
+    assert_eq!(runs.len(), 1);
+    let row = runs.get("worker-1").expect("run keyed by worker id");
+    assert_eq!(row["worker_id"], "worker-1");
+    assert_eq!(row["worker_state"], "exited");
+    assert_eq!(row["pane_id"], "pane-1");
+    assert_eq!(row["pane_state"], "done");
+    assert_eq!(row["exit_code"], 0);
+    assert_eq!(row["cwd"], "/repo/.worktrees/work-abc");
+    assert_eq!(row["pane_dropped_lines"], 3);
+
+    // Bounded and redacted: a tail, never the environment or the full log.
+    assert_eq!(row["pane_tail"], json!(["done"]));
+    assert!(row.get("environment").is_none());
+    assert!(row.get("stdout").is_none());
+}
+
+#[test]
+fn runs_respect_the_collection_limit_like_every_other_collection() {
+    let mut rows = rows();
+    for index in 0..5 {
+        let worker = format!("worker-{index}");
+        let mut built = event(
+            &format!("evt-many-{index}"),
+            "work-abc",
+            "thread-1",
+            None,
+            None,
+            OperatorEventType::WorkerLaunched,
+            json!({
+                "worker_id": worker,
+                "provider": "claude",
+                "provider_session_ref": null,
+                "executable_path": "/usr/local/bin/claude",
+                "executable_sha256": "a".repeat(64),
+                "cwd": "/repo/.worktrees/work-abc",
+                "repo_root": "/repo",
+                "branch": "heiwa/work-abc",
+                "base_commit": "abc123",
+                "lease_id": "lease-1",
+                "installation_id": "installation-1"
+            }),
+        );
+        built.run_id = Some(worker);
+        rows.push(CursorEvent {
+            cursor: format!("cursor-many-{index}"),
+            event: built,
+        });
+    }
+
+    let snapshot = build_work_session(&rows, "work-abc", WorkSessionBuildOptions::new("seed", 2))
+        .expect("snapshot");
+    let runs = snapshot.collections.get("runs").expect("runs collection");
+    assert_eq!(runs.len(), 2);
+    assert_eq!(snapshot.truncated_collections.get("runs"), Some(&3));
+}

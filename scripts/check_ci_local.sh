@@ -97,6 +97,23 @@ for s in check_agent_baseline check_backend_transition check_model_call_boundary
   step "$s" bash "scripts/$s.sh"
 done
 
+# Acceptance gates for every release whose ledger claims completion. The Work
+# Fabric design requires promotion to invoke these, not just the Stop hook:
+# without them a layer can drift red while its stamp still points at an old
+# HEAD. Each script re-stamps itself on a clean tree, which is also what clears
+# the Stop gate. A script that does not exist yet is skipped, not failed — its
+# release has not reached the checkpoint that adds it.
+echo
+echo "== release acceptance gates =="
+for s in check_l0_acceptance check_l1_acceptance check_l2_acceptance \
+         check_work_fabric_a1_acceptance; do
+  if [[ -f "scripts/$s.sh" ]]; then
+    step "$s" bash "scripts/$s.sh"
+  else
+    printf '  %-34s %s\n' "$s" "SKIP (not yet written)"
+  fi
+done
+
 echo
 if [ ${#FAILED[@]} -eq 0 ]; then
   echo "ALL GREEN — safe to push."

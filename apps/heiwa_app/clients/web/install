@@ -100,7 +100,14 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 download() {
-  curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error     --output "$2" "$1"
+  # Retry transient failures. Release assets come from a CDN over whatever
+  # network the user happens to have, and without --retry a single 5xx or
+  # timeout aborts the whole install. The checksum verification below already
+  # makes a truncated body a hard failure, so a retry cannot paper over a bad
+  # download. Deliberately only --retry/--retry-delay: --retry-all-errors and
+  # --retry-connrefused are newer than the curl on RHEL 8 (7.61) and Ubuntu
+  # 20.04 (7.68), where an unknown option would fail the install outright.
+  curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error     --retry 3 --retry-delay 2     --output "$2" "$1"
 }
 
 echo "heiwa install: downloading v$version for $asset (version from $version_source)"

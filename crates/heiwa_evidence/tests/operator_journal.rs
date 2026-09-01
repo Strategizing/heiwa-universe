@@ -876,3 +876,19 @@ fn concurrent_operator_journals_do_not_tear_lines() {
         .collect();
     assert_eq!(unique_ids.len(), 400, "all event ids are unique");
 }
+
+#[test]
+fn worker_and_pane_event_types_round_trip_through_json() {
+    for (variant, wire) in [
+        (OperatorEventType::WorkerLaunched, "worker_launched"),
+        (OperatorEventType::WorkerHeartbeat, "worker_heartbeat"),
+        (OperatorEventType::WorkerExited, "worker_exited"),
+        (OperatorEventType::PaneOpened, "pane_opened"),
+        (OperatorEventType::PaneClosed, "pane_closed"),
+    ] {
+        let encoded = serde_json::to_string(&variant).expect("encode");
+        assert_eq!(encoded, format!("\"{wire}\""));
+        let decoded: OperatorEventType = serde_json::from_str(&encoded).expect("decode");
+        assert_eq!(decoded, variant);
+    }
+}

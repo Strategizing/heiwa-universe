@@ -14,5 +14,6 @@ pub mod mesh;
 pub mod release_update;
 pub mod schedule;
 pub mod work;
+pub mod worker;
 pub mod workers;
 pub mod workspace;
