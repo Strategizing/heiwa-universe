@@ -1,0 +1,14 @@
+{
+  "claim_id": "heiwa.receipts.call-vs-effect-boundary",
+  "verifier_id": "cargo-test",
+  "verifier_version": "1",
+  "result": "pass",
+  "commit": "bf2cc701a73858ec9648494cfd4e3bd5cc5e90d9",
+  "scope_digest": "0f3e94ec0e96e0301051cddae023ec8664c7701f2b3b6699f43ff399472add9c",
+  "verified_at": 1787936612,
+  "environment": {
+    "os": "macos",
+    "arch": "aarch64"
+  },
+  "detail": "24 passed, 0 failed, 0 ignored across 4 target(s)"
+}

@@ -3523,7 +3523,7 @@ fn record_call_receipt(
     rates: &heiwa_receipts::RateTable,
     input: CallReceiptInput<'_>,
 ) {
-    use heiwa_receipts::{runtime, Receipt};
+    use heiwa_receipts::{runtime, CallReceipt};
 
     let env = runtime::env_for_provider(&input.result.provider);
     let tokens_in = input
@@ -3546,7 +3546,7 @@ fn record_call_receipt(
         tokens_out,
     );
 
-    let mut receipt = Receipt::new(
+    let mut receipt = CallReceipt::new(
         Utc::now().timestamp(),
         env,
         input.result.provider.clone(),

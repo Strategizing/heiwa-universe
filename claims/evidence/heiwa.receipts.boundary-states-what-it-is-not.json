@@ -1,0 +1,14 @@
+{
+  "claim_id": "heiwa.receipts.boundary-states-what-it-is-not",
+  "verifier_id": "symbols-present",
+  "verifier_version": "1",
+  "result": "pass",
+  "commit": "bf2cc701a73858ec9648494cfd4e3bd5cc5e90d9",
+  "scope_digest": "b5431cbe278782b8499f3b3cd0ace5faad87cbc09730ec80026efb41d1a1395b",
+  "verified_at": 1787936612,
+  "environment": {
+    "os": "macos",
+    "arch": "aarch64"
+  },
+  "detail": "4 symbol(s) present"
+}

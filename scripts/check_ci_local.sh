@@ -90,6 +90,7 @@ echo
 echo "== repo gates =="
 step "local Python resolver" bash scripts/tests/test_local_python_resolution.sh
 step "Justfile Python override" bash scripts/tests/test_just_python_override.sh
+step "claim gate portability" bash scripts/tests/test_check_claims.sh
 for s in check_agent_baseline check_backend_transition check_model_call_boundary \
          check_release_metadata check_runtime_baseline verify_security check_machine_security \
          check_heiwa_core_dockerfile check_workflow_pins check_public_installer; do

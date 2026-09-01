@@ -1,0 +1,14 @@
+{
+  "claim_id": "heiwa.work.durable-aggregate",
+  "verifier_id": "cargo-test",
+  "verifier_version": "1",
+  "result": "pass",
+  "commit": "c9cfcdb6e500cf9d66eab18503a278882cf8ecb1",
+  "scope_digest": "b9594e3c957850b1dac98a622906a2a4e9438af77b8254da97c3c68bde19910e",
+  "verified_at": 1787882417,
+  "environment": {
+    "os": "macos",
+    "arch": "aarch64"
+  },
+  "detail": "35 passed, 0 failed, 0 ignored across 4 target(s)"
+}

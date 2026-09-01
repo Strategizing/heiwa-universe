@@ -1,0 +1,14 @@
+{
+  "claim_id": "heiwa.claims.computed-state",
+  "verifier_id": "cargo-test",
+  "verifier_version": "1",
+  "result": "pass",
+  "commit": "da0ed88f1859fdb4cbc295be8ffbfe1b9dc08733",
+  "scope_digest": "275e742c985001318ca5f30767ec42ca8cd38bc093534be5847044911317e636",
+  "verified_at": 1787957194,
+  "environment": {
+    "os": "macos",
+    "arch": "aarch64"
+  },
+  "detail": "32 passed, 0 failed, 0 ignored across 6 target(s)"
+}
