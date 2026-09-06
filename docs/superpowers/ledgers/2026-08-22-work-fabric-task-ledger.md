@@ -107,6 +107,28 @@ This repairs the provider transport contract; A1-c3's surface agreement and
 restart-recovery rows remain pending. It does not establish native Codex
 continuation, tool-effect receipts, API migration, or live model entitlement.
 
+### Dependency audit follow-up
+
+The full local gate at `744ac65b` passed Rust, web, Python/product, baseline,
+and L0-L2 acceptance checks, but failed `verify_security` on three pre-existing
+Python dependency findings. The lockfiles now select MkDocs Material `9.7.7`
+and Banks `2.4.5`, the patched versions for
+[CVE-2026-73295](https://github.com/squidfunk/mkdocs-material/releases/tag/9.7.7)
+and [CVE-2026-71492](https://github.com/masci/banks/security/advisories/GHSA-x8wg-4xgc-vr54).
+`uv run --locked --extra docs python -m mkdocs build --strict` passes;
+`uv run --locked --all-extras --python 3.14 python -m pytest -q` from
+`runtime/python` passes all 13 sidecar tests.
+
+The repeated security gate passes every check except the runtime Python audit:
+`heiwa-sidecar[llama] -> llama-index-core -> nltk 3.10.3` retains
+`PYSEC-2026-3740` / `CVE-2026-81726`.
+[Upstream lists no patched version](https://github.com/nltk/nltk/security/advisories/GHSA-8mgp-746c-j5xp)
+as of 2026-09-06; PyPI's latest release is still `3.10.3`. No advisory ignore or
+audit exclusion was added. Promotion remains blocked pending a verified
+replacement/removal of that optional dependency path or a patched upstream
+release. Live provider entitlement, remote CI, and installed-runtime promotion
+were not verified by these local checks.
+
 ## Deferred with reason
 
 - `work_node_bound` and `prior_history_digest` (WF-R15) need an enrolled mesh
