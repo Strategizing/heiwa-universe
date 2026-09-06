@@ -119,15 +119,36 @@ and [CVE-2026-71492](https://github.com/masci/banks/security/advisories/GHSA-x8w
 `uv run --locked --all-extras --python 3.14 python -m pytest -q` from
 `runtime/python` passes all 13 sidecar tests.
 
-The repeated security gate passes every check except the runtime Python audit:
+At `8323492d`, the repeated security gate passed every check except the runtime Python audit:
 `heiwa-sidecar[llama] -> llama-index-core -> nltk 3.10.3` retains
 `PYSEC-2026-3740` / `CVE-2026-81726`.
 [Upstream lists no patched version](https://github.com/nltk/nltk/security/advisories/GHSA-8mgp-746c-j5xp)
 as of 2026-09-06; PyPI's latest release is still `3.10.3`. No advisory ignore or
-audit exclusion was added. Promotion remains blocked pending a verified
+audit exclusion was added. That revision remained blocked pending a verified
 replacement/removal of that optional dependency path or a patched upstream
-release. Live provider entitlement, remote CI, and installed-runtime promotion
-were not verified by these local checks.
+release.
+
+### Optional dependency removal — 2026-09-06
+
+Plane: Execution / Evidence. Repository inspection found no sidecar operation
+using LlamaIndex APIs; `check_deps` only reports whether its module is importable.
+The unused `llama` installation extra is now retired. Regenerating the lockfile
+removes 42 packages, including LlamaIndex, NLTK, and Banks, with no additions or
+version changes among retained packages. Existing environments can reconcile
+with `uv sync --extra dev` from `runtime/python`.
+
+The `llama_index` diagnostic result key is preserved. Characterization tests
+cover both an externally installed module and its absence; all 14 sidecar tests
+pass after syncing the reduced all-extras environment. A real JSONL subprocess
+probe also passes health, dependency checks, echo, and shutdown with LlamaIndex
+absent. Sidecar descriptions now distinguish import diagnostics from execution
+capability.
+
+`bash scripts/verify_security.sh` passes with zero failures and zero warnings;
+both Python dependency audits report no known vulnerabilities. No advisory
+ignore or audit exclusion was added. This resolves the dependency blocker;
+live provider entitlement, remote CI, and installed-runtime promotion remain
+outside these local proofs. A1-c3 remains pending.
 
 ## Deferred with reason
 

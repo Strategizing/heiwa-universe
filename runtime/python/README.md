@@ -1,6 +1,6 @@
 # heiwa-sidecar
 
-Python sidecar that the Rust Heiwa runtime spawns as a subprocess and talks to over stdio.
+Python compatibility sidecar exposing diagnostics and compatibility operations over stdio.
 
 ## Wire protocol
 
@@ -25,9 +25,21 @@ Add new ops in `src/heiwa_sidecar/handlers.py` and register in `HANDLERS`.
 ```bash
 cd runtime/python
 uv sync --extra dev
-uv sync --extra dev --extra llama   # optional LlamaIndex probe surface
 uv run python -m heiwa_sidecar   # serves on stdin/stdout
 uv run --extra dev python -m pytest # run tests
 ```
 
-The Rust side launches this module via `python -m heiwa_sidecar`. No entry-point script is required for the spawn path, but one is provided (`heiwa-sidecar`) for interactive debugging.
+Use `python -m heiwa_sidecar` for subprocess integration; `heiwa-sidecar` is also provided for interactive debugging.
+
+## Dependency boundary
+
+`check_deps` reports whether LangGraph and an externally installed LlamaIndex
+module are importable. Missing LlamaIndex produces `importable: false` under
+the existing `llama_index` result key; all sidecar operations remain available.
+The probe does not establish graph, model, or indexing execution capability.
+
+The `llama` installation extra is retired: no sidecar operation used its APIs,
+and it pulled an unpatched NLTK dependency into the shipped lockfile. Run
+`uv sync --extra dev` to reconcile an existing development environment with
+the reduced dependency graph. Reintroducing LlamaIndex requires a concrete
+execution contract and verified dependencies.
