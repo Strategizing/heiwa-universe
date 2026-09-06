@@ -88,6 +88,25 @@ pane bound to it. Neither claims tri-surface or restart-recovery completion.
 | 3 | `heiwa work run --json` emits one JSON document while retaining both child streams in bounded pane evidence | done | `cargo test -p heiwa-shell --test work_run` |
 | 4 | Reader-thread panics reach the caller instead of becoming clean worker results | done | `cargo test -p heiwa-shell --bin heiwa cmd::worker` |
 
+## Provider stream repair — 2026-09-06
+
+Plane: Execution / Evidence. The Codex subscription adapter now consumes the
+current CLI JSONL protocol. Completed assistant items and usage reach the
+consumer; success requires both a completion event and a successful process
+exit. Failure, malformed output, and cancellation no longer masquerade as
+successful empty output or leave an idle adapter child running.
+
+Verification: `cargo test -p heiwa-provider --locked --test codex_cli` passes
+15 behavior cases plus the isolated child-process driver. Coverage includes
+current and legacy output, usage, provider failure, invalid JSONL/UTF-8,
+nonzero/missing completion, stderr pressure, literal prompt arguments, spawn
+failure, shutdown ordering, and consumer cancellation. The target is included
+in `scripts/ci_rust_test_group.sh`'s runtime integration lane.
+
+This repairs the provider transport contract; A1-c3's surface agreement and
+restart-recovery rows remain pending. It does not establish native Codex
+continuation, tool-effect receipts, API migration, or live model entitlement.
+
 ## Deferred with reason
 
 - `work_node_bound` and `prior_history_digest` (WF-R15) need an enrolled mesh

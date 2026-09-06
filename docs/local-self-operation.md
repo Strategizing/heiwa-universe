@@ -373,6 +373,37 @@ git status --porcelain=v1 -uall
 Report remaining dirty files honestly, separating agent changes from
 pre-existing or peer-agent changes.
 
+## Codex CLI result contract
+
+The subscription adapter wraps provider-owned `codex exec --json`. It forwards
+completed assistant message items and preserves token/cache usage from
+`turn.completed`. Intermediate item snapshots, reasoning, tool output, and
+stderr progress are not assistant text. Stderr is discarded so an unread
+diagnostic pipe cannot block the provider.
+
+A completion event and a successful child exit are both required for success.
+`turn.failed`, `error`, nonzero exit, invalid JSONL/UTF-8, and EOF without a
+completion produce one normalized error instead of an empty successful answer.
+Consumer cancellation stops and reaps the child even while stdout is idle or
+the adapter is waiting for process exit. Supervisor cancellation retains the
+shared `kill_on_drop` safeguard. Prompt arguments are separated from CLI flags.
+
+Verify without provider credentials or inference:
+
+```bash
+cargo test -p heiwa-provider --locked --test codex_cli
+```
+
+The fixtures exercise the public adapter with disposable CLI processes and
+isolated environment/state roots. They establish transport behavior, not live
+account entitlement, model availability, native session continuation, or tool
+effect receipts. Model selection remains with the existing routing/account
+contracts.
+
+Source: [Codex non-interactive JSONL contract](https://learn.chatgpt.com/docs/non-interactive-mode).
+This applies the [latest-model guide](https://developers.openai.com/api/docs/guides/latest-model)
+to the existing CLI integration; it does not claim a Responses API migration.
+
 ## Model Tier Matrix
 
 | Lane                      | Preferred candidates when eligible | Other eligible candidates       | Notes                                                    |
