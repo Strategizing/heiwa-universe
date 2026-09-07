@@ -70,7 +70,11 @@ jobs:
           fi
           test -s "$installer"
 
-          HEIWA_HOME="$RUNTIME_ROOT" sh "$installer" | tee "$RUNTIME_ROOT/install.log"
+          # Create the log destination before the pipeline starts, and keep
+          # install, version, and update probes on the same isolated root.
+          mkdir -p "$RUNTIME_ROOT"
+          export HEIWA_HOME="$RUNTIME_ROOT"
+          sh "$installer" | tee "$RUNTIME_ROOT/install.log"
           test -x "$RUNTIME_ROOT/bin/heiwa"
           test -f "$RUNTIME_ROOT/app/cockpit-current/index.html"
           "$RUNTIME_ROOT/bin/heiwa" --version | grep -Fx "heiwa $HEIWA_VERSION"

@@ -171,6 +171,7 @@ require_match "scripts/configure_public_installer_edge.sh" '^zone_name=.*heiwa\.
 require_match "scripts/configure_public_installer_edge.sh" 'uri\.path in \{\\"/install\\" \\"/install\.sh\\"\}' "installer edge exception must stay scoped to the two public installer paths"
 require_match "scripts/check_public_installer_edge.sh" '^installer_url=.*https://heiwa\.ltd/install' "installer edge check must target the public installer"
 bash scripts/tests/test_check_public_installer_edge.sh
+bash scripts/tests/test_public_install_smoke.sh
 require_block_match ".github/workflows/release.yml" \
   'ARCHIVE_EXT.*zip.*then' \
   '^[[:space:]]*else$' \
