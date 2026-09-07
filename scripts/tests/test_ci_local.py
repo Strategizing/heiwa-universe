@@ -9,9 +9,10 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from check_ci_local import Check, check_inventory, run_checks  # noqa: E402
+from check_ci_local import Check, check_inventory, run_checks, stop_process  # noqa: E402
 
 
 class VerificationTests(unittest.TestCase):
@@ -178,6 +179,35 @@ class VerificationTests(unittest.TestCase):
                 time.sleep(0.5)
                 self.assertEqual((self.root / 'source.txt').read_text(), 'original\n')
                 self.assertFalse(receipt['source_end']['dirty'])
+
+    @unittest.skipUnless(os.name == "posix", "POSIX process groups")
+    def test_cleanup_permission_race_requires_proven_group_absence(self):
+        process = subprocess.Popen([sys.executable, '-c', 'pass'], start_new_session=True)
+        process.wait()
+        with patch('check_ci_local.os.killpg', side_effect=PermissionError('fixture denial')):
+            stop_process(process)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX process groups")
+    def test_cleanup_denial_for_live_group_is_not_ignored(self):
+        process = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'],
+                                   start_new_session=True)
+        try:
+            with patch('check_ci_local.os.killpg', side_effect=PermissionError('fixture denial')):
+                with self.assertRaises(PermissionError):
+                    stop_process(process)
+            self.assertIsNone(process.poll())
+        finally:
+            stop_process(process)
+
+    def test_cleanup_failure_is_not_recorded_as_a_passing_check(self):
+        with patch('check_ci_local.stop_process', side_effect=PermissionError('fixture denial')):
+            code, receipt, _ = self.run_gate([self.check()])
+        self.assertEqual(code, 1)
+        row = receipt['checks'][0]
+        self.assertEqual(row['status'], 'cleanup_failed')
+        self.assertEqual(row['exit_code'], 0)
+        self.assertIn('PermissionError', row['cleanup_error'])
+        self.assertIsInstance(row['pid'], int)
 
     @unittest.skipUnless(os.name == "posix", "POSIX interruption")
     def test_interrupt_keeps_partial_receipt_and_stops_work(self):

@@ -60,6 +60,18 @@ def stop_process(process: subprocess.Popen) -> None:
                 process.kill()
         except ProcessLookupError:
             pass
+        except PermissionError:
+            # macOS can race group teardown after the leader is reaped. Do
+            # not retry a denied signal or ignore a live group: prove absence.
+            if os.name != "posix":
+                raise
+            groups = subprocess.check_output(
+                ["ps", "-axo", "pgid="], text=True, timeout=5,
+            ).split()
+            if not groups or not all(group.isdecimal() for group in groups):
+                raise RuntimeError("Unable to inspect process groups after cleanup denial")
+            if str(process.pid) in groups:
+                raise
 
     terminate(signal.SIGTERM)
     try:
@@ -110,6 +122,8 @@ def run_checks(root: Path, checks: list[Check], *, profile: str) -> tuple[int, P
                         check.argv, cwd=root, env=environment, stdin=subprocess.DEVNULL,
                         stdout=log, stderr=subprocess.STDOUT, start_new_session=os.name == "posix",
                     )
+                    row["pid"] = process.pid
+                    write_receipt(path, receipt)
                     row["exit_code"] = process.wait(timeout=check.timeout_seconds)
                     row["status"] = "passed" if row["exit_code"] == 0 else "failed"
                 except subprocess.TimeoutExpired:
@@ -124,10 +138,15 @@ def run_checks(root: Path, checks: list[Check], *, profile: str) -> tuple[int, P
                 finally:
                     # A direct child exiting does not prove its work stopped.
                     # Reap its group before collecting final source identity.
-                    if process is not None:
-                        stop_process(process)
-                    row["duration_seconds"] = round(time.monotonic() - monotonic_start, 3)
-                    write_receipt(path, receipt)
+                    try:
+                        if process is not None:
+                            stop_process(process)
+                    except Exception as error:
+                        row.update(status="cleanup_failed", cleanup_error=f"{type(error).__name__}: {error}")
+                        raise
+                    finally:
+                        row["duration_seconds"] = round(time.monotonic() - monotonic_start, 3)
+                        write_receipt(path, receipt)
             print(row["status"].upper(), flush=True)
             if row["status"] != "passed":
                 with log_path.open(errors="replace") as log:
