@@ -3252,7 +3252,7 @@ dependencies = [
 
 [[package]]
 name = "heiwa-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -3274,7 +3274,7 @@ dependencies = [
 
 [[package]]
 name = "heiwa-desktop"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "futures-util",
@@ -3406,7 +3406,7 @@ dependencies = [
 
 [[package]]
 name = "heiwa-shell"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-trait",

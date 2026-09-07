@@ -30,12 +30,22 @@ Ruby workflow validation. No runtime backend or model change.
   shapes. Keep dispatch-only vendor canaries separate from publication.
 - [x] Reconcile AGENTS, provider instructions, canonical agent templates, and
   the baseline workflow. Regenerate derived agent files and run sync checks.
-- [ ] Review all changes for duplicate mechanics, softened gates, misleading
+- [x] Review all changes for duplicate mechanics, softened gates, misleading
   maturity claims, and secret exposure. Commit the cohesive implementation on
   the experimental branch, then run the full local gate at that revision.
-- [ ] Publish a PR to `dev`, inspect current CI and review threads, repair any
+- [x] Publish a PR to `dev`, inspect current CI and review threads, repair any
   reproduced findings, and promote only after the configured gates pass.
-  Carry the same evidence requirements through production publication.
+- [ ] Carry the same evidence requirements through production publication.
+
+## Integration evidence
+
+Full local certification passed at clean, unchanged `9e14f9ef`: 34 checks
+executed, including Lance and native desktop tests, Clippy, and release build.
+The private receipt is `local-ci-4wf3cwba/receipt.json`; Work Fabric A1 is
+explicitly deferred. [PR #90](https://github.com/Heiwa-Limited/heiwa-universe/pull/90)
+merged into `dev` at `5e619d1a` after all 11 remote checks passed and a fresh
+GraphQL review-thread check found no unresolved findings. These receipts do
+not yet prove a published binary or an updated installed runtime.
 
 Independent instruction and runner-policy repairs run through the parallel
 agents workflow. The parent integrates them with verification changes and
