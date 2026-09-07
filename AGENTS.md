@@ -11,7 +11,7 @@ This repository builds the Heiwa full stack. The current product center of gravi
 - **DREX** is the internal execution kernel.
 - **Per-user local state** under the resolved config root (`~/.heiwa` by default) is the runtime truth on each machine. `crates/heiwa_config::HeiwaPaths` is the sole resolver; the product assumes N users, not one seat.
 - **Lance + GitHub** are the backend (pivot 2026-07-15): text truth (JSONL/markdown) local-first — GitHub sync planned, redaction-gated — with Lance as the derived local recall index. SpacetimeDB is retired; code extracted from the tree. Journal service: `crates/heiwa_evidence/`.
-- **GitHub** is distribution and CI. Evidence sync is planned and redaction-gated, not live. **Cloudflare** is DNS utility only.
+- **GitHub** is distribution and CI. Evidence sync is planned and redaction-gated, not live. **Cloudflare** serves DNS and the static public shell/installer; GitHub remains the binary authority.
 
 Compression:
 
@@ -66,7 +66,7 @@ Be honest about maturity:
 - This checkout plus the local runtime root are the current source-of-truth/server for user functionality on a development machine.
 - Users/operators should not have to think about the evidence backend directly.
 - GitHub is source, CI, and release distribution.
-- Cloudflare is paused public edge and later remote-surface infrastructure.
+- Cloudflare serves DNS and the static public shell/installer through explicit deployment. Runtime authority and private evidence remain local.
 
 ## Agentic Runtime Workflow
 

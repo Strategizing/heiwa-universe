@@ -18,8 +18,8 @@ name: Heiwa CI
 # indefinitely across independent PRs and same-SHA reruns even while the public
 # Blacksmith status page was green. `timeout-minutes` does not bound queue time,
 # which is why scripts/check_ci_job_deadlines.rb requires a runner label with
-# observed claim evidence. Both this label and the prior Blacksmith 4-vCPU label
-# remain allowlisted until a deliberate canary proves the latter healthy again.
+# observed claim evidence. Active workflows allow GitHub-hosted labels; custom
+# runner experiments belong in the isolated dispatch-only canary.
 on:
   pull_request:
     branches: ["dev", "main"]
@@ -109,9 +109,9 @@ jobs:
 
   desktop-app:
     name: Desktop App
-    # Blacksmith, like every other lane since the PR #68 migration. Linux
-    # needs the GTK/WebKit stack installed below; the macOS and Windows
-    # bundle paths are exercised by the release workflow. Excluding this
+    # GitHub-hosted Linux needs the GTK/WebKit stack installed below. The
+    # macOS and Windows bundle paths are exercised by the release workflow.
+    # Excluding this
     # crate from the workspace jobs left the one crate a user actually runs
     # untested.
     runs-on: ubuntu-latest
@@ -130,9 +130,9 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
       - name: Set up Node
-        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v5.0.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 22
+          node-version-file: .nvmrc
       - name: Install Tauri system dependencies
         run: |
           sudo apt-get update

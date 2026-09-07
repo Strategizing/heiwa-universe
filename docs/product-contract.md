@@ -104,7 +104,7 @@ The current backbone keeps runtime authority on the operator machine:
 | Service             | Product role                                                     |
 | ------------------- | ---------------------------------------------------------------- |
 | GitHub              | source, CI, release artifacts, installer, public repo front page |
-| Cloudflare          | DNS utility only                                                 |
+| Cloudflare          | DNS and static public shell/installer delivery                    |
 | Local JSONL + Lance | canonical evidence plus derived local recall                     |
 
 This is not a hosted control plane. Local runtimes execute side effects, hold
@@ -145,9 +145,9 @@ treated as product-grade.
 | Service boundary | Runs where        | Owns                                                                       | Must not own                              |
 | ---------------- | ----------------- | -------------------------------------------------------------------------- | ----------------------------------------- |
 | Local runtime    | Devon/user device | side effects, provider subprocesses, secrets, JSONL evidence, Lance recall | hosted authority or unredacted sync       |
-| Cloudflare DNS   | Cloudflare        | DNS records                                                                | state, application hosting, or automation |
+| Cloudflare edge  | Cloudflare        | DNS records, static public shell, installer scripts                         | runtime state, binary authority, or privileged automation |
 | GitHub           | GitHub            | source, CI, releases, install distribution                                 | live user state or private runtime memory |
-| Public website   | GitHub Pages      | marketing, docs, install, public repo trust                                | privileged control-plane mutations        |
+| Public website   | Cloudflare Pages (shell), GitHub Pages (docs) | marketing, docs, install, public repo trust              | privileged control-plane mutations        |
 
 ## Feature Families
 

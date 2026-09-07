@@ -46,12 +46,17 @@ same authority.
 | ----------------- | ------------------------------------------------------------------------------------------------- |
 | GitHub repository | Canonical source code, tags, CI evidence, release artifacts, checksums, and install scripts       |
 | GitHub Releases   | Canonical binary/archive distribution and version provenance                                      |
-| Cloudflare        | Public edge, docs, install landing pages, update manifest cache, status, and future remote attach |
+| GitHub Pages      | Public documentation at `docs.heiwa.ltd`                                                          |
+| Cloudflare        | DNS, static public shell, install landing pages, and installer script delivery                    |
 | Local machine     | Installed binary, local config, provider auth, local state, and user-approved side effects        |
 
 Cloudflare may front or cache install/update material, but it must point back to
 GitHub release identity and checksums. Cloudflare must not become a second
 source of binary truth.
+
+Update-manifest caching, edge status services, and remote attachment remain
+future capabilities requiring their own implementation and verification. A
+static public deployment does not establish them.
 
 GitHub Releases are the authoritative public install and update path, including
 on the operator MacBook. Local checkout promotion (`heiwa app update --source
@@ -435,5 +440,7 @@ heiwa providers
 curl -fsS http://127.0.0.1:7474/status/health
 ```
 
-The runtime is not ready for public access until the localhost checks pass and
-Cloudflare is explicitly re-enabled with fresh targets.
+The installed runtime stays local. Public release readiness requires current
+GitHub CI and certification, verified release assets, and a successful static
+installer deployment with public install checks. A reachable localhost runtime
+proves only that local surface.
