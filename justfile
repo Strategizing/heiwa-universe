@@ -2,8 +2,8 @@ set shell := ["bash", "-cu"]
 
 # Transitional product graph: Rust + TypeScript + Shell is the target stack.
 # Python recipes remain here as regression coverage during migration.
-python := ".venv/bin/python"
-pytest := ".venv/bin/python -m pytest"
+python := env_var_or_default("HEIWA_PYTHON", justfile_directory() + "/.venv/bin/python")
+pytest := env_var_or_default("HEIWA_PYTEST", justfile_directory() + "/.venv/bin/python -m pytest")
 
 default:
     @echo "Product graph recipes:"
@@ -22,7 +22,7 @@ default:
     @echo "  drex-evals     Run DREX routing golden eval suite (E3)"
 
 test-trading:
-    cd apps/heiwa_trading && PYTHONPATH=src ../../{{python}} -m pytest tests -q
+    cd apps/heiwa_trading && PYTHONPATH=src {{python}} -m pytest tests -q
 
 check-web:
     {{python}} apps/heiwa_app/scripts/check_static_surface.py
@@ -52,11 +52,15 @@ check-product: check-web check-docs
 
 verify-product: test-product check-product
 
-# main is branch-protected (enforce_admins + required checks); production
-# promotion is push dev -> PR -> merge on green. Requires gh auth.
+# dev and main are branch-protected (enforce_admins + required checks).
+# Experimental work reaches dev through its own PR before this production step.
+# Requires explicit remote authorization and gh auth.
 deploy-product:
-    git push origin dev
-    gh pr create --base main --head dev --fill || true
+    git fetch --prune origin dev main
+    test "$(git branch --show-current)" = dev
+    test "$(git rev-parse HEAD)" = "$(git rev-parse origin/dev)"
+    bash scripts/check_branch_topology.sh --mode integration
+    gh pr view dev --json url >/dev/null 2>&1 || gh pr create --base main --head dev --fill
     gh pr merge dev --merge --auto
 
 # E3 DREX routing golden eval suite: L1 intent classification + L2 routing

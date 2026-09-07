@@ -54,6 +54,8 @@ fn preparing_a_workspace_replays_onto_the_work_that_owns_it() {
             "thread-1",
             &snapshot.root,
             &handle,
+            "worker-1",
+            "lease-1",
             "2026-08-24T00:01:00Z",
             || "evt-2".to_string(),
         ))
@@ -91,6 +93,8 @@ fn a_workspace_event_without_its_work_is_refused_by_the_writer() {
         "thread-1",
         "/repo",
         &handle,
+        "worker-1",
+        "lease-1",
         "2026-08-24T00:01:00Z",
         || "evt-1".to_string(),
     );
@@ -117,6 +121,7 @@ fn the_whole_hold_can_be_taken_and_given_back() {
         "work-abc",
         &snapshot.root,
         "install-1",
+        "worker-1",
         "2026-08-24T00:00:00Z",
         "2026-08-24T01:00:00Z",
         || "lease-1".to_string(),
@@ -145,6 +150,7 @@ fn the_whole_hold_can_be_taken_and_given_back() {
         "work-def",
         &snapshot.root,
         "install-1",
+        "worker-1",
         "2026-08-24T00:31:00Z",
         "2026-08-24T01:31:00Z",
         || "lease-2".to_string(),
@@ -158,4 +164,40 @@ fn the_whole_hold_can_be_taken_and_given_back() {
         "2026-08-24T00:30:00Z",
         || "evt-3".to_string(),
     );
+}
+
+#[test]
+fn a_lease_records_the_worker_session_it_was_issued_for() {
+    let evidence = tempfile::tempdir().expect("evidence");
+    let transport = JsonlTransport::new(evidence.path().to_path_buf()).expect("transport");
+
+    let lease = acquire_writer_lease(
+        evidence.path(),
+        &transport,
+        "work-1",
+        "/tmp/repo",
+        "install-1",
+        "worker-7",
+        "2026-08-26T00:00:00Z",
+        "2026-08-26T08:00:00Z",
+        || "lease-1".to_string(),
+    )
+    .expect("lease");
+
+    assert_eq!(lease.worker_id, "worker-7");
+
+    let view = heiwa_evidence::WorkerStateView::replay(evidence.path()).expect("replay");
+    let persisted = view.leases.get("lease-1").expect("persisted lease");
+    // task_id keeps naming the Work; session_id now names the worker rather
+    // than repeating the Work, which is the seam A1-b left for A1-c.
+    assert_eq!(persisted.task_id, "work-1");
+    assert_eq!(persisted.session_id, "worker-7");
+
+    release_writer_lease(&transport, &lease, "2026-08-26T01:00:00Z").expect("release");
+    let after = heiwa_evidence::WorkerStateView::replay(evidence.path()).expect("replay again");
+    let released = after.leases.get("lease-1").expect("released lease");
+    assert_eq!(released.status, "completed");
+    // Release replaces the issued record wholesale, so the worker must be
+    // carried forward or it is destroyed.
+    assert_eq!(released.session_id, "worker-7");
 }

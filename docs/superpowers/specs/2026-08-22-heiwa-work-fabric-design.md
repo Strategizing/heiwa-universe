@@ -1,7 +1,7 @@
 # Heiwa Work Fabric Design
 
 Date: 2026-08-22
-Status: Draft for review — architecture approved in conversation; written artifact approval pending
+Status: Approved — written artifact authorized by Devon on 2026-08-25
 Scope: Heiwa.app, local runtime, multi-repository work, provider agents, productivity context, GitHub collaboration, approvals, and evidence
 Planes: Intake, Execution, Evidence
 Supersedes: `2026-08-14-heiwa-app-product-roadmap-design.md` post-L3 sequencing and standalone placement of § L4; preserves its L4 browser ownership and safety requirements as Release D

@@ -17,7 +17,7 @@ concurrency:
 jobs:
   security:
     name: Multi-Ecosystem Security Certification
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -66,7 +66,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, blacksmith-4vcpu-windows-2025]
+        os: [ubuntu-latest, macos-latest, windows-2025]
     env:
       CARGO_PROFILE_DEV_DEBUG: "0"
       CARGO_INCREMENTAL: "0"
@@ -100,7 +100,7 @@ jobs:
 
   rust-static:
     name: Rust Static Certification
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       CARGO_PROFILE_DEV_DEBUG: "0"
@@ -148,7 +148,7 @@ jobs:
 
   lance:
     name: Lance Backend Certification
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       CARGO_PROFILE_DEV_DEBUG: "0"
@@ -177,7 +177,7 @@ jobs:
 
   desktop:
     name: Desktop Shell Certification (macOS)
-    runs-on: blacksmith-6vcpu-macos-15
+    runs-on: macos-15
     timeout-minutes: 12
     env:
       CARGO_PROFILE_DEV_DEBUG: "0"

@@ -1,6 +1,7 @@
 name: Heiwa CI
 
-# CI is the promotion gate for `main`. It has two lanes:
+# CI is the integration gate for experimental PRs into `dev` and the promotion
+# gate for `dev` PRs into `main`. It has two lanes:
 #
 #   * the sub-minute feedback lane (everything except the Rust jobs), bounded at
 #     one minute per job by scripts/check_ci_job_deadlines.rb
@@ -12,14 +13,16 @@ name: Heiwa CI
 # on `main` pins that context name, so it must keep reporting even when the
 # underlying Rust jobs are renamed or re-sharded.
 #
-# Runner note: these jobs run on `blacksmith-4vcpu-ubuntu-2404` since PR #68.
-# An earlier attempt at `blacksmith-16vcpu-ubuntu-2404` was never picked up by
-# a runner — jobs sat queued indefinitely, and `timeout-minutes` does not bound
-# queue time — which is why scripts/check_ci_job_deadlines.rb requires a label
-# to be proven before it may be used.
+# Runner note: these jobs run on `ubuntu-latest` after Blacksmith stopped
+# adopting this repository's required jobs on 2026-08-28/29. Jobs sat queued
+# indefinitely across independent PRs and same-SHA reruns even while the public
+# Blacksmith status page was green. `timeout-minutes` does not bound queue time,
+# which is why scripts/check_ci_job_deadlines.rb requires a runner label with
+# observed claim evidence. Both this label and the prior Blacksmith 4-vCPU label
+# remain allowlisted until a deliberate canary proves the latter healthy again.
 on:
   pull_request:
-    branches: ["main"]
+    branches: ["dev", "main"]
   push:
     branches: ["main"]
   workflow_dispatch:
@@ -34,7 +37,7 @@ concurrency:
 jobs:
   security-scan:
     name: Security Vulnerability Scan
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -67,7 +70,7 @@ jobs:
   dependency-review:
     name: Dependency Review
     if: github.event_name == 'pull_request'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 1
     permissions:
       contents: read
@@ -77,7 +80,7 @@ jobs:
 
   rust-tests:
     name: Rust Tests
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       CARGO_PROFILE_DEV_DEBUG: "0"
@@ -111,7 +114,7 @@ jobs:
     # bundle paths are exercised by the release workflow. Excluding this
     # crate from the workspace jobs left the one crate a user actually runs
     # untested.
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       CARGO_PROFILE_DEV_DEBUG: "0"
@@ -153,7 +156,7 @@ jobs:
 
   rust-static:
     name: Rust Static Checks
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       CARGO_PROFILE_DEV_DEBUG: "0"
@@ -208,9 +211,9 @@ jobs:
     # the crate a user actually double-clicks. Left out of the aggregate, a
     # broken desktop lane merges while the only required Rust context stays
     # green.
-    needs: [rust-tests, rust-static, desktop-app]
+    needs: [rust-tests, rust-static, desktop-app, python-tests]
     if: always()
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
       - name: Require the Rust promotion lanes to pass
@@ -218,6 +221,7 @@ jobs:
           RUST_TESTS_RESULT: ${{ needs.rust-tests.result }}
           RUST_STATIC_RESULT: ${{ needs.rust-static.result }}
           DESKTOP_APP_RESULT: ${{ needs.desktop-app.result }}
+          PYTHON_TESTS_RESULT: ${{ needs.python-tests.result }}
         run: |
           set -euo pipefail
           echo "rust-tests=$RUST_TESTS_RESULT rust-static=$RUST_STATIC_RESULT desktop-app=$DESKTOP_APP_RESULT"
@@ -234,14 +238,37 @@ jobs:
             echo "Desktop App did not succeed" >&2
             status=1
           fi
+          if [[ "$PYTHON_TESTS_RESULT" != "success" ]]; then
+            echo "Python Tests did not succeed" >&2
+            status=1
+          fi
           if (( status != 0 )); then
             exit 1
           fi
           echo "Rust promotion proof complete."
 
+  python-tests:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.14"
+      - name: Install pinned uv
+        run: python -m pip install uv==0.12.1
+      - name: Verify local evidence runner
+        run: python -m unittest discover -s scripts/tests -p test_ci_local.py
+      - name: Verify Python sidecar from lockfile
+        run: bash scripts/check_python_sidecar.sh
+
   lint:
     name: TypeScript and Web Lint
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -263,7 +290,7 @@ jobs:
 
   docs-build:
     name: Docs Build
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -278,15 +305,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m venv .venv
-          source .venv/bin/activate
-          pip install --upgrade pip
-          pip install -r docs/requirements.txt
-          mkdocs build --strict
+          python -m pip install uv==0.12.1
+          uv run --locked --extra docs python -m mkdocs build --strict
 
   agent-sync-check:
     name: Agent Sync Check
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -305,7 +329,7 @@ jobs:
 
   repo-hygiene:
     name: Repo Hygiene
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -344,4 +368,7 @@ jobs:
         run: |
           python3 scripts/validate_connector_manifests.py
           bash scripts/check_public_installer.sh
+          bash scripts/tests/test_local_python_resolution.sh
+          bash scripts/tests/test_release_workflow_source.sh
+          bash scripts/tests/test_ci_required_checks.sh
           bats tests/audit/*.bats

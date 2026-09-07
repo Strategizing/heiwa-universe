@@ -30,6 +30,7 @@ foundation_packages=(
   heiwa_quota
   heiwa_receipts
   heiwa_work
+  heiwa_worker
   heiwa_workspace
 )
 
@@ -55,6 +56,7 @@ shell_ops_targets=(
   mail_triage
   schedule
   smoke
+  work_run
 )
 
 runtime_a_targets=(
@@ -69,6 +71,7 @@ runtime_a_targets=(
 )
 
 runtime_b_targets=(
+  codex_cli
   ollama_detect
   openrouter_live
   operator_service
@@ -100,7 +103,9 @@ foundation_b_targets=(
   runtime
   smoke
   telemetry_pane
+  runs
   work_core
+  work_session
   workspace_core
 )
 

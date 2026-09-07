@@ -1,8 +1,8 @@
 """Op handlers dispatched from the stdio server.
 
-Each op is a small async function. The real LangGraph/LlamaIndex work
-lives behind lazy imports so `health` + `version` stay fast even before the
-heavy ML deps resolve in an install.
+Each op is a small async function. Ecosystem imports are dependency
+diagnostics only; graph and indexing execution are not implemented here.
+`health` and `version` do not import the ML libraries.
 """
 
 from __future__ import annotations
@@ -34,7 +34,11 @@ async def op_version(req: Request) -> OkResponse | ErrResponse:
 
 
 async def op_check_deps(req: Request) -> OkResponse | ErrResponse:
-    """Probe importability of each ML dep without actually running them."""
+    """Report importability of known ecosystem modules, not execution capability.
+
+    LlamaIndex is an external optional probe, not a sidecar dependency.
+    Keep its result key for callers that already consume this diagnostic.
+    """
     results: dict[str, Any] = {}
     for name in ("langgraph", "llama_index"):
         try:

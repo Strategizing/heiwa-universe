@@ -9,6 +9,7 @@ pub mod events;
 pub mod migration;
 pub mod model;
 pub mod projector;
+pub mod session;
 pub mod snapshot;
 
 pub use events::{
@@ -17,9 +18,10 @@ pub use events::{
 pub use migration::{resolve_work_id, MigrationConflict, WorkIdResolution};
 pub use model::{Work, WorkId, WorkStatus, SCHEMA_VERSION};
 pub use projector::{fold, WorkProjection};
+pub use session::{build_work_session, WorkSessionBuildError, WorkSessionBuildOptions};
 pub use snapshot::{
-    ClientProjection, DeltaApplyOutcome, ProjectionEpoch, ResyncReason, WorkSessionDeltaV1,
-    WorkSessionSnapshotV1,
+    ClientProjection, CollectionRows, DeltaApplyOutcome, ProjectionEpoch, ResyncReason,
+    WorkSessionDeltaV1, WorkSessionSnapshotV1,
 };
 
 #[derive(Debug, thiserror::Error)]

@@ -5,6 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
 expected_branch="${HEIWA_BASELINE_BRANCH:-dev}"
+branch_mode="${HEIWA_BRANCH_MODE:-integration}"
 allow_dirty=0
 
 usage() {
@@ -12,8 +13,12 @@ usage() {
 Usage: scripts/check_agent_baseline.sh [--allow-dirty] [--branch <name>]
 
 Local-only agent baseline gate. This script does not fetch, push, call gh, or
-perform network health checks. Remote pre-flight remains a separate explicitly
-assigned operation.
+perform network health checks. Remote pre-flight is separate evidence collected
+within an authorized publishing or remote-audit assignment.
+
+Set HEIWA_BRANCH_MODE to `experimental` for a branch descended from `dev`, or
+to `post-promotion` for the brief synchronized dev/main handoff. The default is
+`integration`, which requires value-bearing work on `dev` ahead of `main`.
 
 Checks:
   - current checkout is on the expected integration branch (default: dev)
@@ -50,6 +55,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+case "$branch_mode" in
+  integration|experimental|post-promotion) ;;
+  *)
+    printf 'FAIL: invalid HEIWA_BRANCH_MODE: %s\n' "$branch_mode" >&2
+    exit 2
+    ;;
+esac
+
 fail=0
 
 ok() {
@@ -80,11 +93,16 @@ run_gate() {
 current_branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
 if [[ -z "$current_branch" ]]; then
   fail_msg "checkout is detached; expected branch $expected_branch"
+elif [[ "$branch_mode" == "experimental" ]]; then
+  ok "experimental branch $current_branch"
 elif [[ "$current_branch" != "$expected_branch" ]]; then
   fail_msg "checkout branch is $current_branch; expected $expected_branch"
 else
   ok "branch $current_branch"
 fi
+
+run_gate "branch topology ($branch_mode)" \
+  bash scripts/check_branch_topology.sh --mode "$branch_mode"
 
 head_sha="$(git rev-parse --short=8 HEAD)"
 ok "local HEAD $head_sha"

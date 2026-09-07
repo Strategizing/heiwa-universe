@@ -25,6 +25,24 @@ fn test_service(path: &std::path::Path) -> OperatorSessionService {
     OperatorSessionService::new(OperatorJournal::new(path.to_path_buf()).unwrap())
 }
 
+fn create_work(service: &OperatorSessionService, work_id: &str, thread_id: &str) {
+    service.ensure_thread(thread_id).expect("thread");
+    let mut created = base_event(thread_id, None, None, OperatorEventType::WorkCreated);
+    created.work_id = Some(work_id.to_string());
+    created.payload = json!({
+        "intent": "exercise Work-scoped execution",
+        "origin_installation_id": "installation-test",
+        "primary_thread_id": thread_id,
+    });
+    service.append_event(created).expect("work created");
+}
+
+fn work_request(request_id: &str, work_id: &str) -> StartTurnRequest {
+    let mut request = StartTurnRequest::auto(request_id, "ship it");
+    request.work_id = Some(work_id.to_string());
+    request
+}
+
 #[derive(Default)]
 struct RecordingEmbedder {
     rows: Mutex<Vec<(String, String, String)>>,
@@ -439,6 +457,176 @@ fn duplicate_client_request_returns_one_turn() {
     assert_eq!(first.turn_id, second.turn_id);
     assert!(second.duplicate);
     assert_eq!(service.thread("default").unwrap().turns.len(), 1);
+}
+
+#[test]
+fn work_scoped_turn_refuses_an_unknown_work_without_writing_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let service = test_service(dir.path());
+
+    let error = service
+        .start_turn(
+            "thread-1",
+            work_request("work-scoped-unknown", "work-missing"),
+        )
+        .unwrap_err();
+
+    assert!(
+        error.to_string().contains("unknown or is not linked"),
+        "{error}"
+    );
+    assert!(service
+        .events_after("thread-1", None, 100)
+        .unwrap()
+        .events
+        .is_empty());
+    assert!(!dir.path().join("operator_events.jsonl").exists());
+}
+
+#[test]
+fn work_scoped_turn_refuses_a_thread_not_linked_to_the_work() {
+    let dir = tempfile::tempdir().unwrap();
+    let service = test_service(dir.path());
+    create_work(&service, "work-abc", "thread-primary");
+    service.ensure_thread("thread-foreign").unwrap();
+    let mut duplicate_creation =
+        base_event("thread-foreign", None, None, OperatorEventType::WorkCreated);
+    duplicate_creation.work_id = Some("work-abc".to_string());
+    duplicate_creation.payload = json!({
+        "intent": "must not rebind",
+        "origin_installation_id": "installation-test",
+        "primary_thread_id": "thread-foreign",
+    });
+    service.append_event(duplicate_creation).unwrap();
+    let rows_before = service
+        .events_after("thread-foreign", None, 100)
+        .unwrap()
+        .events
+        .len();
+
+    let error = service
+        .start_turn(
+            "thread-foreign",
+            work_request("work-scoped-foreign", "work-abc"),
+        )
+        .unwrap_err();
+
+    assert!(
+        error.to_string().contains("unknown or is not linked"),
+        "{error}"
+    );
+    assert_eq!(
+        service
+            .events_after("thread-foreign", None, 100)
+            .unwrap()
+            .events
+            .len(),
+        rows_before,
+        "a duplicate creation cannot rebind Work, and refused admission appends nothing"
+    );
+}
+
+#[test]
+fn work_scoped_turn_appends_the_work_id_to_admission_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let service = test_service(dir.path());
+    create_work(&service, "work-abc", "thread-primary");
+
+    service
+        .start_turn(
+            "thread-primary",
+            work_request("work-scoped-admitted", "work-abc"),
+        )
+        .unwrap();
+
+    let rows = service
+        .events_after("thread-primary", None, 100)
+        .unwrap()
+        .events;
+    let admission = rows
+        .iter()
+        .filter(|row| {
+            matches!(
+                row.event.event_type,
+                OperatorEventType::TurnStarted | OperatorEventType::UserMessage
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(admission.len(), 2);
+    assert!(admission
+        .iter()
+        .all(|row| row.event.work_id.as_deref() == Some("work-abc")));
+    assert_eq!(
+        service.thread("thread-primary").unwrap().turns[0]
+            .work_id
+            .as_deref(),
+        Some("work-abc")
+    );
+}
+
+#[test]
+fn work_scoped_turn_rejects_later_events_that_drop_or_change_work() {
+    let dir = tempfile::tempdir().unwrap();
+    let service = test_service(dir.path());
+    create_work(&service, "work-abc", "thread-primary");
+    let submission = service
+        .start_turn(
+            "thread-primary",
+            work_request("work-scoped-later-events", "work-abc"),
+        )
+        .unwrap();
+
+    for wrong_scope in [None, Some("work-def".to_string())] {
+        let mut event = base_event(
+            "thread-primary",
+            Some(&submission.turn_id),
+            None,
+            OperatorEventType::AssistantStarted,
+        );
+        event.work_id = wrong_scope;
+        let error = service.append_event(event).unwrap_err();
+        assert!(error.to_string().contains("Work scope"), "{error}");
+    }
+}
+
+#[test]
+fn work_scoped_turn_accepts_a_related_thread_and_binds_retries_to_work() {
+    let dir = tempfile::tempdir().unwrap();
+    let service = test_service(dir.path());
+    create_work(&service, "work-abc", "thread-primary");
+    create_work(&service, "work-def", "thread-other");
+    service.ensure_thread("thread-related").unwrap();
+    let mut linked = base_event("thread-related", None, None, OperatorEventType::WorkLinked);
+    linked.work_id = Some("work-abc".to_string());
+    linked.payload = json!({"thread_id": "thread-related", "origin": "adopted"});
+    service.append_event(linked).unwrap();
+
+    let first = service
+        .start_turn(
+            "thread-related",
+            work_request("work-scoped-retry", "work-abc"),
+        )
+        .unwrap();
+    let duplicate = service
+        .start_turn(
+            "thread-related",
+            work_request("work-scoped-retry", "work-abc"),
+        )
+        .unwrap();
+    assert_eq!(duplicate.turn_id, first.turn_id);
+    assert!(duplicate.duplicate);
+
+    let error = service
+        .start_turn(
+            "thread-related",
+            work_request("work-scoped-retry", "work-def"),
+        )
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        TurnSubmissionError::IdempotencyConflict { .. }
+    ));
+    assert!(error.to_string().contains("different Work"), "{error}");
 }
 
 #[test]

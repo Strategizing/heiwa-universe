@@ -1,9 +1,9 @@
 use crate::adapter::{Message, ProviderAdapter, StreamEvent, TokenUsage};
-use anyhow::Result;
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
+use tokio::process::{Child, Command};
 use tokio::sync::mpsc;
 
 /// CLI subprocess adapter for OpenAI Codex.
@@ -42,57 +42,32 @@ impl ProviderAdapter for CodexCliAdapter {
         crate::adapter::configure_cli_command(&mut cmd);
         cmd.arg("exec")
             .arg("--json")
+            .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+            // Progress belongs to Codex. An unread pipe can fill and block
+            // inference, and raw diagnostics must not become assistant text.
+            .stderr(Stdio::null());
 
         if !model.is_empty() {
             cmd.arg("-m").arg(model);
         }
 
-        cmd.arg(&prompt);
+        cmd.arg("--").arg(&prompt);
 
-        let mut child = cmd.spawn()?;
-        let stdout = child.stdout.take().unwrap();
-        let mut reader = BufReader::new(stdout).lines();
-
-        while let Some(line) = reader.next_line().await? {
-            if line.trim().is_empty() {
-                continue;
+        // One terminal event for both the stream consumer and Result caller.
+        // The child is reaped before success or failure is published.
+        match run_codex(&mut cmd, &stream_tx).await {
+            Ok(Some(usage)) => {
+                let _ = stream_tx.send(StreamEvent::Done(usage)).await;
+                Ok(())
             }
-            let Ok(obj) = serde_json::from_str::<serde_json::Value>(&line) else {
-                continue;
-            };
-            match obj.get("type").and_then(|t| t.as_str()) {
-                Some("agent_message_delta") | Some("message_delta") => {
-                    if let Some(delta) = obj.get("delta").and_then(|d| d.as_str()) {
-                        if stream_tx
-                            .send(StreamEvent::Token(delta.to_string()))
-                            .await
-                            .is_err()
-                        {
-                            child.kill().await.ok();
-                            return Ok(());
-                        }
-                    }
-                }
-                Some("agent_message") | Some("message") => {
-                    if let Some(text) = obj.get("text").and_then(|t| t.as_str()) {
-                        let _ = stream_tx.send(StreamEvent::Token(text.to_string())).await;
-                    }
-                }
-                Some("task_complete") | Some("turn_complete") | Some("result") => {
-                    let usage = extract_usage(&obj);
-                    let _ = stream_tx.send(StreamEvent::Done(usage)).await;
-                    return Ok(());
-                }
-                _ => {}
+            Ok(None) => Ok(()), // Consumer cancelled; no receiver remains.
+            Err(error) => {
+                let message = format!("Codex execution failed: {error:#}");
+                let _ = stream_tx.send(StreamEvent::Error(message.clone())).await;
+                Err(anyhow!(message))
             }
         }
-
-        let _ = stream_tx
-            .send(StreamEvent::Done(TokenUsage::default()))
-            .await;
-        Ok(())
     }
 
     async fn interrupt(&self) -> Result<()> {
@@ -106,6 +81,93 @@ impl ProviderAdapter for CodexCliAdapter {
             "o3".to_string(),
         ]
     }
+}
+
+async fn run_codex(
+    cmd: &mut Command,
+    stream_tx: &mpsc::Sender<StreamEvent>,
+) -> Result<Option<TokenUsage>> {
+    let mut child = cmd.spawn().context("could not start Codex CLI")?;
+    let result = read_codex(&mut child, stream_tx).await;
+    if !matches!(result, Ok(Some(_))) {
+        // kill() also waits. kill_on_drop remains the backstop when the
+        // entire adapter future is aborted by its supervisor.
+        child.kill().await.ok();
+    }
+    result
+}
+
+async fn read_codex(
+    child: &mut Child,
+    stream_tx: &mpsc::Sender<StreamEvent>,
+) -> Result<Option<TokenUsage>> {
+    let stdout = child.stdout.take().context("Codex stdout unavailable")?;
+    let mut reader = BufReader::new(stdout).lines();
+    let mut completion = None;
+
+    loop {
+        let line = tokio::select! {
+            biased;
+            _ = stream_tx.closed() => return Ok(None),
+            line = reader.next_line() => line.context("could not read Codex output")?,
+        };
+        let Some(line) = line else { break };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let obj: serde_json::Value =
+            serde_json::from_str(&line).map_err(|_| anyhow!("invalid Codex JSONL event"))?;
+        let text = match obj.get("type").and_then(|t| t.as_str()) {
+            // Current codex exec --json emits complete item snapshots. Only
+            // final agent text is a token; reasoning and tool output are not.
+            Some("item.completed") => obj.get("item").and_then(|item| {
+                (item.get("type").and_then(|t| t.as_str()) == Some("agent_message"))
+                    .then(|| item.get("text").and_then(|t| t.as_str()))
+                    .flatten()
+            }),
+            Some("agent_message_delta") | Some("message_delta") => {
+                obj.get("delta").and_then(|d| d.as_str())
+            }
+            Some("agent_message") | Some("message") => obj.get("text").and_then(|t| t.as_str()),
+            Some("turn.completed")
+            | Some("task_complete")
+            | Some("turn_complete")
+            | Some("result") => {
+                completion = Some(extract_usage(&obj));
+                None
+            }
+            Some("turn.failed") | Some("error") => {
+                let message = obj
+                    .pointer("/error/message")
+                    .or_else(|| obj.get("message"))
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("provider reported failure");
+                return Err(anyhow!("{message}"));
+            }
+            _ => None,
+        };
+        if let Some(text) = text {
+            if stream_tx
+                .send(StreamEvent::Token(text.to_string()))
+                .await
+                .is_err()
+            {
+                return Ok(None);
+            }
+        }
+    }
+
+    let status = tokio::select! {
+        biased;
+        _ = stream_tx.closed() => return Ok(None),
+        status = child.wait() => status.context("could not reap Codex CLI")?,
+    };
+    if !status.success() {
+        return Err(anyhow!("Codex CLI exited with {status}"));
+    }
+    completion
+        .map(Some)
+        .ok_or_else(|| anyhow!("Codex output ended without a completion event"))
 }
 
 fn extract_usage(result: &serde_json::Value) -> TokenUsage {

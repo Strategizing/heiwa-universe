@@ -4,19 +4,25 @@
 //! this command adds no second writer; it resolves the runtime root once and
 //! hands it down.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 
-use heiwa_evidence::OperatorJournal;
+use heiwa_evidence::{CursorEvent, OperatorJournal};
 use heiwa_session::operator::OperatorSessionService;
-use heiwa_work::{fold, work_created_event, Work, WorkId, WorkProjection};
+use heiwa_work::{
+    build_work_session, fold, work_created_event, Work, WorkId, WorkProjection,
+    WorkSessionBuildOptions, WorkSessionSnapshotV1,
+};
 
 pub fn run(args: &[String]) -> Result<()> {
     match args.first().map(String::as_str) {
         Some("list") | Some("status") | None => list(args),
         Some("create") => create_command(&args[1..]),
+        Some("show") => show_command(&args[1..]),
+        Some("run") => crate::cmd::worker::run(&args[1..]),
         Some("--help") | Some("-h") => {
             print_help();
             Ok(())
@@ -30,6 +36,8 @@ fn print_help() {
     println!();
     println!("  heiwa work list [--json]              what Work exists and where it stands");
     println!("  heiwa work create <intent> [--json]   open a new Work and its primary thread");
+    println!("  heiwa work show <work-id> [--json]    bounded session truth for one Work");
+    println!("  heiwa work run <work-id> -- <cmd>     run a provider-owned worker in its worktree");
 }
 
 fn service(root: &Path) -> Result<OperatorSessionService> {
@@ -88,6 +96,82 @@ fn create_command(args: &[String]) -> Result<()> {
     } else {
         println!("opened {}", created["work_id"].as_str().unwrap_or("?"));
         println!("  {intent}");
+    }
+    Ok(())
+}
+
+fn show_command(args: &[String]) -> Result<()> {
+    let work_id = args
+        .iter()
+        .find(|arg| !arg.starts_with("--"))
+        .ok_or_else(|| anyhow!("usage: heiwa work show <work-id> [--json]"))?;
+    let paths = heiwa_config::HeiwaPaths::resolve();
+    let snapshot = session(
+        &paths.evidence_dir,
+        work_id,
+        &format!("cli-{}", uuid::Uuid::new_v4()),
+    )?;
+    if has_flag(args, "--json") {
+        println!("{}", serde_json::to_string(&snapshot)?);
+        return Ok(());
+    }
+
+    println!(
+        "{}  rev {}  projection {}",
+        snapshot.work_id, snapshot.work_revision, snapshot.projection_revision
+    );
+    if let Some(work) = snapshot
+        .collections
+        .get("work")
+        .and_then(|rows| rows.get(&snapshot.work_id))
+    {
+        println!("  {}", work["intent"].as_str().unwrap_or(""));
+        println!("  status: {}", work["status"].as_str().unwrap_or("unknown"));
+    }
+    // Runs get their own block rather than a count: what ran, as what
+    // identity, and how it ended is the question `heiwa work show` exists to
+    // answer once a worker has touched the Work.
+    if let Some(runs) = snapshot.collections.get("runs") {
+        for (run_id, run) in runs {
+            println!(
+                "  run {run_id}  {}  {}",
+                run["worker_state"].as_str().unwrap_or("unknown"),
+                run["provider"].as_str().unwrap_or("-")
+            );
+            println!("    cwd  {}", run["cwd"].as_str().unwrap_or("?"));
+            match run["exit_code"].as_i64() {
+                Some(code) => println!("    exit {code}"),
+                None if run["ended_at"].is_null() => println!("    exit (still running)"),
+                None => println!("    exit (signalled)"),
+            }
+            if let Some(pane) = run["pane_id"].as_str() {
+                println!(
+                    "    pane {pane}  {}",
+                    run["pane_state"].as_str().unwrap_or("unknown")
+                );
+            }
+        }
+    }
+    for name in [
+        "threads",
+        "workspace",
+        "runs",
+        "approvals",
+        "actions",
+        "artifacts",
+        "tests",
+        "receipts",
+        "blockers",
+    ] {
+        let count = snapshot.collections.get(name).map_or(0, BTreeMap::len);
+        let omitted = snapshot
+            .truncated_collections
+            .get(name)
+            .copied()
+            .unwrap_or(0);
+        if count > 0 || omitted > 0 {
+            println!("  {name}: {count} visible, {omitted} omitted");
+        }
     }
     Ok(())
 }
@@ -155,11 +239,32 @@ pub(crate) fn summarize(root: &Path) -> Result<Value> {
 /// `work_linked` can be visited before its earlier `work_created`, making valid
 /// history look damaged. The journal cursor is the order authority.
 pub(crate) fn project(root: &Path) -> Result<WorkProjection> {
+    let rows = read_rows(root)?;
+    Ok(fold(
+        &rows.into_iter().map(|row| row.event).collect::<Vec<_>>(),
+    ))
+}
+
+pub(crate) fn session(
+    root: &Path,
+    work_id: &str,
+    epoch_seed: &str,
+) -> Result<WorkSessionSnapshotV1> {
+    let rows = read_rows(root)?;
+    build_work_session(
+        &rows,
+        work_id,
+        WorkSessionBuildOptions::new(epoch_seed, 256),
+    )
+    .map_err(|error| anyhow!(error))
+}
+
+fn read_rows(root: &Path) -> Result<Vec<CursorEvent>> {
     const PAGE_SIZE: usize = 256;
 
     let journal = OperatorJournal::new(root.to_path_buf()).map_err(|error| anyhow!("{error}"))?;
     let mut cursor: Option<String> = None;
-    let mut events = Vec::new();
+    let mut rows = Vec::new();
     loop {
         let page = journal
             .read_after(cursor.as_deref(), PAGE_SIZE)
@@ -168,9 +273,9 @@ pub(crate) fn project(root: &Path) -> Result<WorkProjection> {
             break;
         }
         cursor = page.next_cursor;
-        events.extend(page.events.into_iter().map(|row| row.event));
+        rows.extend(page.events);
     }
-    Ok(fold(&events))
+    Ok(rows)
 }
 
 pub(crate) fn find(root: &Path, work_id: &str) -> Result<Option<Work>> {
@@ -184,9 +289,45 @@ fn has_flag(args: &[String], flag: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use heiwa_evidence::{
+        OperatorActor, OperatorEvent, OperatorEventType, OperatorRisk, OperatorSensitivity,
+        OPERATOR_EVENT_SCHEMA_VERSION,
+    };
 
     fn root() -> tempfile::TempDir {
         tempfile::tempdir().expect("tempdir")
+    }
+
+    fn scoped_event(
+        work_id: &str,
+        thread_id: &str,
+        turn_id: &str,
+        call_id: Option<&str>,
+        event_type: OperatorEventType,
+        payload: Value,
+    ) -> OperatorEvent {
+        OperatorEvent {
+            schema_version: OPERATOR_EVENT_SCHEMA_VERSION,
+            event_id: format!("evt-{}", uuid::Uuid::new_v4()),
+            thread_id: thread_id.to_string(),
+            turn_id: Some(turn_id.to_string()),
+            run_id: None,
+            call_id: call_id.map(str::to_string),
+            work_id: Some(work_id.to_string()),
+            event_type,
+            occurred_at: chrono::Utc::now().to_rfc3339(),
+            actor: OperatorActor {
+                kind: "runtime".to_string(),
+                id: "work-command-test".to_string(),
+            },
+            risk_class: OperatorRisk::Low,
+            sensitivity: OperatorSensitivity::LocalPrivate,
+            parent_event_id: None,
+            correlation_id: call_id.map(str::to_string),
+            source_refs: vec![],
+            evidence_refs: vec![],
+            payload,
+        }
     }
 
     #[test]
@@ -215,6 +356,79 @@ mod tests {
             listed[0]["replicable"], false,
             "work created before enrolment must not claim mesh reach"
         );
+    }
+
+    #[test]
+    fn showing_work_reuses_the_canonical_session_projector() {
+        let dir = root();
+        let created =
+            create(dir.path(), "prepare the release", "installation-1").expect("create work");
+        let work_id = created["work_id"].as_str().unwrap();
+        let thread_id = created["primary_thread_id"].as_str().unwrap();
+        let service = service(dir.path()).unwrap();
+        let mut request = heiwa_session::operator::StartTurnRequest::auto("work-show", "ship it");
+        request.work_id = Some(work_id.to_string());
+        let submission = service.start_turn(thread_id, request).unwrap();
+        service
+            .append_event(scoped_event(
+                work_id,
+                thread_id,
+                &submission.turn_id,
+                Some("call-1"),
+                OperatorEventType::ToolCallStarted,
+                json!({"name": "fs.write", "arguments": {"hidden": true}}),
+            ))
+            .unwrap();
+        service
+            .append_event(scoped_event(
+                work_id,
+                thread_id,
+                &submission.turn_id,
+                Some("call-1"),
+                OperatorEventType::ToolCallCompleted,
+                json!({
+                    "name": "fs.write",
+                    "status": "success",
+                    "output": "hidden",
+                    "receipt_id": "receipt-action-1"
+                }),
+            ))
+            .unwrap();
+        service
+            .append_event(scoped_event(
+                work_id,
+                thread_id,
+                &submission.turn_id,
+                None,
+                OperatorEventType::ReceiptLinked,
+                json!({"kind": "operator_turn", "receipt_ref": "receipt-turn-1"}),
+            ))
+            .unwrap();
+        service
+            .append_event(scoped_event(
+                work_id,
+                thread_id,
+                &submission.turn_id,
+                None,
+                OperatorEventType::TurnCompleted,
+                json!({"trace": {"hidden": true}}),
+            ))
+            .unwrap();
+
+        let snapshot = session(dir.path(), work_id, "command-test").unwrap();
+        assert_eq!(snapshot.work_id, work_id);
+        assert_eq!(
+            snapshot.collections["threads"][thread_id]["status"],
+            "completed"
+        );
+        assert_eq!(
+            snapshot.collections["actions"]["call-1"]["status"],
+            "success"
+        );
+        assert_eq!(snapshot.collections["receipts"].len(), 1);
+        assert!(snapshot.operator_cursor.is_some());
+        let encoded = serde_json::to_string(&snapshot).unwrap();
+        assert!(!encoded.contains("hidden"), "{encoded}");
     }
 
     #[test]
