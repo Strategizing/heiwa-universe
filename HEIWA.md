@@ -1,12 +1,12 @@
 # HEIWA
 
-Updated: 2026-07-16
+Updated: 2026-09-07
 Status: Canonical truth for `heiwa-universe`
 
 This file replaces the old repo-root compatibility shim. When `README.md`, legacy plans, or older architecture notes conflict with this document, this document wins.
 
 > **Backend (since the 2026-07-15 pivot): Lance + GitHub.** SpacetimeDB,
-> Railway, and Cloudflare-as-infra are retired; the STDB code paths were
+> Railway, and hosted runtime backends are retired; the STDB code paths were
 > extracted from the tree on 2026-07-15 (git history has the rest). Durable
 > truth is text: JSONL journal streams under `~/.heiwa/evidence/` plus
 > markdown/receipts, owned by `crates/heiwa_evidence`. Lance is the derived
@@ -14,7 +14,8 @@ This file replaces the old repo-root compatibility shim. When `README.md`, legac
 > (`heiwa_receipts`, `heiwa_vault`, embedding hot state) keeps hot
 > operational state. GitHub owns source, CI, and distribution; evidence sync
 > to GitHub is planned but gated — nothing syncs until an explicit redaction
-> and privacy boundary exists. Cloudflare remains DNS utility only.
+> and privacy boundary exists. Cloudflare serves DNS and the static public
+> shell/installer; GitHub remains the source of release binaries and checksums.
 
 ## One-Sentence Truth
 
@@ -292,7 +293,7 @@ If there is no internet connection, Claude Code, Codex cloud, Gemini cloud, or o
 - The local runtime owns the hot path: provider streams, PTY/shell work, local models, device resources, local approvals, and side effects.
 - Durable truth stays on the device: the JSONL journal, receipts, and markdown state under `~/.heiwa/`.
 - GitHub owns source, CI, release artifacts, installer distribution, and public repo trust once the secure publish gate passes. Redaction-gated evidence sync through GitHub is the planned (not yet built) multi-device path.
-- Cloudflare is DNS utility only.
+- Cloudflare serves DNS and the static public shell/installer through explicit deployment. GitHub owns the release bytes.
 
 No hosted backend authority plane exists in this topology. If a later stage adds a hosted control plane, it must not become a hidden inference middleman for the local runtime path.
 
@@ -405,14 +406,14 @@ Heiwa is local-first. Hosted infrastructure exists to provide durable truth, pub
 | ----------------- | --------------------------------------------------------------------------------------------------------------------- |
 | **Local machine** | Primary `heiwa` runtime, provider CLIs, local models, operator control, canonical evidence truth                      |
 | **GitHub**        | Source of truth for code, CI, release artifacts, install/update distribution; planned (redaction-gated) evidence sync |
-| **Cloudflare**    | DNS utility only                                                                                                      |
+| **Cloudflare**    | DNS and static public shell/installer delivery; no runtime or binary authority                                         |
 
 | Layer                       | Host                              | Role                                                                                                  |
 | --------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Canonical state / evidence  | Local device (`~/.heiwa/`)        | JSONL journal truth, replay/materialized read models, receipts, Lance derived index, SQLite hot state |
 | Local inference + streaming | `heiwa` app runtime on the device | Provider streams, PTY/shell, local models, local approvals, side effects                              |
 | Source / CI / distribution  | GitHub                            | Releases, install artifacts, binaries, checksums, source trust                                        |
-| DNS                         | Cloudflare                        | Domain records only                                                                                   |
+| DNS / static public edge    | Cloudflare                        | Domain records, public shell, and installer scripts pointing to GitHub release assets                 |
 
 Architectural implication:
 
@@ -440,15 +441,14 @@ Heiwa implication:
 
 ### Cloudflare
 
-Cloudflare Workers and Pages are strong fits for Heiwa’s edge and public surfaces:
+Cloudflare Pages serves the packaged static public shell and installer scripts.
+The existing `deploy.yml` workflow publishes them only on explicit dispatch and
+then checks the served installer bytes. GitHub Pages publishes the docs.
 
-- Workers Custom Domains are the right model when the Worker is the application origin. [4]
-- Pages is appropriate for the public web shell and static/full-stack edge delivery later. [5]
-
-Heiwa implication:
-
-- Cloudflare is an edge and public-surface layer, not the definition of the product.
-- The local `heiwa` runtime still matters even if hosted surfaces grow.
+GitHub Releases owns binaries, checksums, release identity, and provenance.
+Installer scripts served through Cloudflare resolve those GitHub assets.
+Provider execution, secrets, approvals, and private evidence remain on the
+user's device. Public static hosting does not grant runtime authority.
 
 ## What Makes Heiwa Come Alive
 

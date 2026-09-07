@@ -75,6 +75,14 @@ require_match ".github/workflows/release.yml" 'git merge-base --is-ancestor "\$c
 require_match ".github/workflows/release.yml" 'actions/workflows/\$\{workflow_file\}/runs\?event=push&branch=main&head_sha=\$\{RELEASE_COMMIT\}' "release publication must query required workflows at the tagged commit"
 require_match ".github/workflows/release.yml" 'required_workflows=\(ci\.yml certification\.yml\)' "release publication must require fast CI and full certification"
 require_match ".github/workflows/release.yml" 'if \[\[ "\$conclusion" != "success" \]\]' "release publication must reject failed main certification"
+require_block_match ".github/workflows/pages.yml" \
+  '^  build:' '^  deploy:' \
+  'uv run --locked --extra docs python -m mkdocs build --strict' \
+  "published docs must use the verified lockfile and strict build"
+require_block_match ".github/workflows/ci.yml" \
+  '^  desktop-app:' '^  rust-static:' \
+  'node-version-file: \.nvmrc' \
+  "desktop CI must use the repository Node baseline"
 require_file ".github/workflows/certification.yml"
 require_match ".github/workflows/certification.yml" '^name: Heiwa Certification$' "heavy release proofs must use the certification workflow"
 require_no_match ".github/workflows/ci.yml" 'name: (Lance Backend Certification|Desktop Shell Certification|Cross-Platform Rust Compilation|Multi-Ecosystem Security Certification)' "heavy release proofs must stay out of sub-minute CI"

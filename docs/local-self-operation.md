@@ -435,5 +435,7 @@ heiwa providers
 curl -fsS http://127.0.0.1:7474/status/health
 ```
 
-The runtime is not ready for public access until the localhost checks pass and
-Cloudflare is explicitly re-enabled with fresh targets.
+The installed runtime stays local. Public release readiness requires current
+GitHub CI and certification, verified release assets, and a successful static
+installer deployment with public install checks. A reachable localhost runtime
+proves only that local surface.
