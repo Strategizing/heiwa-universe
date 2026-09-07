@@ -211,7 +211,7 @@ jobs:
     # the crate a user actually double-clicks. Left out of the aggregate, a
     # broken desktop lane merges while the only required Rust context stays
     # green.
-    needs: [rust-tests, rust-static, desktop-app]
+    needs: [rust-tests, rust-static, desktop-app, python-tests]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 1
@@ -221,6 +221,7 @@ jobs:
           RUST_TESTS_RESULT: ${{ needs.rust-tests.result }}
           RUST_STATIC_RESULT: ${{ needs.rust-static.result }}
           DESKTOP_APP_RESULT: ${{ needs.desktop-app.result }}
+          PYTHON_TESTS_RESULT: ${{ needs.python-tests.result }}
         run: |
           set -euo pipefail
           echo "rust-tests=$RUST_TESTS_RESULT rust-static=$RUST_STATIC_RESULT desktop-app=$DESKTOP_APP_RESULT"
@@ -237,10 +238,33 @@ jobs:
             echo "Desktop App did not succeed" >&2
             status=1
           fi
+          if [[ "$PYTHON_TESTS_RESULT" != "success" ]]; then
+            echo "Python Tests did not succeed" >&2
+            status=1
+          fi
           if (( status != 0 )); then
             exit 1
           fi
           echo "Rust promotion proof complete."
+
+  python-tests:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.14"
+      - name: Install pinned uv
+        run: python -m pip install uv==0.12.1
+      - name: Verify local evidence runner
+        run: python -m unittest discover -s scripts/tests -p test_ci_local.py
+      - name: Verify Python sidecar from lockfile
+        run: bash scripts/check_python_sidecar.sh
 
   lint:
     name: TypeScript and Web Lint
@@ -281,11 +305,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m venv .venv
-          source .venv/bin/activate
-          pip install --upgrade pip
-          pip install -r docs/requirements.txt
-          mkdocs build --strict
+          python -m pip install uv==0.12.1
+          uv run --locked --extra docs python -m mkdocs build --strict
 
   agent-sync-check:
     name: Agent Sync Check
@@ -348,4 +369,6 @@ jobs:
           python3 scripts/validate_connector_manifests.py
           bash scripts/check_public_installer.sh
           bash scripts/tests/test_local_python_resolution.sh
+          bash scripts/tests/test_release_workflow_source.sh
+          bash scripts/tests/test_ci_required_checks.sh
           bats tests/audit/*.bats

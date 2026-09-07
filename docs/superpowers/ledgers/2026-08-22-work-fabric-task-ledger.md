@@ -88,6 +88,88 @@ pane bound to it. Neither claims tri-surface or restart-recovery completion.
 | 3 | `heiwa work run --json` emits one JSON document while retaining both child streams in bounded pane evidence | done | `cargo test -p heiwa-shell --test work_run` |
 | 4 | Reader-thread panics reach the caller instead of becoming clean worker results | done | `cargo test -p heiwa-shell --bin heiwa cmd::worker` |
 
+## Provider stream repair — 2026-09-06
+
+Plane: Execution / Evidence. The Codex subscription adapter now consumes the
+current CLI JSONL protocol. Completed assistant items and usage reach the
+consumer; success requires both a completion event and a successful process
+exit. Failure, malformed output, and cancellation no longer masquerade as
+successful empty output or leave an idle adapter child running.
+
+Verification: `cargo test -p heiwa-provider --locked --test codex_cli` passes
+15 behavior cases plus the isolated child-process driver. Coverage includes
+current and legacy output, usage, provider failure, invalid JSONL/UTF-8,
+nonzero/missing completion, stderr pressure, literal prompt arguments, spawn
+failure, shutdown ordering, and consumer cancellation. The target is included
+in `scripts/ci_rust_test_group.sh`'s runtime integration lane.
+
+This repairs the provider transport contract; A1-c3's surface agreement and
+restart-recovery rows remain pending. It does not establish native Codex
+continuation, tool-effect receipts, API migration, or live model entitlement.
+
+### Dependency audit follow-up
+
+The full local gate at `744ac65b` passed Rust, web, Python/product, baseline,
+and L0-L2 acceptance checks, but failed `verify_security` on three pre-existing
+Python dependency findings. The lockfiles now select MkDocs Material `9.7.7`
+and Banks `2.4.5`, the patched versions for
+[CVE-2026-73295](https://github.com/squidfunk/mkdocs-material/releases/tag/9.7.7)
+and [CVE-2026-71492](https://github.com/masci/banks/security/advisories/GHSA-x8wg-4xgc-vr54).
+`uv run --locked --extra docs python -m mkdocs build --strict` passes;
+`uv run --locked --all-extras --python 3.14 python -m pytest -q` from
+`runtime/python` passes all 13 sidecar tests.
+
+At `8323492d`, the repeated security gate passed every check except the runtime Python audit:
+`heiwa-sidecar[llama] -> llama-index-core -> nltk 3.10.3` retains
+`PYSEC-2026-3740` / `CVE-2026-81726`.
+[Upstream lists no patched version](https://github.com/nltk/nltk/security/advisories/GHSA-8mgp-746c-j5xp)
+as of 2026-09-06; PyPI's latest release is still `3.10.3`. No advisory ignore or
+audit exclusion was added. That revision remained blocked pending a verified
+replacement/removal of that optional dependency path or a patched upstream
+release.
+
+### Optional dependency removal — 2026-09-06
+
+Plane: Execution / Evidence. Repository inspection found no sidecar operation
+using LlamaIndex APIs; `check_deps` only reports whether its module is importable.
+The unused `llama` installation extra is now retired. Regenerating the lockfile
+removes 42 packages, including LlamaIndex, NLTK, and Banks, with no additions or
+version changes among retained packages. Existing environments can reconcile
+with `uv sync --extra dev` from `runtime/python`.
+
+The `llama_index` diagnostic result key is preserved. Characterization tests
+cover both an externally installed module and its absence; all 14 sidecar tests
+pass after syncing the reduced all-extras environment. A real JSONL subprocess
+probe also passes health, dependency checks, echo, and shutdown with LlamaIndex
+absent. Sidecar descriptions now distinguish import diagnostics from execution
+capability.
+
+`bash scripts/verify_security.sh` passes with zero failures and zero warnings;
+both Python dependency audits report no known vulnerabilities. No advisory
+ignore or audit exclusion was added. This resolves the dependency blocker;
+live provider entitlement, remote CI, and installed-runtime promotion remain
+outside these local proofs. A1-c3 remains pending.
+
+## Development and publishing refactor — 2026-09-07
+
+Plane: Execution / Evidence. The delivery harness now records per-check logs
+and atomic local verification receipts with source identity and worktree state.
+Required L0-L2 gates fail when absent. A1 remains explicitly deferred. Native
+desktop checks are explicit in the full local profile and remain required in
+PR CI. Sidecar tests/lint share a locked local/CI entry point; the existing
+required aggregate rejects failed, cancelled, or skipped Python checks.
+
+Active workflows use GitHub-hosted runners, checked across all workflow files
+and static matrices. Releases validate the resolved tag's declarations with
+trusted main validators and build from the resolved commit. Containers reuse
+the verified release-byte packaging path. Agent instructions now share one
+authorization and evidence contract.
+
+Focused verification covers source changes, missing gates, process cleanup,
+interruption, concurrent receipts, aggregate failure propagation, retired
+runners, and tag/main version divergence. Exact committed local and remote
+results belong in their generated receipts; these changes do not complete A1.
+
 ## Deferred with reason
 
 - `work_node_bound` and `prior_history_digest` (WF-R15) need an enrolled mesh

@@ -25,7 +25,7 @@ toolName = "run_shell_command"
 decision = "allow"
 priority = 900
 
-# Railway MCP — primary execution plane
+# Legacy Railway tool permissions; not Heiwa's current execution authority.
 [[rule]]
 decision = "allow"
 priority = 850

@@ -16,7 +16,7 @@ concurrency:
 jobs:
   changes:
     name: Detect Deploy Surfaces
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     outputs:
       deploy_core: ${{ steps.detect.outputs.deploy_core }}
       deploy_trading: ${{ steps.detect.outputs.deploy_trading }}
@@ -50,7 +50,7 @@ jobs:
 
   repo-hygiene:
     name: Repo Hygiene
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -79,7 +79,7 @@ jobs:
 
   core-release-preflight:
     name: Core Rust Release Preflight
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs:
       - changes
       - repo-hygiene
@@ -126,7 +126,7 @@ jobs:
 
   web-release-preflight:
     name: Web Release Preflight
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs:
       - changes
       - repo-hygiene
@@ -163,7 +163,7 @@ jobs:
 
   deploy-web:
     name: Deploy Cloudflare Public Shell
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs:
       - changes
       - web-release-preflight

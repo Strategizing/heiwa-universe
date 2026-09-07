@@ -14,11 +14,11 @@ name: Runner Canary
 # Promotion path for a new runner label:
 #   1. dispatch this workflow with the label
 #   2. confirm it is claimed, and note the queue time in the run timing
-#   3. add the label to PROVEN_RUNNER_LABELS in scripts/check_ci_job_deadlines.rb
-#   4. only then use it in ci.yml
+#   3. add the label to GITHUB_HOSTED_RUNNER_LABELS in scripts/check_ci_job_deadlines.rb
+#   4. only then use it in CI or publishing workflows
 #
 # Usage:
-#   gh workflow run runner-canary.yml -f runner=blacksmith-2vcpu-ubuntu-2404
+#   gh workflow run runner-canary.yml -f runner=ubuntu-latest
 #
 # Inputs come from a collaborator who can already dispatch workflows, but they
 # are still passed to `run:` steps through `env:` rather than interpolated into
@@ -30,7 +30,7 @@ on:
       runner:
         description: Runner label to probe
         required: true
-        default: blacksmith-2vcpu-ubuntu-2404
+        default: ubuntu-latest
 
 permissions:
   contents: read
@@ -46,6 +46,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Report runner identity
+        shell: bash
         env:
           REQUESTED_LABEL: ${{ inputs.runner }}
         run: |
@@ -58,6 +59,7 @@ jobs:
           echo "memory          : $(awk '/MemTotal/ {printf "%.1f GiB", $2/1048576}' /proc/meminfo 2>/dev/null || echo unknown)"
           echo "disk            : $(df -h / | awk 'NR==2 {print $4 " free of " $2}')"
       - name: Confirm the claim
+        shell: bash
         env:
           RUN_ID: ${{ github.run_id }}
         run: |

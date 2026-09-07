@@ -7,11 +7,9 @@ name: Desktop Build
 # install?" without tagging. This does exactly that and nothing else: build
 # the runtime, stage it into the bundle, build the bundle, upload it.
 #
-# Runners: macOS and Windows are unavoidable here — a .dmg and a .msi cannot
-# be produced anywhere else. scripts/check_ci_job_deadlines.rb governs the CI
-# promotion lanes in ci.yml, which is a different question: those gate merges
-# to main and must never sit queued. This workflow gates nothing, so a queued
-# job delays an artifact rather than holding a merge.
+# Standard GitHub-hosted runners preserve the native bundle platforms.
+# scripts/check_ci_job_deadlines.rb checks runner selection here too; the
+# existing 60-minute bundle deadline is separate from the CI feedback lanes.
 
 on:
   workflow_dispatch:
@@ -52,7 +50,7 @@ jobs:
             bundles: msi
             artifact_path: target/release/bundle/msi/*.msi
           - name: linux-x86_64
-            runner: blacksmith-4vcpu-ubuntu-2404
+            runner: ubuntu-latest
             selector: linux
             bundles: appimage,deb
             artifact_path: |

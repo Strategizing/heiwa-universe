@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import sys
+import types
 
 import pytest
 
@@ -83,12 +85,32 @@ async def test_validation_failure_is_typed_error() -> None:
 
 
 @pytest.mark.asyncio
-async def test_check_deps_reports_each_module() -> None:
+@pytest.mark.parametrize("llama_installed", [False, True])
+async def test_check_deps_reports_optional_module_availability(
+    monkeypatch: pytest.MonkeyPatch, llama_installed: bool
+) -> None:
+    langgraph = types.ModuleType("langgraph")
+    langgraph.__version__ = "fixture-langgraph"
+    llama = types.ModuleType("llama_index") if llama_installed else None
+    if llama is not None:
+        llama.__version__ = "fixture-llama"
+    monkeypatch.setitem(sys.modules, "langgraph", langgraph)
+    monkeypatch.setitem(sys.modules, "llama_index", llama)
+
     resp = await dispatch(Request(id="x", op="check_deps"))
     assert resp.status == "ok"
-    for name in ("langgraph", "llama_index"):
-        assert name in resp.result
-        assert "importable" in resp.result[name]
+    assert resp.result["langgraph"] == {
+        "importable": True,
+        "version": "fixture-langgraph",
+    }
+    if llama_installed:
+        assert resp.result["llama_index"] == {
+            "importable": True,
+            "version": "fixture-llama",
+        }
+    else:
+        assert resp.result["llama_index"]["importable"] is False
+        assert "ModuleNotFoundError" in resp.result["llama_index"]["error"]
 
 
 @pytest.mark.asyncio

@@ -71,6 +71,7 @@ runtime_a_targets=(
 )
 
 runtime_b_targets=(
+  codex_cli
   ollama_detect
   openrouter_live
   operator_service

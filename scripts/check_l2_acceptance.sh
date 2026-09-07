@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# acceptance-scope: apps crates Cargo.toml Cargo.lock scripts/check_l2_acceptance.sh
+# acceptance-scope: apps crates Cargo.toml Cargo.lock scripts/check_l2_acceptance.sh scripts/lib/verification_logs.sh
 #
 # Same reason as L1, plus the readiness-decider scan, which walks all of
 # apps/ and crates/ looking for a second place that decides onboarding.
@@ -26,27 +26,30 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
+source "$repo_root/scripts/lib/verification_logs.sh"
+umask 077
+log_dir="$(verification_log_dir "$repo_root" "l2")"
 
 fail=0
 ok() { printf 'OK: %s\n' "$*"; }
 fail_msg() { printf 'FAIL: %s\n' "$*" >&2; fail=1; }
 
 # ── 1. Identity + onboarding unit tests ─────────────────────────────────────
-if cargo test -p heiwa_identity --quiet >/tmp/l2_identity_tests.log 2>&1; then
+if cargo test -p heiwa_identity --quiet >"$log_dir/l2_identity_tests.log" 2>&1; then
   ok "heiwa_identity tests"
 else
-  fail_msg "heiwa_identity tests (see /tmp/l2_identity_tests.log)"
+  fail_msg "heiwa_identity tests (see $log_dir/l2_identity_tests.log)"
 fi
 
 # ── 2. First-run harness ────────────────────────────────────────────────────
 if [[ ! -f "apps/heiwa_shell/tests/first_run.rs" ]]; then
   fail_msg "first-run harness missing: apps/heiwa_shell/tests/first_run.rs"
-elif ! cargo build -p heiwa-shell --bin heiwa --quiet >/tmp/l2_build.log 2>&1; then
-  fail_msg "heiwa binary did not build (see /tmp/l2_build.log)"
-elif cargo test -p heiwa-shell --test first_run --quiet >/tmp/l2_first_run.log 2>&1; then
+elif ! cargo build -p heiwa-shell --bin heiwa --quiet >"$log_dir/l2_build.log" 2>&1; then
+  fail_msg "heiwa binary did not build (see $log_dir/l2_build.log)"
+elif cargo test -p heiwa-shell --test first_run --quiet >"$log_dir/l2_first_run.log" 2>&1; then
   ok "first-run harness passes (empty root → identity → provider → turn)"
 else
-  fail_msg "first-run harness failed (see /tmp/l2_first_run.log)"
+  fail_msg "first-run harness failed (see $log_dir/l2_first_run.log)"
 fi
 
 # ── 3. Identity is per-user, not per-repository ─────────────────────────────
@@ -55,8 +58,8 @@ fi
 # must not reacquire it: no repo-relative discovery, and no lenient resolver
 # that would fall back to the process working directory.
 if grep -nE 'monorepo|CARGO_MANIFEST_DIR|current_dir|HeiwaPaths::resolve\(\)' \
-   crates/heiwa_identity/src/*.rs >/tmp/l2_identity_paths.log 2>&1; then
-  fail_msg "heiwa_identity resolves a path outside the strict per-user root (see /tmp/l2_identity_paths.log)"
+   crates/heiwa_identity/src/*.rs >"$log_dir/l2_identity_paths.log" 2>&1; then
+  fail_msg "heiwa_identity resolves a path outside the strict per-user root (see $log_dir/l2_identity_paths.log)"
 else
   ok "identity resolves only through the strict per-user root"
 fi
