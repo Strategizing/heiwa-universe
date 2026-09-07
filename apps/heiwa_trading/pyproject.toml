@@ -9,7 +9,7 @@ license = { text = "Apache-2.0" }
 [project.urls]
 Homepage = "https://github.com/Heiwa-Limited/heiwa-universe"
 Repository = "https://github.com/Heiwa-Limited/heiwa-universe"
-Documentation = "https://heiwa-limited.github.io/heiwa-universe/"
+Documentation = "https://docs.heiwa.ltd/"
 Issues = "https://github.com/Heiwa-Limited/heiwa-universe/issues"
 
 [tool.pytest.ini_options]

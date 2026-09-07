@@ -134,6 +134,25 @@ if ! grep -q "\"node\": \"${required_node_major}\"" package.json; then
   exit 1
 fi
 
+ruby -ryaml - <<'RUBY'
+failures = []
+Dir.glob(".github/workflows/*.{yml,yaml}").sort.each do |path|
+  workflow = YAML.safe_load(File.read(path), aliases: true)
+  workflow.fetch("jobs", {}).each do |job_id, job|
+    Array(job["steps"]).each do |step|
+      next unless step["uses"].to_s.start_with?("actions/setup-node@")
+
+      settings = step.fetch("with", {})
+      unless settings["node-version-file"] == ".nvmrc" && !settings.key?("node-version")
+        failures << "#{path} #{job_id}: setup-node must use .nvmrc without a version override"
+      end
+    end
+  end
+end
+abort failures.join("\n") unless failures.empty?
+puts "Every workflow Node setup uses the repository baseline."
+RUBY
+
 if ! grep -Eq "actions/setup-node@[0-9a-f]{40}[[:space:]]+# v[0-9]+" .github/workflows/certification.yml; then
   echo ".github/workflows/certification.yml must set up Node with an immutable commit pin" >&2
   exit 1

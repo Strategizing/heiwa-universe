@@ -16,7 +16,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/Heiwa-Limited/heiwa-universe"
 Repository = "https://github.com/Heiwa-Limited/heiwa-universe"
-Documentation = "https://heiwa-limited.github.io/heiwa-universe/"
+Documentation = "https://docs.heiwa.ltd/"
 Issues = "https://github.com/Heiwa-Limited/heiwa-universe/issues"
 
 [tool.uv.sources]
