@@ -13,8 +13,8 @@ usage() {
 Usage: scripts/check_agent_baseline.sh [--allow-dirty] [--branch <name>]
 
 Local-only agent baseline gate. This script does not fetch, push, call gh, or
-perform network health checks. Remote pre-flight remains a separate explicitly
-assigned operation.
+perform network health checks. Remote pre-flight is separate evidence collected
+within an authorized publishing or remote-audit assignment.
 
 Set HEIWA_BRANCH_MODE to `experimental` for a branch descended from `dev`, or
 to `post-promotion` for the brief synchronized dev/main handoff. The default is

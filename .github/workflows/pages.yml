@@ -18,7 +18,7 @@ concurrency:
 jobs:
   build:
     name: Build MkDocs Site
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -46,7 +46,7 @@ jobs:
 
   deploy:
     name: Deploy GitHub Pages
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     needs: build
     environment:
       name: github-pages

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# acceptance-scope: apps crates Cargo.toml Cargo.lock scripts/check_l0_acceptance.sh
+# acceptance-scope: apps crates Cargo.toml Cargo.lock scripts/check_l0_acceptance.sh scripts/lib/verification_logs.sh
 #
 # Broad on purpose. Checks 1-4 only read apps/heiwa_app/desktop, but check 5
 # scans every runtime source under apps/ and crates/ for home-path resolution
@@ -23,6 +23,9 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
+source "$repo_root/scripts/lib/verification_logs.sh"
+umask 077
+log_dir="$(verification_log_dir "$repo_root" "l0")"
 
 desktop="apps/heiwa_app/desktop"
 fail=0
@@ -31,22 +34,22 @@ ok() { printf 'OK: %s\n' "$*"; }
 fail_msg() { printf 'FAIL: %s\n' "$*" >&2; fail=1; }
 
 # ── 1+2. Desktop typecheck, build, tests ────────────────────────────────────
-if (cd "$desktop" && npm run --silent typecheck >/tmp/l0_typecheck.log 2>&1); then
+if (cd "$desktop" && npm run --silent typecheck >"$log_dir/l0_typecheck.log" 2>&1); then
   ok "desktop typecheck"
 else
-  fail_msg "desktop typecheck (see /tmp/l0_typecheck.log)"
+  fail_msg "desktop typecheck (see $log_dir/l0_typecheck.log)"
 fi
 
-if (cd "$desktop" && npm run --silent build >/tmp/l0_build.log 2>&1); then
+if (cd "$desktop" && npm run --silent build >"$log_dir/l0_build.log" 2>&1); then
   ok "desktop production build"
 else
-  fail_msg "desktop production build (see /tmp/l0_build.log)"
+  fail_msg "desktop production build (see $log_dir/l0_build.log)"
 fi
 
-if (cd "$desktop" && npm test --silent >/tmp/l0_vitest.log 2>&1); then
+if (cd "$desktop" && npm test --silent >"$log_dir/l0_vitest.log" 2>&1); then
   ok "desktop vitest suite"
 else
-  fail_msg "desktop vitest suite (see /tmp/l0_vitest.log)"
+  fail_msg "desktop vitest suite (see $log_dir/l0_vitest.log)"
 fi
 
 # ── 3. Operator seam preserved: test files byte-identical to baseline ───────

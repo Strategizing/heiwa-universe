@@ -1,104 +1,61 @@
 # GEMINI.md — heiwa-universe
 
-This repository builds Heiwa, a local-first AI runtime and enterprise platform. Gemini CLI is one wrapped provider surface inside Heiwa, not the product itself.
+Gemini CLI is a provider-owned peer executor inside Heiwa. It owns its native
+tools, system prompts, authentication, sessions, model inventory, and quotas.
+Heiwa owns the local runtime, routing, and evidence around that provider surface.
 
-Naming:
+## Shared Operating Contract
 
-- **Heiwa** = product/app/runtime/CLI/packages/docs.
-- **Heiwa Limited** = company/publisher/legal identity.
-- **Heiwa Universe** = this repo, `Heiwa-Limited/heiwa-universe`, public on GitHub since the v0.1.0 release. Treat everything committed here as published.
+Use [`AGENTS.md`](AGENTS.md#operating-contract) for authorization, implementation,
+review, testing, and reporting. Explicit user authorization persists across
+turns; provider skills and local guidance must not add a second approval round
+to already authorized work. This file supplies Gemini-specific context only.
 
-## Gemini's Role Here
+Before runtime or architecture changes, read:
 
-- Gemini CLI is a peer executor alongside Claude Code, Codex, Antigravity, and local model runtimes.
-- Gemini owns its own native auth flows, system prompts, cloud model inventory, quota behavior, and tool semantics.
-- Heiwa adds repo-local context, routing, evidence, shell ergonomics, and cross-provider normalization.
-- Do not imply that Heiwa owns Gemini's inference internals.
+1. [`HEIWA.md`](HEIWA.md) for product and architecture truth.
+2. [`AGENTS.md`](AGENTS.md) for shared working rules.
+3. [`docs/local-self-operation.md`](docs/local-self-operation.md) for runtime boundaries.
 
-## Required Reading
+When diagnosing Gemini configuration or tool policy, inspect
+`.gemini/settings.json` and `.gemini/policies/heiwa-executive.toml`. Tool
+availability does not expand the assigned scope. Provider-owned machine
+configuration and credentials remain outside routine repository edits.
 
-Before touching runtime or architecture work, read in this order:
+## Runtime Boundaries
 
-1. `HEIWA.md`
-2. `AGENTS.md`
-3. `.gemini/settings.json`
-4. `.gemini/policies/heiwa-executive.toml`
+- Resolve per-user roots with `crates/heiwa_config::HeiwaPaths`; never assume
+  one maintainer, hardcode an owner identity, or grant privileges by alias.
+- Extend the Rust service that owns the behavior. Python under
+  `packages/heiwa_sdk/` is compatibility and migration code; its legacy identity,
+  gateway, and tool-mesh conventions are not the Rust runtime contract.
+- Resolve credentials through the existing vault and provider keychain. Keep
+  secrets out of source, evidence, logs, and child environments; report the
+  actual auth failure without inventing a fallback account or model.
+- Verify enforcement at the execution boundary before claiming sandboxing,
+  approval, or privacy protection. A declared `SandboxRequired` mode does not
+  prove a sandbox backend ran the code.
 
-## Current Product Truth
+## Branches and Verification
 
-- The installed `heiwa` runtime is the current product center.
-- `apps/heiwa_shell/` is the main operator surface in this repo.
-- `apps/heiwa_core/` contains the Rust execution kernel and hosted runtime path.
-- Evidence authority lives in `crates/heiwa_evidence/`; Lance recall lives in `crates/heiwa_embed/`.
-- Legacy surfaces (old Hub, CLI, limbs) were removed from the tree on 2026-07-06; they live in git history and `~/heiwa_archive/`. Do not treat them as work targets.
-- Web and `/code` surfaces are later work. Do not overstate them.
+Use a short-lived experimental branch from current `dev`, then the protected PR
+flow in `AGENTS.md`. An authorized publishing task includes normal push, PR,
+review, and merge steps. Recheck the exact PR head, required checks, merge state,
+and unresolved review threads before merging. Never commit or push directly to
+`dev` or `main`, bypass protection, or overwrite another agent's changes.
 
-## Provider Truth
-
-Heiwa wraps provider-owned runtimes:
-
-- Claude Code
-- Codex
-- Gemini CLI
-- Antigravity
-- Ollama and later local runtimes
-
-Integration maturity differs across those providers. Discovery is not the same as full execution parity.
-
-## Shared Peer Truth
-
-Use corrected peer framing before architecture or parity work:
-
-- Hermes is Python, server/VPS-friendly, terminal-first. It proves learning loop,
-  skills, FTS5 recall, Honcho user modeling, messaging gateway, cron delivery,
-  MCP, provider switching, and terminal backends. Do not call it a worker mesh.
-- OpenHuman is Rust + Tauri/CEF with local memory plus managed default services.
-  It proves consumer desktop onboarding, Memory Tree, Obsidian vault,
-  Composio/OAuth integrations, TokenJuice, and voice/meeting surface. Do not
-  call it pure local-first.
-- Heiwa's defensible difference: provider-peer MacBook owner seat, local runtime
-  authority, approvals, local receipts, derived Lance recall, and provider-owned runtime
-  truth.
-- Biggest current gap: connector/tool breadth and compression/learning loop.
-  Do not imply parity until code proves it.
-
-## Engineering Standards (2026-03 BYOK Update)
-
-### 1. Identity & Multi-tenancy
-
-- **Primary human operator (Devon)**: `owner_id="0"`.
-- **System identities**: `operator` and `local-operator` are equivalent to `0` for system-wide key access.
-- **Helper**: Always use `is_system_operator(owner_id)` from `heiwa_protocol.routing` to check privileges.
-- **Auth**: `HEIWA_ADMIN_ID_MAPPINGS` (e.g., `discord:123456789=0`) handles admin promotion and relinking.
-
-### 2. Security & Credentials
-
-- **Vault First**: Resolve provider keys through Heiwa's local vault/keychain boundary; never place raw secrets in evidence or Lance.
-- **Scrubbing**: `ToolMesh` uses `SAFE_ENV_ALLOWLIST`. Never expose `HEIWA_MASTER_KEY` or `RAILWAY_AUTH_TOKEN` to child processes.
-- **BYOK**: Strict enforcement. If a user key is missing, return `BLOCKED_AUTH`.
-
-### 3. Execution Patterns
-
-- **Propagation**: `owner_id` must be carried in `BrokerRouteRequest` and `BrokerRouteResult`.
-- **Status Mapping**: Map authentication failures to `BLOCKED_AUTH` in `OpenClaw` and narrate specifically in `HeiwaClawAgent`.
-
-## Commands
+Use targeted tests while iterating. Before promotion, run:
 
 ```bash
-cargo build --workspace
-cargo test -p heiwa-shell --test smoke -- --nocapture
-cargo test -p heiwa-loop -- --nocapture
+HEIWA_BRANCH_MODE=experimental bash scripts/check_agent_baseline.sh
+HEIWA_BRANCH_MODE=experimental bash scripts/check_ci_local.sh
 ```
 
-## Hard Rules
+Use the appropriate mode on integration or post-promotion checkouts. Follow
+[`docs/agent-baseline-workflow.md`](docs/agent-baseline-workflow.md) for evidence
+and remote pre-flight. Report a dirty development handoff honestly; do not
+commit or discard work just to satisfy a clean-tree gate.
 
-- local-first truth over hosted-first framing
-- provider-owned semantics stay provider-owned
-- Local JSONL is evidence authority; Lance is a disposable, rebuildable recall index
-- Railway is support infra, not the product center
-- honesty over maturity theater
-- State: write canonical local text truth first; derive indexes afterward
-- Transport: prefer subscriptions/WebSockets over polling
-- Cost: cheapest acceptable route first
-- Privacy: sovereign work stays local-first
-- Untrusted code: E2B sandboxes only, never host
+Verify checkout runtime changes in disposable state on `7475`; installed `7474`
+requires separate user authorization to change or restart. Stop temporary
+processes you start unless asked to keep them running.

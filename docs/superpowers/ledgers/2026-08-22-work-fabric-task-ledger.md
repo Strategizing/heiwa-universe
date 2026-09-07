@@ -150,6 +150,26 @@ ignore or audit exclusion was added. This resolves the dependency blocker;
 live provider entitlement, remote CI, and installed-runtime promotion remain
 outside these local proofs. A1-c3 remains pending.
 
+## Development and publishing refactor — 2026-09-07
+
+Plane: Execution / Evidence. The delivery harness now records per-check logs
+and atomic local verification receipts with source identity and worktree state.
+Required L0-L2 gates fail when absent. A1 remains explicitly deferred. Native
+desktop checks are explicit in the full local profile and remain required in
+PR CI. Sidecar tests/lint share a locked local/CI entry point; the existing
+required aggregate rejects failed, cancelled, or skipped Python checks.
+
+Active workflows use GitHub-hosted runners, checked across all workflow files
+and static matrices. Releases validate the resolved tag's declarations with
+trusted main validators and build from the resolved commit. Containers reuse
+the verified release-byte packaging path. Agent instructions now share one
+authorization and evidence contract.
+
+Focused verification covers source changes, missing gates, process cleanup,
+interruption, concurrent receipts, aggregate failure propagation, retired
+runners, and tag/main version divergence. Exact committed local and remote
+results belong in their generated receipts; these changes do not complete A1.
+
 ## Deferred with reason
 
 - `work_node_bound` and `prior_history_digest` (WF-R15) need an enrolled mesh

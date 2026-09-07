@@ -81,7 +81,9 @@ Default behavior:
 1. Detect update or restart requirement.
 2. Classify active work as `none`, `pausable`, or `blocking`.
 3. Prompt the operator with target version, source, expected downtime, active tasks, and rollback path.
-4. Apply update/restart only after approval.
+4. Apply update/restart within the user's authorization. A request that already
+   includes the installed update/restart is sufficient; do not ask again for
+   the same action. Verify active-work safety immediately before applying it.
 5. Emit an evidence receipt with before/after versions and task handling.
 
 Optional auto-restart is allowed only when explicitly enabled and one of these
@@ -93,6 +95,10 @@ conditions holds:
 Auto-restart must not run while a provider subprocess, file mutation, network
 mutation, payment, booking, message send, or credential operation is in flight.
 Those cases require an approval prompt.
+
+If existing authorization explicitly covers interrupting that active work,
+follow it and record the disposition. Otherwise stage the restart until the
+work completes or the operator decides how it should be handled.
 
 Pause-before-restart must:
 
